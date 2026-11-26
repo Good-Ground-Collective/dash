@@ -24,6 +24,10 @@
       "dependsOn": ["^build"]
     },
     "//#lint:root": {},
-    "//#typecheck:root": {}
+    "//#typecheck:root": {},
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "passThroughEnv": ["CI"]
+    }
   }
 }

@@ -47,3 +47,29 @@ jobs:
       - name: Verify all packages
         if: github.event_name == 'push'
         run: pnpm turbo run lint typecheck test build
+
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @dash/web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @dash/web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @dash/web exec playwright install-deps chromium
+
+      - name: End-to-end test affected packages
+        if: github.event_name == 'pull_request'
+        run: pnpm turbo run test:e2e --affected
+
+      - name: End-to-end test all packages
+        if: github.event_name == 'push'
+        run: pnpm turbo run test:e2e

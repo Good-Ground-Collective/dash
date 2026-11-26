@@ -4,15 +4,38 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node build",
     "lint": "eslint . && stylelint \"**/*.css\" --allow-empty-input",
+    "test": "svelte-kit sync && vitest run",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@internationalized/date": "catalog:",
+    "bits-ui": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
     "@playwright/test": "catalog:",
+    "@sveltejs/adapter-node": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@types/node": "catalog:",
     "eslint": "catalog:",
     "stylelint": "catalog:",
-    "typescript": "catalog:"
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
   }
 }

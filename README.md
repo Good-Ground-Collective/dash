@@ -7,7 +7,7 @@ Open questions live in [discussions](./discussions). Each one is a conversation 
 ## Layout
 
 ```
-apps/web              SvelteKit web app (placeholder)
+apps/web              SvelteKit web app
 apps/mission-control  Fastify server with Drizzle and DBOS on Postgres
 packages/standards    Zod schemas shared between components
 packages/config       Shared tsconfig, ESLint and Stylelint config
@@ -54,6 +54,14 @@ The workspace uses pnpm and Turborepo, on Node 24 LTS.
 
 Add `--filter <package>` to run a task in one package, for example `pnpm turbo run test --filter @dash/standards`.
 
+## Web app
+
+`apps/web` is SvelteKit with adapter-node. Start it with `pnpm --filter @dash/web dev`. It calls Mission Control at `API_BASE_URL` (default `https://api.dash.doublel.studio`); set it to a local Mission Control, for example `API_BASE_URL=http://localhost:3000`. The shell renders without Mission Control.
+
+The theme comes from the `dash-theme` and `dash-mode` cookies (`characters`; `light` or `dark`), applied to `<html>` during server rendering. Theme tokens live in `apps/web/src/lib/theme/`. Components take colour, type, spacing, radius and shadow from those custom properties.
+
+`pnpm turbo run test:e2e --filter @dash/web` builds the app and runs the Playwright smoke test. Run `pnpm --filter @dash/web exec playwright install chromium` once first.
+
 ## Lint gates
 
 ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Packages and the repo root pick the shared config up from `@dash/config/eslint`.
@@ -97,7 +105,7 @@ Mission Control's tests don't need Postgres, and CI runs none: auth tests use Be
 
 ## CI
 
-`.github/workflows/ci.yml` installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything. The repository needs Actions read access to the preflight package, granted in the package's settings.
+`.github/workflows/ci.yml` installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything. The repository needs Actions read access to the preflight package, granted in the package's settings.
 
 Dependabot updates npm packages and GitHub Actions weekly. To resolve preflight it reads GitHub Packages with the `DEPENDABOT_PACKAGES_TOKEN` Dependabot secret, a token with `read:packages`.
 

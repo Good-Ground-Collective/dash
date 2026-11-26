@@ -21,6 +21,8 @@
     "@dash/config": "workspace:*",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "prettier-plugin-svelte": "catalog:",
+    "svelte": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
