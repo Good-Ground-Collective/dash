@@ -43,6 +43,7 @@ export class HeartbeatWorkflows implements WorkflowModule {
       },
       { name: 'exampleRecordHeartbeat' },
     );
+
     this.scheduled = DBOS.registerWorkflow(
       async (firedAt: Date) => {
         await DBOS.startWorkflow(record, { queueName })(firedAt.toISOString());

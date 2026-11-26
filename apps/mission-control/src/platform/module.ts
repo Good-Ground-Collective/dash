@@ -52,6 +52,7 @@ export class PlatformModule {
       async () => this.props.workflows.shutdown(),
       async () => this.props.database.close(),
     ];
+
     const failures: Error[] = [];
     for (const step of steps) {
       try {
@@ -62,6 +63,7 @@ export class PlatformModule {
         );
       }
     }
+
     if (failures.length > 0) {
       throw new AggregateError(
         failures,

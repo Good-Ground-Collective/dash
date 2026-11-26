@@ -8,7 +8,6 @@ import { postgresUrlSchema } from '#src/platform/definitions/config/app-config.t
 
 export const databasePropsSchema = z.object({ url: postgresUrlSchema });
 
-/** The application's Postgres connection and its Drizzle query builder. */
 export interface Database extends HealthProbe {
   readonly orm: NodePgDatabase;
   close(): Promise<void>;

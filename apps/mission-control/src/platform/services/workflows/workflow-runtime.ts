@@ -26,7 +26,7 @@ export const workflowRuntimePropsSchema = z.object({
   logLevel: logLevelSchema,
 });
 
-/** Starts and stops the durable workflow engine. */
+/** `launch` must follow every module's `registerWorkflows()`, because DBOS fixes its registry at launch. */
 export interface WorkflowRuntime extends HealthProbe {
   launch(): Promise<void>;
   shutdown(): Promise<void>;

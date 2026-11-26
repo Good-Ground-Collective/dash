@@ -3,7 +3,9 @@ import { z } from 'zod';
 import type { HealthReport } from '#src/health/contracts/health-report.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 
-const timeoutMillisecondsSchema = z.number().int().positive();
+export const probeHealthCheckPropsSchema = z.object({
+  timeoutMilliseconds: z.number().int().positive().default(2000),
+});
 
 export interface HealthCheck {
   run(): Promise<HealthReport>;
@@ -17,14 +19,15 @@ export class ProbeHealthCheck implements HealthCheck {
   private readonly probes: readonly HealthProbe[];
   private readonly timeoutMilliseconds: number;
 
-  constructor(props: {
-    probes: readonly HealthProbe[];
-    timeoutMilliseconds: number;
-  }) {
+  constructor(
+    props: { probes: readonly HealthProbe[] } & z.input<
+      typeof probeHealthCheckPropsSchema
+    >,
+  ) {
     this.probes = props.probes;
-    this.timeoutMilliseconds = timeoutMillisecondsSchema.parse(
-      props.timeoutMilliseconds,
-    );
+    this.timeoutMilliseconds = probeHealthCheckPropsSchema.parse({
+      timeoutMilliseconds: props.timeoutMilliseconds,
+    }).timeoutMilliseconds;
   }
 
   async run(): Promise<HealthReport> {
