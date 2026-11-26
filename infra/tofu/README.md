@@ -30,7 +30,7 @@ Nothing secret lives in this directory. `tofu.sh` loads the files below and runs
 | `LINODE_OBJ_ACCESS_KEY`, `LINODE_OBJ_SECRET_KEY`                                                    | State bucket key, written by `bootstrap.sh`             | `~/.config/dash/infra.env`     |
 | `TF_VAR_tailscale_auth_key`                                                                         | Tailscale join at first boot                            | `~/.config/dash/infra.env`     |
 
-The Tailscale key is written into each box's user data, so it also ends up in the Linode metadata service and in OpenTofu state. Keep it pre-authorized, tagged `tag:dash` and short-lived (a day is plenty). After the first apply it is only needed again when a box is created or replaced, so any value satisfies the variable in between.
+The Tailscale key is written into each box's user data, so it also ends up in the Linode metadata service and in OpenTofu state. Keep it pre-authorized, tagged `tag:dash` and short-lived (a day is plenty). After the first apply it is only needed again when a box is created or replaced, so in between any `tskey-` value other than the bootstrap placeholder satisfies the variable, even an expired one.
 
 ## Bootstrap order
 

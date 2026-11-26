@@ -90,6 +90,8 @@ jobs:
           tofu_version: 1.12.6
           tofu_wrapper: false
 
+      - run: shellcheck bootstrap.sh tofu.sh
+
       - run: tofu fmt -check -recursive
 
       - run: tofu init -backend=false -input=false -lockfile=readonly

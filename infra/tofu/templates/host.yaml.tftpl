@@ -12,7 +12,7 @@ users:
     lock_passwd: true
     ssh_authorized_keys:
 %{ for key in ssh_public_keys ~}
-      - ${key}
+      - ${jsonencode(key)}
 %{ endfor ~}
 
 package_update: true
