@@ -1,0 +1,47 @@
+#cloud-config
+hostname: ${hostname}
+preserve_hostname: false
+disable_root: true
+ssh_pwauth: false
+
+users:
+  - name: ${admin_username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+%{ for key in ssh_public_keys ~}
+      - ${key}
+%{ endfor ~}
+
+package_update: true
+package_upgrade: true
+packages:
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-dash.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /run/dash/tailscale-auth-key
+    permissions: "0600"
+    content: ${jsonencode(tailscale_auth_key)}
+
+runcmd:
+  - systemctl try-reload-or-restart ssh
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale
+  - systemctl enable --now tailscaled
+  - tailscale status >/dev/null 2>&1 || tailscale up --auth-key=file:/run/dash/tailscale-auth-key --advertise-tags=tag:dash --hostname=${hostname}
+  - rm -f /run/dash/tailscale-auth-key
