@@ -8,10 +8,6 @@ const messages: ReadonlyMap<string, string> = new Map([
   ],
   ['SETUP_CLOSED', 'Setup is already done. Sign in with your passkey instead.'],
   [
-    'PASSKEY_ENROLMENT_REJECTED',
-    'This setup expired or was already used. Start again.',
-  ],
-  [
     'LAST_PASSKEY',
     'This is your only passkey. Add another before removing it.',
   ],

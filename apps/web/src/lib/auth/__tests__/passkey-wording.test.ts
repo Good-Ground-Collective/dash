@@ -19,6 +19,19 @@ describe('PasskeyWording', () => {
     ).toBe('Odd');
   });
 
+  it('passes on why Mission Control refused to enrol a passkey', () => {
+    expect(
+      passkeyWording.explain(
+        new PasskeyAuthError({
+          code: 'PASSKEY_ENROLMENT_REJECTED',
+          message:
+            "Can't enrol this passkey: sign in first, or start from setup.",
+          status: 401,
+        }),
+      ),
+    ).toBe("Can't enrol this passkey: sign in first, or start from setup.");
+  });
+
   it('treats an aborted prompt as a cancellation', () => {
     expect(
       passkeyWording.isCancellation(
