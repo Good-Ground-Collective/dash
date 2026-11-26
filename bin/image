@@ -47,10 +47,12 @@ done
 bin/image-secret-scan "$repository:$version" "$base" $(printf '%s\n' "${secrets[@]}" | sort -u)
 
 if [[ $push == --push ]]; then
+  # A throwaway Docker config, so the push credential never reaches a keychain or ~/.docker.
   config=$(mktemp -d)
   trap 'rm -rf "$config"' EXIT
-  printf '%s' "${KAMAL_REGISTRY_PASSWORD:-$NODE_AUTH_TOKEN}" |
-    DOCKER_CONFIG=$config docker login ghcr.io --username "${KAMAL_REGISTRY_USERNAME:-$(gh api user --jq .login)}" --password-stdin >/dev/null
+  username=${KAMAL_REGISTRY_USERNAME:-$(gh api user --jq .login)}
+  auth=$(printf '%s:%s' "$username" "${KAMAL_REGISTRY_PASSWORD:-$NODE_AUTH_TOKEN}" | base64 | tr -d '\n')
+  printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$auth" >"$config/config.json"
   DOCKER_CONFIG=$config docker push --quiet "$repository:$version"
   echo "pushed $repository:$version"
 fi
