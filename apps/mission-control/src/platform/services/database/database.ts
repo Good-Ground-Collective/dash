@@ -6,7 +6,17 @@ import { z } from 'zod';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 import { postgresUrlSchema } from '#src/platform/definitions/config/app-config.ts';
 
-export const databasePropsSchema = z.object({ url: postgresUrlSchema });
+export const databasePropsSchema = z.object({
+  url: postgresUrlSchema,
+  queryTimeoutMilliseconds: z
+    .number()
+    .int()
+    .nonnegative()
+    .default(5000)
+    .describe(
+      'Client-side bound on each query, so a stalled health probe releases its connection. 0 disables it, as migrations do.',
+    ),
+});
 
 export interface Database extends HealthProbe {
   readonly orm: NodePgDatabase;
@@ -20,11 +30,11 @@ export class PostgresDatabase implements Database {
   private readonly pool: pg.Pool;
 
   constructor(props: z.input<typeof databasePropsSchema>) {
-    const { url } = databasePropsSchema.parse(props);
+    const { url, queryTimeoutMilliseconds } = databasePropsSchema.parse(props);
     this.pool = new pg.Pool({
       connectionString: url,
       connectionTimeoutMillis: 5000,
-      query_timeout: 5000,
+      query_timeout: queryTimeoutMilliseconds,
     });
     this.orm = drizzle({ client: this.pool });
   }

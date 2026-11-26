@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 export const liveEventSchema = z.object({
-  type: z.string().min(1),
+  type: z
+    .string()
+    .regex(/^[\w.:-]+$/u)
+    .describe('An SSE event name: no whitespace, so it cannot break the frame'),
   data: z.json(),
 });
 

@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 
-import type { LiveEvent } from '#src/live/contracts/live-event.ts';
+import {
+  type LiveEvent,
+  liveEventSchema,
+} from '#src/live/contracts/live-event.ts';
 
 export type LiveEventListener = (event: LiveEvent) => void;
 
@@ -16,7 +19,7 @@ export class InProcessLiveEvents implements LiveEvents {
   private readonly emitter = new EventEmitter().setMaxListeners(0);
 
   publish(event: LiveEvent): void {
-    this.emitter.emit('event', event);
+    this.emitter.emit('event', liveEventSchema.parse(event));
   }
 
   subscribe(listener: LiveEventListener): () => void {

@@ -10,17 +10,25 @@ import type {
   HttpModule,
   ZodFastifyInstance,
 } from '#src/platform/contracts/http-module.ts';
-import type { AppConfig } from '#src/platform/definitions/config/app-config.ts';
+import { z } from 'zod';
 
-export type HttpServerConfig = Pick<
-  AppConfig,
-  'corsOrigins' | 'environment' | 'logLevel'
->;
+import {
+  environmentSchema,
+  logLevelSchema,
+} from '#src/platform/definitions/config/app-config.ts';
+
+export const httpServerConfigSchema = z.object({
+  corsOrigins: z.array(z.url()).readonly(),
+  environment: environmentSchema,
+  logLevel: logLevelSchema,
+});
+
+export type HttpServerConfig = z.input<typeof httpServerConfigSchema>;
 
 /** Builds the Fastify app: pino logging, Zod schemas, the CORS allowlist and one scope per module. */
 export class HttpServer {
   private readonly props: {
-    config: HttpServerConfig;
+    config: z.output<typeof httpServerConfigSchema>;
     modules: readonly HttpModule[];
   };
 
@@ -28,7 +36,10 @@ export class HttpServer {
     config: HttpServerConfig;
     modules: readonly HttpModule[];
   }) {
-    this.props = props;
+    this.props = {
+      config: httpServerConfigSchema.parse(props.config),
+      modules: props.modules,
+    };
   }
 
   async build(): Promise<ZodFastifyInstance> {

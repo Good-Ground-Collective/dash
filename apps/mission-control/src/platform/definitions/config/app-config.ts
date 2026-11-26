@@ -16,11 +16,13 @@ export const logLevelSchema = z.enum([
 
 export type LogLevel = z.infer<typeof logLevelSchema>;
 
+export const environmentSchema = z.enum(['development', 'test', 'production']);
+
 export const postgresUrlSchema = z.url({ protocol: /^postgres(ql)?$/u });
 
 export const appConfigSchema = z
   .object({
-    NODE_ENV: z.enum(['development', 'test', 'production']),
+    NODE_ENV: environmentSchema,
     HOST: z.string().min(1).default('127.0.0.1'),
     PORT: z.coerce.number().int().min(0).max(65_535).default(3000),
     LOG_LEVEL: logLevelSchema.default('info'),
@@ -36,7 +38,7 @@ export const appConfigSchema = z
     devWebOrigin: env.DEV_WEB_ORIGIN,
   }));
 
-export type Environment = z.output<typeof appConfigSchema>['environment'];
+export type Environment = z.infer<typeof environmentSchema>;
 
 /** Typed settings parsed once from the environment at boot. */
 export class AppConfig {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
@@ -40,5 +41,19 @@ describe('HttpServer', () => {
     );
     expect(allowed.headers['access-control-allow-credentials']).toBe('true');
     expect(refused.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('rejects a CORS origin that is not a URL', () => {
+    expect(
+      () =>
+        new HttpServer({
+          config: {
+            corsOrigins: ['not a url'],
+            environment: 'test',
+            logLevel: 'silent',
+          },
+          modules: [],
+        }),
+    ).toThrow(ZodError);
   });
 });
