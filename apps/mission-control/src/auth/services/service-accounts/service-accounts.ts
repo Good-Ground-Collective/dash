@@ -216,6 +216,7 @@ export class OwnedServiceAccounts implements ServiceAccounts {
     }
     throw new ApiKeyRejectedError();
   }
+
   private async owned(props: {
     ownerUserId: string;
     serviceAccountId: string;

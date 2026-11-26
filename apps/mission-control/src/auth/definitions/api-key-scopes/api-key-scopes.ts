@@ -5,6 +5,16 @@ export const apiKeyScopeSchema = z.enum(['heartbeat:write', 'telemetry:write']);
 
 export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 
+/** Scopes as stored on an account. Ones the enum no longer knows are dropped, so a retired scope grants nothing and the account stays readable. */
+export const storedApiKeyScopesSchema = z
+  .array(z.string())
+  .transform((values) =>
+    values.flatMap((value) => {
+      const known = apiKeyScopeSchema.safeParse(value);
+      return known.success ? [known.data] : [];
+    }),
+  );
+
 /** Better Auth's permission statements: actions per resource. */
 export type ApiKeyStatements = Record<string, string[]>;
 

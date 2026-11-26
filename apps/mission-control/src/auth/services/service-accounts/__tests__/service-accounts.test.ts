@@ -190,6 +190,34 @@ describe('OwnedServiceAccounts revoking', () => {
   });
 });
 
+describe('OwnedServiceAccounts replacing the only key', () => {
+  it('gives the new key exactly the account’s scopes, whatever the request asks for', async () => {
+    const harness = new ServiceAccountHarness();
+    const cookie = await harness.signIn();
+    const created = await harness.createAccount({ cookie, account: ciAgent });
+    await harness.post({
+      path: '/service-accounts/keys/revoke',
+      cookie,
+      body: { keyId: created.apiKey.key.id },
+    });
+
+    const issued = await harness.post({
+      path: '/service-accounts/keys/create',
+      cookie,
+      body: {
+        serviceAccountId: created.serviceAccount.id,
+        scopes: ['heartbeat:write', 'telemetry:write'],
+      },
+    });
+    const replacement = issuedApiKeySchema.parse(await issued.json());
+
+    expect(replacement.key.scopes).toEqual(['heartbeat:write']);
+    expect(harness.tables.apikey.map((row) => row.id)).toEqual([
+      replacement.key.id,
+    ]);
+  });
+});
+
 describe('OwnedServiceAccounts revoking accounts', () => {
   it('removes an account and every key it holds', async () => {
     const harness = new ServiceAccountHarness();

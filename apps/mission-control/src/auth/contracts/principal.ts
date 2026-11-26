@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { apiKeyScopeSchema } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+import {
+  apiKeyScopeSchema,
+  storedApiKeyScopesSchema,
+} from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
 
 export const principalKindSchema = z
   .enum(['user', 'service'])
@@ -55,7 +58,7 @@ export const servicePrincipalSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
-  scopes: z.array(apiKeyScopeSchema),
+  scopes: storedApiKeyScopesSchema,
   createdAt: z.iso.datetime({ offset: true }),
 });
 

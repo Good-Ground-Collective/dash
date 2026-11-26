@@ -366,7 +366,7 @@
     padding: 0;
     background: var(--bg);
     border: var(--border-hairline) solid var(--line);
-    border-radius: 5px;
+    border-radius: calc(var(--radius-control) / 2);
     cursor: pointer;
   }
 

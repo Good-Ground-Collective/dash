@@ -6,12 +6,12 @@ import {
   type ServicePrincipal,
   servicePrincipalSchema,
 } from '#src/auth/contracts/principal.ts';
+import type { ApiKeyScope } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
 import {
   ServiceAccountTakenError,
   ServicePrincipalNotStoredError,
 } from '#src/auth/errors.ts';
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
-import type { ApiKeyScope } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
 import { serviceProfileTable } from '#src/auth/repositories/service-principals/service-principals-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
@@ -77,6 +77,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
       .where(eq(userTable.id, props.id));
     return row?.kind ?? null;
   }
+
   async find(props: { id: string }): Promise<ServicePrincipal | null> {
     const [row] = await this.select().where(
       eq(serviceProfileTable.principalId, props.id),
