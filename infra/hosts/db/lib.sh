@@ -94,7 +94,7 @@ remote() {
 # Copies remote/ and files/ to a fresh temp dir on the host; prints its path.
 push_bundle() {
   local host="$1" dir
-  dir="$(remote "$host" 'mktemp -d /tmp/dash-db.XXXXXX')"
+  dir="$(remote "$host" 'mktemp -d /tmp/dash-db.XXXXXX' </dev/null)"
   COPYFILE_DISABLE=1 tar -C "$HERE" -cf - remote files |
     remote "$host" "tar --warning=no-unknown-keyword -C '$dir' -xf -"
   echo "$dir"

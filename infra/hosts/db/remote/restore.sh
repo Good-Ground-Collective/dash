@@ -46,10 +46,10 @@ for attempt in $(seq 1 12); do
 done
 pgbr info
 
-# archive_mode=off keeps this copy from ever writing into the production repo.
 pg_createcluster 18 main >/dev/null
 find "$DATA" -mindepth 1 -delete
 
+# archive_mode=off keeps this copy from ever writing into the production repo.
 if [ -n "$TARGET" ]; then
   pgbr restore --type=time --target="$TARGET" --target-action=promote --archive-mode=off
 else

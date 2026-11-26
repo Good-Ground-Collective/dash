@@ -33,10 +33,14 @@ bundle=""
 key_id=""
 table_created=0
 cleanup() {
+  local rc=$?
   set +e
   echo "== 4. teardown"
   if [ -n "$bundle" ]; then
-    remote "$SCRATCH_HOST" "sudo bash '$bundle/remote/teardown.sh' >/dev/null && echo 'teardown: done'; rm -rf '$bundle'"
+    if ! remote "$SCRATCH_HOST" "sudo bash '$bundle/remote/teardown.sh' >/dev/null && echo 'teardown: done' && rm -rf '$bundle'"; then
+      echo "error: teardown on ${SCRATCH_HOST} FAILED; it may still hold the cipher passphrase in /etc/pgbackrest. Fix it by hand." >&2
+      rc=1
+    fi
   fi
   if [ -n "$key_id" ]; then
     linode_api DELETE "/object-storage/keys/${key_id}" >/dev/null && echo "revoked key ${key_label}"
@@ -44,6 +48,7 @@ cleanup() {
   if [ "$table_created" = 1 ]; then
     echo "DROP TABLE IF EXISTS dash_restore_check" | db_sql >/dev/null && echo "dropped dash_restore_check on ${DB_HOST}"
   fi
+  exit "$rc"
 }
 trap cleanup EXIT
 

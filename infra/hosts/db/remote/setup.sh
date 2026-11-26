@@ -40,11 +40,13 @@ if [ -n "$on_box_cipher" ] && [ "$on_box_cipher" != "$CIPHER_PASS" ]; then
   exit 1
 fi
 unset on_box_cipher
+
 if [ -z "$S3_KEY" ]; then
   S3_KEY="$(sed -n 's/^repo1-s3-key=//p' "$SECRETS" 2>/dev/null || true)"
   S3_SECRET="$(sed -n 's/^repo1-s3-key-secret=//p' "$SECRETS" 2>/dev/null || true)"
 fi
 [ -n "$S3_KEY" ] && [ -n "$S3_SECRET" ] || { echo "no backup key supplied or on disk" >&2; exit 1; }
+
 secrets_tmp="$(mktemp /etc/pgbackrest/.secrets.XXXXXX)"
 chmod 600 "$secrets_tmp"
 printf '[global]\nrepo1-s3-key=%s\nrepo1-s3-key-secret=%s\nrepo1-cipher-pass=%s\n' \
@@ -80,14 +82,17 @@ bash "$(dirname "${BASH_SOURCE[0]}")/install-packages.sh"
 # On a fresh box the secrets file predates the postgres group.
 chown root:postgres "$SECRETS"
 chmod 640 "$SECRETS"
+
 rendered="$(mktemp)"
 sed "s/@TAILNET_IP@/${TAILNET_IP}/g" "$SRC/postgresql.conf" >"$rendered"
 install_file "$rendered" "$PG_CONF_DIR/conf.d/50-dash.conf" 644 postgres:postgres && restart_pg=1
 rm -f "$rendered"
 install_file "$SRC/systemd/postgresql-override.conf" \
   "/etc/systemd/system/${PG_UNIT}.d/50-dash.conf" 644 root:root && restart_pg=1
+
 reload_pg=0
 install_file "$SRC/pg_hba.conf" "$PG_CONF_DIR/pg_hba.conf" 640 postgres:postgres && reload_pg=1
+
 install_file "$SRC/pgbackrest.conf" /etc/pgbackrest/pgbackrest.conf 644 root:root || true
 for unit in "$SRC"/systemd/dash-*; do
   install_file "$unit" "/etc/systemd/system/$(basename "$unit")" 644 root:root || true

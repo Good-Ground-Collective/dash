@@ -48,7 +48,8 @@ key_id="$(jq -r '.id // empty' <<<"$key_json")"
 s3_key=""
 s3_secret=""
 if [ -n "$key_id" ]; then
-  box_key="$(remote "$DB_HOST" 'sudo sed -n "s/^repo1-s3-key=//p" /etc/pgbackrest/conf.d/dash-secrets.conf 2>/dev/null' || true)"
+  box_key="$(remote "$DB_HOST" "sudo sh -c 'f=/etc/pgbackrest/conf.d/dash-secrets.conf; test ! -e \$f || sed -n s/^repo1-s3-key=//p \$f'")" ||
+    die "could not read the backup key on ${DB_HOST} (SSH or sudo failed); nothing was changed"
   [ "$box_key" = "$(jq -r .access_key <<<"$key_json")" ] ||
     die "key ${KEY_LABEL} (id ${key_id}) exists but ${DB_HOST} does not hold it. Revoke it in Linode and re-run; a secret cannot be read back."
   echo "key ${KEY_LABEL}: exists (id ${key_id}), already on ${DB_HOST}"

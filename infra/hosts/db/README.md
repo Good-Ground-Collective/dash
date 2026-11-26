@@ -2,7 +2,7 @@
 
 Scripts and config for Dash's production database host, `dash-db`. Issue #42 has the decisions behind it; `infra/tofu` creates the box itself.
 
-`dash-db` is a 1 GB Nanode running Ubuntu 24.04. It has no public inbound traffic: the cloud firewall drops everything except Tailscale, and Mission Control on `dash-app` reaches Postgres over the tailnet.
+`dash-db` is a 1 GB Nanode running Ubuntu 24.04. It has no public inbound traffic: the cloud firewall drops everything except Tailscale, and Mission Control on `dash-app` reaches Postgres over the tailnet, which encrypts the link with WireGuard. `pg_hba` uses `host`, not `hostssl`, so clients that don't ask for TLS still connect. node-postgres, which Mission Control and DBOS use, doesn't ask by default.
 
 ## What `provision.sh` sets up
 
@@ -23,7 +23,7 @@ On `dash-db`, it:
   - `shared_buffers = 256MB`, `effective_cache_size = 640MB`, `work_mem = 4MB`, `maintenance_work_mem = 64MB`
   - `max_connections = 50`
   - WAL archiving through pgBackRest, with `archive_timeout = 900`
-- replaces `pg_hba.conf` with `files/pg_hba.conf`: peer auth on the local socket, and TLS-only (`hostssl`) scram-sha-256 from `100.64.0.0/10` for the `mission_control` role and database only
+- replaces `pg_hba.conf` with `files/pg_hba.conf`: peer auth on the local socket, and scram-sha-256 from `100.64.0.0/10` for the `mission_control` role and database only
 - sets `net.ipv4.ip_nonlocal_bind = 1` and orders Postgres after `tailscaled`, so Postgres binds the tailnet IP at boot even if Tailscale is not up yet
 - creates the `mission_control` role and the `mission_control` database it owns, revokes `PUBLIC` access to that database, and sets the role's password from `infra.env` on every run
 - creates the pgBackRest stanza `dash`, checks that WAL archiving works, and takes a first full backup if the repo has none
@@ -90,17 +90,20 @@ sudo systemctl start dash-pgbackrest@diff.service   # back up now
 
 1. Recreate the box with OpenTofu.
 2. In Linode Object Storage, revoke the `dash-pg-backups` key. Its secret died with the old box.
-3. From the repo root, in bash, mint a read-only key and restore. The latest point in the archive is the default; pass a time as the argument to `restore.sh` for point in time.
+3. From the repo root, mint a read-only key and restore. The snippet runs in its own bash process, so a failing helper cannot close your shell. The latest point in the archive is the default; pass a time as the argument to `restore.sh` for point in time.
 
    ```bash
+   bash -euo pipefail <<'SH'
    . infra/hosts/db/lib.sh
    load_linode_token
    key_json="$(create_bucket_key dash-pg-restore-manual read_only)"
    bundle="$(push_bundle dash-db)"
+   trap 'remote dash-db "rm -rf '\''$bundle'\''" </dev/null' EXIT
    printf 'S3_KEY=%s\nS3_SECRET=%s\nCIPHER_PASS=%s\n' \
      "$(jq -r .access_key <<<"$key_json")" "$(jq -r .secret_key <<<"$key_json")" \
      "$(env_get DASH_PGBACKREST_CIPHER_PASS)" |
-     remote dash-db "sudo bash $bundle/remote/restore.sh"
+     remote dash-db "sudo bash '$bundle/remote/restore.sh'"
+   SH
    ```
 
 4. Run `provision.sh`. Linode no longer has a `dash-pg-backups` key, so it mints a new read_write one and replaces the read-only key on the box. It also applies the Dash settings, clears the restore's `archive_mode=off`, and resets the app password. It does not take a new full backup automatically, because the repo already has older ones. Start one with `sudo systemctl start dash-pgbackrest@full.service`.
@@ -135,7 +138,7 @@ It exits non-zero unless the restored counts are exactly 100 and 50, with no row
 
 ### Result, 2026-11-26
 
-Run `20261126T184210Z`: **PASS.** Later runs `20261126T184700Z` and `20261126T191858Z` (after the review fixes) passed with the same counts.
+Run `20261126T184210Z`: **PASS.** Later runs `20261126T184700Z`, `20261126T191858Z` and `20261126T193220Z` (after review fixes) passed with the same counts.
 
 ```text
 target time: 2026-11-26 18:42:19.511938+00
@@ -156,7 +159,7 @@ Afterwards, `dash-spare`'s installed package list was identical to a snapshot ta
 
 Other checks the same day:
 
-- **App path.** A throwaway `psql` unpacked in `/tmp` on `dash-app` (since removed) connected with `DASH_DATABASE_URL`. It saw `current_user = mission_control`, server `100.117.180.120` and client `100.107.66.72`, over TLS, on PostgreSQL 18.7. Connecting as `postgres` from `dash-app` was refused with `no pg_hba.conf entry`. So was `mission_control` with `sslmode=disable`.
+- **App path.** A throwaway `psql` unpacked in `/tmp` on `dash-app` (since removed) connected with `DASH_DATABASE_URL`. It saw `current_user = mission_control`, server `100.117.180.120` and client `100.107.66.72`, on PostgreSQL 18.7, both with TLS (`sslmode=prefer`) and without it (`sslmode=disable`, the node-postgres default). Connecting as `postgres` from `dash-app` was refused with `no pg_hba.conf entry`.
 - **Reboot.** After `dash-db` rebooted, Postgres was listening on `100.117.180.120:5432` and localhost, both swap devices were active, the timers were scheduled, and `pgbackrest check` passed.
 - **Cipher guard.** `provision.sh` with a wrong `DASH_PGBACKREST_CIPHER_PASS` stopped with "refusing to replace it", and archiving kept working.
 - **Failure hook.** A deliberately failing `dash-pgbackrest@bogus.service` logged `dash-db backup FAILED: dash-pgbackrest@bogus.service` under `dash-backup`.
