@@ -5,8 +5,9 @@ export class Initials {
       .trim()
       .split(/\s+/u)
       .filter((word) => word.length > 0);
-    const first = words.at(0)?.at(0) ?? '';
-    const last = words.length > 1 ? (words.at(-1)?.at(0) ?? '') : '';
+    const first = Array.from(words.at(0) ?? '').at(0) ?? '';
+    const last =
+      words.length > 1 ? (Array.from(words.at(-1) ?? '').at(0) ?? '') : '';
     return `${first}${last}`.toUpperCase();
   }
 }

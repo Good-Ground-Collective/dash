@@ -11,16 +11,24 @@ export interface ThemePreference {
   mode: ColorMode;
 }
 
-/** Reads the theme and mode a request asks for, falling back to Characters in light mode. */
-export class ThemePreferenceReader {
-  read(props: {
-    themeCookie: string | undefined;
-    modeCookie: string | undefined;
-    colorSchemeHint: string | null;
-  }): ThemePreference {
-    const theme = themeNameSchema.safeParse(props.themeCookie);
-    const mode = colorModeSchema.safeParse(props.modeCookie);
-    const hinted = colorModeSchema.safeParse(props.colorSchemeHint);
+export interface ThemePreferenceSources {
+  themeCookie: string | undefined;
+  modeCookie: string | undefined;
+  colorSchemeHint: string | null;
+}
+
+/** Works out which theme and mode a request should render in. */
+export interface ThemePreferenceReader {
+  read(sources: ThemePreferenceSources): ThemePreference;
+}
+
+/** Reads the theme and mode cookies, then the colour-scheme client hint, then falls back to Characters in light mode. */
+export class CookieThemePreferenceReader implements ThemePreferenceReader {
+  read(sources: ThemePreferenceSources): ThemePreference {
+    const theme = themeNameSchema.safeParse(sources.themeCookie);
+    const mode = colorModeSchema.safeParse(sources.modeCookie);
+    const hinted = colorModeSchema.safeParse(sources.colorSchemeHint);
+
     return {
       theme: theme.success ? theme.data : 'characters',
       mode: mode.success ? mode.data : hinted.success ? hinted.data : 'light',
@@ -32,4 +40,5 @@ export class ThemePreferenceReader {
   static readonly COLOR_SCHEME_HINT = 'sec-ch-prefers-color-scheme';
 }
 
-export const themePreferenceReader = new ThemePreferenceReader();
+export const themePreferenceReader: ThemePreferenceReader =
+  new CookieThemePreferenceReader();

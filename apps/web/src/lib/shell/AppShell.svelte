@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { Viewer } from '#lib/api/api-client.ts';
+  import type { Viewer } from '#lib/api/mission-control.ts';
   import NeedsYou from '#lib/shell/NeedsYou.svelte';
   import PrimaryNav from '#lib/shell/PrimaryNav.svelte';
   import SearchButton from '#lib/shell/SearchButton.svelte';

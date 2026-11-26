@@ -6,6 +6,7 @@ describe('Initials', () => {
     ['Ada Lovelace', 'AL'],
     ['grace brewster murray hopper', 'GH'],
     ['  Linus  ', 'L'],
+    ['𝒜da 𝒷yron', '𝒜𝒷'],
     ['', ''],
   ])('turns %j into %j', (name, initials) => {
     expect(Initials.of(name)).toBe(initials);

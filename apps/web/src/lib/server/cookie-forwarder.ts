@@ -1,9 +1,27 @@
-/** Copies the browser's cookies onto server-side requests bound for Mission Control. */
-export class CookieForwarder {
+import { z } from 'zod';
+import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
+
+export const originCookieForwarderPropsSchema = z.object({
+  apiBaseUrl: missionControlBaseUrlSchema,
+});
+
+export type OriginCookieForwarderProps = z.input<
+  typeof originCookieForwarderPropsSchema
+>;
+
+/** Decides which server-side requests carry the browser's cookies. */
+export interface CookieForwarder {
+  forward(props: { request: Request; cookie: string | null }): Request;
+}
+
+/** Forwards cookies only to requests bound for Mission Control's origin. */
+export class OriginCookieForwarder implements CookieForwarder {
   private readonly apiOrigin: string;
 
-  constructor(props: { apiBaseUrl: string }) {
-    this.apiOrigin = new URL(props.apiBaseUrl).origin;
+  constructor(props: OriginCookieForwarderProps) {
+    this.apiOrigin = new URL(
+      originCookieForwarderPropsSchema.parse(props).apiBaseUrl,
+    ).origin;
   }
 
   forward(props: { request: Request; cookie: string | null }): Request {
@@ -13,6 +31,7 @@ export class CookieForwarder {
     ) {
       return props.request;
     }
+
     const headers = new Headers(props.request.headers);
     headers.set('cookie', props.cookie);
     return new Request(props.request, { headers });

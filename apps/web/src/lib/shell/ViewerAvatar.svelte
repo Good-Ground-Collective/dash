@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Viewer } from '#lib/api/api-client.ts';
+  import type { Viewer } from '#lib/api/mission-control.ts';
   import { Initials } from '#lib/shell/initials.ts';
 
   let { viewer }: { viewer: Viewer | null } = $props();

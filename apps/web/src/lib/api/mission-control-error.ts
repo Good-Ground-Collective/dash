@@ -1,6 +1,6 @@
 /** Mission Control answered with a non-2xx status. */
-export class ApiError extends Error {
-  override name = 'ApiError';
+export class MissionControlError extends Error {
+  override name = 'MissionControlError';
   readonly status: number;
 
   constructor(props: { path: string; status: number }) {

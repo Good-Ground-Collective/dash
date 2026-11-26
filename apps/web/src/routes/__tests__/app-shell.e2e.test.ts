@@ -11,8 +11,11 @@ test.describe('app shell', () => {
     await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
     await expect(page.getByRole('link', { name: 'Dash' })).toBeVisible();
     const nav = page.getByRole('navigation', { name: 'Primary' });
-    for (const label of ['Home', 'Objectives', 'Agents', 'GitHub', 'Benches']) {
-      await expect(nav.getByText(label, { exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
+    for (const label of ['Objectives', 'Agents', 'GitHub', 'Benches']) {
+      await expect(nav.locator('li', { hasText: label })).toHaveText(
+        `${label} (not built yet)`,
+      );
     }
     await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute(
       'aria-current',
@@ -22,7 +25,7 @@ test.describe('app shell', () => {
       page.getByRole('heading', { name: 'Home', level: 1 }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: /Needs you/u }),
+      page.getByRole('button', { name: 'Needs you, 0 waiting' }),
     ).toBeVisible();
   });
 

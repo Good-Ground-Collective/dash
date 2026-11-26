@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CookieForwarder } from '#lib/server/cookie-forwarder.ts';
+import { OriginCookieForwarder } from '#lib/server/cookie-forwarder.ts';
 
-const forwarder = new CookieForwarder({
+const forwarder = new OriginCookieForwarder({
   apiBaseUrl: 'https://api.example.test',
 });
 
-describe('CookieForwarder', () => {
+describe('OriginCookieForwarder', () => {
   it('adds the cookie to requests for Mission Control', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
@@ -25,5 +25,11 @@ describe('CookieForwarder', () => {
       'https://api.example.test/api/auth/get-session',
     );
     expect(forwarder.forward({ request, cookie: null })).toBe(request);
+  });
+
+  it('refuses an API base URL that is not a URL', () => {
+    expect(
+      () => new OriginCookieForwarder({ apiBaseUrl: 'not a url' }),
+    ).toThrow();
   });
 });

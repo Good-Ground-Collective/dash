@@ -1,8 +1,8 @@
 import type { Handle, HandleFetch } from '@sveltejs/kit/hooks';
 import { API_BASE_URL } from '$app/env/public';
-import { ServerHooks } from '#lib/server/server-hooks.ts';
+import { VisitorContext } from '#lib/server/visitor-context.ts';
 
-const serverHooks = new ServerHooks({ apiBaseUrl: API_BASE_URL });
+const visitorContext = new VisitorContext({ apiBaseUrl: API_BASE_URL });
 
-export const handle: Handle = serverHooks.handle;
-export const handleFetch: HandleFetch = serverHooks.handleFetch;
+export const handle: Handle = visitorContext.handle;
+export const handleFetch: HandleFetch = visitorContext.handleFetch;

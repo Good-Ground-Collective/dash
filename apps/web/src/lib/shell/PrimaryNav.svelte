@@ -16,8 +16,10 @@
             {item.label}
           </a>
         {:else}
-          <span class="nav-link" aria-disabled="true" title="Not built yet">
-            {item.label}
+          <span class="nav-link unavailable">
+            {item.label}<span class="visually-hidden">
+              {' (not built yet)'}
+            </span>
           </span>
         {/if}
       </li>
@@ -62,7 +64,7 @@
     background: var(--faint);
   }
 
-  span.nav-link {
+  .unavailable {
     cursor: default;
   }
 </style>

@@ -8,9 +8,14 @@
   <Popover.Root>
     <Popover.Trigger>
       {#snippet child({ props })}
-        <button {...props} class="bubble" data-count={count}>
+        <button
+          {...props}
+          class="bubble"
+          data-count={count}
+          aria-label={`Needs you, ${count} waiting`}
+        >
           <span class="label">Needs you</span>
-          <span class="count" aria-label={`${count} waiting`}>{count}</span>
+          <span class="count">{count}</span>
         </button>
       {/snippet}
     </Popover.Trigger>
