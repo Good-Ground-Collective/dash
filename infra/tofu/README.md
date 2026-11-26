@@ -17,6 +17,8 @@ Nothing else in the `doublel.studio` zone is managed here. Atlanta has no Linode
 
 Each box boots from `templates/host.yaml.tftpl` through Linode metadata. Cloud-init creates the `dash` sudo user with the keys in `admin_ssh_public_keys`, turns off root and password SSH, enables unattended security upgrades, then installs Tailscale and joins the tailnet as `tag:dash`. It runs once, at first boot. Later edits to the template do not touch running boxes.
 
+The Linode provider refuses to create a box from an image unless it has `authorized_keys`, `root_pass` or `authorized_users`, so the same keys are also passed as `authorized_keys`. Linode puts them on root, but root SSH is off and port 22 is closed publicly, so they only matter for Linode's recovery tooling.
+
 ## Secrets
 
 Nothing secret lives in this directory. `tofu.sh` loads the files below and runs `tofu` with them, so the values never need to be in your interactive shell.
@@ -35,7 +37,8 @@ The Tailscale key is written into each box's user data, so it also ends up in th
 1. `LINODE_TOKEN=... ./bootstrap.sh` creates the `dash-tfstate` bucket with versioning, plus an access key limited to that bucket, and writes the key to `~/.config/dash/infra.env` (mode 600). It is safe to re-run. If the key exists in Linode but not in the env file, revoke it and run the script again.
 2. Create the Tailscale auth key and put it in `~/.config/dash/infra.env` as `TF_VAR_tailscale_auth_key`.
 3. Plan and apply as below.
-4. Delete `imports.tf` once the first apply has succeeded. It maps the three old DoubleL boxes onto their successors so the first plan replaces them.
+
+The first apply also used a one-off `imports.tf`, which mapped the three old DoubleL boxes onto their successors so that apply replaced them. It was deleted once they were gone. Imports are not part of the normal flow.
 
 ## State
 

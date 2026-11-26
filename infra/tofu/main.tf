@@ -62,13 +62,14 @@ resource "linode_firewall" "private" {
 resource "linode_instance" "host" {
   for_each = local.hosts
 
-  label       = each.value.label
-  region      = var.region
-  type        = each.value.type
-  image       = var.image
-  private_ip  = false
-  tags        = ["dash"]
-  firewall_id = each.value.firewall == "public" ? linode_firewall.public.id : linode_firewall.private.id
+  label           = each.value.label
+  region          = var.region
+  type            = each.value.type
+  image           = var.image
+  authorized_keys = var.admin_ssh_public_keys
+  private_ip      = false
+  tags            = ["dash"]
+  firewall_id     = each.value.firewall == "public" ? linode_firewall.public.id : linode_firewall.private.id
 
   metadata {
     user_data = sensitive(base64encode(templatefile("${path.module}/templates/host.yaml.tftpl", {
