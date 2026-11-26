@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { HttpMissionControl } from '#lib/api/mission-control.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
@@ -47,6 +48,21 @@ describe('HttpMissionControl', () => {
     expect(recorder.calls[0]?.init?.credentials).toBe('include');
   });
 
+  it('keeps a path prefix on the base URL', async () => {
+    const recorder = new RecordingFetch({
+      respond: async () => Response.json(null),
+    });
+    const missionControl = new HttpMissionControl({
+      baseUrl: 'https://api.example.test/mc',
+      fetch: recorder.fetch,
+    });
+
+    await missionControl.getViewer();
+    expect(recorder.calls[0]?.url).toBe(
+      'https://api.example.test/mc/api/auth/get-session',
+    );
+  });
+
   it('returns null when there is no session', async () => {
     const recorder = new RecordingFetch({
       respond: async () => Response.json(null),
@@ -84,7 +100,7 @@ describe('HttpMissionControl failures', () => {
       fetch: recorder.fetch,
     });
 
-    await expect(missionControl.getViewer()).rejects.toThrow();
+    await expect(missionControl.getViewer()).rejects.toBeInstanceOf(z.ZodError);
   });
 
   it('gives up once the timeout elapses', async () => {

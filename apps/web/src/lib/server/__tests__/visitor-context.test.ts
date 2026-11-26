@@ -90,6 +90,8 @@ describe('VisitorContext client hints', () => {
     });
 
     expect(response.headers.get('accept-ch')).toBeNull();
+    expect(response.headers.get('critical-ch')).toBeNull();
+    expect(response.headers.get('vary')).toBeNull();
   });
 
   it('refuses an API base URL that is not a URL', () => {

@@ -11,33 +11,39 @@ export interface ThemePreference {
   mode: ColorMode;
 }
 
-export interface ThemePreferenceSources {
-  themeCookie: string | undefined;
-  modeCookie: string | undefined;
-  colorSchemeHint: string | null;
+/** The parts of a request a theme preference can come from. */
+export interface ThemePreferenceRequest {
+  cookies: { get: (name: string) => string | undefined };
+  headers: Headers;
 }
 
 /** Works out which theme and mode a request should render in. */
 export interface ThemePreferenceReader {
-  read(sources: ThemePreferenceSources): ThemePreference;
+  /** The client hint the reader uses, for the response to ask browsers for. */
+  readonly clientHint: string;
+  read(request: ThemePreferenceRequest): ThemePreference;
 }
 
 /** Reads the theme and mode cookies, then the colour-scheme client hint, then falls back to Characters in light mode. */
 export class CookieThemePreferenceReader implements ThemePreferenceReader {
-  read(sources: ThemePreferenceSources): ThemePreference {
-    const theme = themeNameSchema.safeParse(sources.themeCookie);
-    const mode = colorModeSchema.safeParse(sources.modeCookie);
-    const hinted = colorModeSchema.safeParse(sources.colorSchemeHint);
+  readonly clientHint = 'sec-ch-prefers-color-scheme';
 
-    return {
-      theme: theme.success ? theme.data : 'characters',
-      mode: mode.success ? mode.data : hinted.success ? hinted.data : 'light',
-    };
+  read(request: ThemePreferenceRequest): ThemePreference {
+    const theme = themeNameSchema
+      .catch('characters')
+      .parse(request.cookies.get(CookieThemePreferenceReader.THEME_COOKIE));
+    const hintedMode = colorModeSchema
+      .catch('light')
+      .parse(request.headers.get(this.clientHint));
+    const mode = colorModeSchema
+      .catch(hintedMode)
+      .parse(request.cookies.get(CookieThemePreferenceReader.MODE_COOKIE));
+
+    return { theme, mode };
   }
 
   static readonly THEME_COOKIE = 'dash-theme';
   static readonly MODE_COOKIE = 'dash-mode';
-  static readonly COLOR_SCHEME_HINT = 'sec-ch-prefers-color-scheme';
 }
 
 export const themePreferenceReader: ThemePreferenceReader =

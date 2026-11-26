@@ -38,14 +38,16 @@ export class HttpMissionControl implements MissionControl {
 
   constructor(props: HttpMissionControlProps) {
     const valid = httpMissionControlPropsSchema.parse(props);
-    this.baseUrl = new URL(valid.baseUrl);
+    this.baseUrl = new URL(
+      valid.baseUrl.endsWith('/') ? valid.baseUrl : `${valid.baseUrl}/`,
+    );
     this.fetcher = valid.fetch;
     this.timeoutMs = valid.timeoutMs;
   }
 
   async getViewer(): Promise<Viewer | null> {
     const session = await this.getJson({
-      path: '/api/auth/get-session',
+      path: 'api/auth/get-session',
       schema: sessionResponseSchema,
     });
     return session?.user ?? null;

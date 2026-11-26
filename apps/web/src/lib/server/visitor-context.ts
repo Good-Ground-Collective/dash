@@ -8,10 +8,7 @@ import {
 } from '#lib/server/cookie-forwarder.ts';
 import { sessionCookie } from '#lib/server/session-cookie.ts';
 import { documentTheme } from '#lib/theme/document-theme.ts';
-import {
-  CookieThemePreferenceReader,
-  themePreferenceReader,
-} from '#lib/theme/theme-preference-reader.ts';
+import { themePreferenceReader } from '#lib/theme/theme-preference-reader.ts';
 
 export const visitorContextPropsSchema = z.object({
   apiBaseUrl: missionControlBaseUrlSchema,
@@ -57,11 +54,8 @@ export class VisitorContext {
 
   async visit(visit: Visit): Promise<Response> {
     const preference = themePreferenceReader.read({
-      themeCookie: visit.cookies.get(CookieThemePreferenceReader.THEME_COOKIE),
-      modeCookie: visit.cookies.get(CookieThemePreferenceReader.MODE_COOKIE),
-      colorSchemeHint: visit.headers.get(
-        CookieThemePreferenceReader.COLOR_SCHEME_HINT,
-      ),
+      cookies: visit.cookies,
+      headers: visit.headers,
     });
     visit.locals.themePreference = preference;
     visit.locals.hasSessionCookie = sessionCookie.isPresent({
@@ -75,7 +69,7 @@ export class VisitorContext {
     if (
       response.headers.get('content-type')?.startsWith('text/html') === true
     ) {
-      const hint = CookieThemePreferenceReader.COLOR_SCHEME_HINT;
+      const hint = themePreferenceReader.clientHint;
       response.headers.set('accept-ch', hint);
       response.headers.set('critical-ch', hint);
       response.headers.append('vary', hint);
