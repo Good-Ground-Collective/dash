@@ -81,7 +81,7 @@ resource "linode_instance" "host" {
   }
 
   lifecycle {
-    ignore_changes = [metadata[0].user_data]
+    ignore_changes = [metadata[0].user_data, authorized_keys]
   }
 }
 
@@ -92,15 +92,16 @@ data "cloudflare_zone" "this" {
 }
 
 locals {
-  app_ipv4 = one([
-    for ip in linode_instance.host["app"].ipv4 : ip if !cidrcontains("192.168.0.0/16", ip)
-  ])
+  host_public_ipv4 = {
+    for key, host in linode_instance.host :
+    key => one([for ip in host.ipv4 : ip if !cidrcontains("192.168.0.0/16", ip)])
+  }
   app_records = merge([
     for name in ["dash", "api.dash"] : {
       "${name}-A" = {
         name    = "${name}.${var.zone_name}"
         type    = "A"
-        content = local.app_ipv4
+        content = local.host_public_ipv4["app"]
       }
       "${name}-AAAA" = {
         name    = "${name}.${var.zone_name}"

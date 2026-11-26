@@ -15,7 +15,7 @@ OpenTofu for Dash's production hosts in Linode's Atlanta region (`us-southeast`)
 
 Nothing else in the `doublel.studio` zone is managed here. Atlanta has no Linode VPCs and its 192.168 private network is shared with other customers, so the boxes talk to each other over Tailscale. SSH is only reachable over the tailnet.
 
-Each box boots from `templates/host.yaml.tftpl` through Linode metadata. Cloud-init creates the `dash` sudo user with the keys in `admin_ssh_public_keys`, turns off root and password SSH, enables unattended security upgrades, then installs Tailscale and joins the tailnet as `tag:dash`. It runs once, at first boot. Later edits to the template do not touch running boxes.
+Each box boots from `templates/host.yaml.tftpl` through Linode metadata. Cloud-init creates the `dash` sudo user with the keys in `admin_ssh_public_keys`, turns off root and password SSH, enables unattended security upgrades, then installs Tailscale and joins the tailnet as `tag:dash`. It runs once, at first boot. Later edits to the template or to `admin_ssh_public_keys` do not touch or replace running boxes; add keys to a running box over the tailnet.
 
 The Linode provider refuses to create a box from an image unless it has `authorized_keys`, `root_pass` or `authorized_users`, so the same keys are also passed as `authorized_keys`. Linode puts them on root, but root SSH is off and port 22 is closed publicly, so they only matter for Linode's recovery tooling.
 

@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Creates the OpenTofu state bucket and a key limited to it. Safe to re-run.
-# Needs LINODE_TOKEN. Writes the key to $DASH_INFRA_ENV and never prints it.
-# The bucket is Linode Object Storage; versioning is set through its
-# S3-compatible API. No AWS account is involved.
+# Creates the dash-tfstate bucket and its key; see README.md. Needs LINODE_TOKEN.
 set -euo pipefail
 
 REGION="us-southeast"
@@ -32,8 +29,11 @@ else
   echo "bucket ${BUCKET}: created"
 fi
 
-mkdir -p "$(dirname "$ENV_FILE")"
-chmod 700 "$(dirname "$ENV_FILE")"
+env_dir="$(dirname "$ENV_FILE")"
+[ -d "$env_dir" ] || {
+  mkdir -p "$env_dir"
+  chmod 700 "$env_dir"
+}
 touch "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
@@ -55,13 +55,15 @@ else
   key_json="$(api POST /object-storage/keys --data "$(jq -nc \
     --arg l "$KEY_LABEL" --arg r "$REGION" --arg b "$BUCKET" \
     '{label: $l, bucket_access: [{region: $r, bucket_name: $b, permissions: "read_write"}]}')")"
-  {
-    echo "LINODE_OBJ_ACCESS_KEY=$(jq -r .access_key <<<"$key_json")"
-    echo "LINODE_OBJ_SECRET_KEY=$(jq -r .secret_key <<<"$key_json")"
-  } >>"$ENV_FILE"
+  access_key="$(jq -er .access_key <<<"$key_json")"
+  secret_key="$(jq -er .secret_key <<<"$key_json")"
+  key_id="$(jq -er .id <<<"$key_json")"
   unset key_json
-  echo "key ${KEY_LABEL}: created (id $(api GET "/object-storage/keys?page_size=500" |
-    jq -r --arg l "$KEY_LABEL" '[.data[] | select(.label == $l)][0].id'))"
+  {
+    echo "LINODE_OBJ_ACCESS_KEY=${access_key}"
+    echo "LINODE_OBJ_SECRET_KEY=${secret_key}"
+  } >>"$ENV_FILE"
+  echo "key ${KEY_LABEL}: created (id ${key_id})"
 fi
 
 grep -q '^TF_VAR_tailscale_auth_key=' "$ENV_FILE" ||

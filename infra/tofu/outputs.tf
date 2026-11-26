@@ -3,7 +3,7 @@ output "hosts" {
   value = {
     for key, host in linode_instance.host : host.label => {
       id   = host.id
-      ipv4 = one([for ip in host.ipv4 : ip if !cidrcontains("192.168.0.0/16", ip)])
+      ipv4 = local.host_public_ipv4[key]
       ipv6 = split("/", host.ipv6)[0]
     }
   }

@@ -29,6 +29,11 @@ variable "tailscale_auth_key" {
   type        = string
   sensitive   = true
   nullable    = false
+
+  validation {
+    condition     = startswith(var.tailscale_auth_key, "tskey-") && var.tailscale_auth_key != "tskey-auth-REPLACE-ME"
+    error_message = "Set TF_VAR_tailscale_auth_key to a real pre-authorized tag:dash key."
+  }
 }
 
 variable "zone_name" {
