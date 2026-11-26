@@ -16,7 +16,7 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 
 | Step | Discussion | Why here |
 |---|---|---|
-| 1 | [01 Identity: users, service accounts, passkeys](./01-identity-and-auth.md) | Shapes the data model and every auth screen. The biggest model decision. |
+| ✓ | 01 Identity: concluded in #1 → build issues #11–#15 | |
 | 2 | [02 Design direction](./02-design-direction.md) | Sets the visual language before any mock gets made. |
 | 3 | [04 GitHub integration](./04-github-integration.md) | Decides what "Connect GitHub" means in onboarding and what slice 1 shows. |
 | 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |

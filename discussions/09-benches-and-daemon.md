@@ -6,7 +6,7 @@
 - Settings screens extend to API keys and Claude OAuth tokens for sessions.
 
 ## Questions
-1. **Pairing:** how does a new machine get its service account? A device-code pair flow, or a key pasted in? (Ties to [01](./01-identity-and-auth.md).)
+1. **Pairing:** how does a new machine get its service account? A device-code pair flow, or a key pasted in? (Ties to #1 (concluded).)
 2. **Process watch list:** configured per bench in Dash and pushed to the daemon, or a local config file?
 3. **Sampling:** how often for metrics (every 15–60 s?), and how much history do we keep (rollups)?
 4. **Harness version matrix** (as in Bench): detect installed versions, compare with the latest, and offer an update button? Is updating in scope, or is it read-only?

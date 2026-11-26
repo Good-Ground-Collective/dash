@@ -4,7 +4,7 @@
 It's the first screen you'll touch and it exercises auth end to end. It's a good first design iteration.
 
 ## Depends on
-[01](./01-identity-and-auth.md) for bootstrap, passkeys and recovery, and [02](./02-design-direction.md) for the visual language.
+#1 (concluded) for bootstrap, passkeys and recovery, and [02](./02-design-direction.md) for the visual language.
 
 ## Flow to design (strawman)
 1. **First boot:** enter the setup token, or arrive from the admin magic link.
