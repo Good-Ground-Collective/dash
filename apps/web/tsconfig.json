@@ -1,7 +1,7 @@
 {
-  "extends": "@dash/config/tsconfig/base.json",
+  "extends": ["@dash/config/tsconfig/base.json", "$app/tsconfig"],
   "compilerOptions": {
-    "noEmit": true
+    "types": ["$app/types", "node"]
   },
-  "include": ["playwright.config.ts"]
+  "include": ["src", "*.config.ts"]
 }

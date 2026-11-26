@@ -7,7 +7,7 @@ Open questions live in [discussions](./discussions). Each one is a conversation 
 ## Layout
 
 ```
-apps/web              SvelteKit web app (placeholder)
+apps/web              SvelteKit web app
 apps/mission-control  Fastify server (placeholder)
 packages/standards    Zod schemas shared between components
 packages/config       Shared tsconfig, ESLint and Stylelint config
@@ -53,6 +53,14 @@ The workspace uses pnpm and Turborepo, on Node 24 LTS.
 | `pnpm format:check`                        | Prettier, check only                                                                                  |
 
 Add `--filter <package>` to run a task in one package, for example `pnpm turbo run test --filter @dash/standards`.
+
+## Web app
+
+`apps/web` is SvelteKit with adapter-node. Start it with `pnpm --filter @dash/web dev`. It calls Mission Control at `API_BASE_URL` (default `https://api.dash.doublel.studio`); set it to a local Mission Control, for example `API_BASE_URL=http://localhost:3000`. The shell renders without Mission Control.
+
+The theme comes from the `dash-theme` and `dash-mode` cookies (`characters`; `light` or `dark`), applied to `<html>` during server rendering. Theme tokens live in `apps/web/src/lib/theme/`; components use only those custom properties.
+
+`pnpm turbo run test:e2e --filter @dash/web` builds the app and runs the Playwright smoke test. Run `pnpm --filter @dash/web exec playwright install chromium` once first.
 
 ## Lint gates
 

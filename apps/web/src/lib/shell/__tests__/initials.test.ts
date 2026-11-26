@@ -1,0 +1,13 @@
+import { describe, expect, it } from 'vitest';
+import { Initials } from '#lib/shell/initials.ts';
+
+describe('Initials', () => {
+  it.each([
+    ['Ada Lovelace', 'AL'],
+    ['grace brewster murray hopper', 'GH'],
+    ['  Linus  ', 'L'],
+    ['', ''],
+  ])('turns %j into %j', (name, initials) => {
+    expect(Initials.of(name)).toBe(initials);
+  });
+});

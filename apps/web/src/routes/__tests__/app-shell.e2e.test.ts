@@ -1,0 +1,65 @@
+import { expect, test } from '@playwright/test';
+
+test.describe('app shell', () => {
+  test('renders the shell in light mode by default', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme',
+      'characters',
+    );
+    await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
+    await expect(page.getByRole('link', { name: 'Dash' })).toBeVisible();
+    const nav = page.getByRole('navigation', { name: 'Primary' });
+    for (const label of ['Home', 'Objectives', 'Agents', 'GitHub', 'Benches']) {
+      await expect(nav.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(
+      page.getByRole('heading', { name: 'Home', level: 1 }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Needs you/u }),
+    ).toBeVisible();
+  });
+
+  test('renders dark mode from the mode cookie during server rendering', async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await context.addCookies([
+      { name: 'dash-mode', value: 'dark', url: baseURL ?? '' },
+    ]);
+    const response = await page.request.get('/');
+
+    expect(await response.text()).toContain('data-mode="dark"');
+  });
+
+  test('still renders when Mission Control is unreachable with a session cookie', async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await context.addCookies([
+      { name: 'better-auth.session_token', value: 'stale', url: baseURL ?? '' },
+    ]);
+    await page.goto('/');
+
+    await expect(page.getByRole('img', { name: 'Signed out' })).toBeVisible();
+  });
+
+  test('opens the search dialog and the needs-you panel', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page.getByRole('dialog', { name: 'Search' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: /Needs you/u }).click();
+    await expect(page.getByText('Nothing needs you right now.')).toBeVisible();
+  });
+});

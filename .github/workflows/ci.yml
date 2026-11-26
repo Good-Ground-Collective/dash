@@ -47,3 +47,14 @@ jobs:
       - name: Verify all packages
         if: github.event_name == 'push'
         run: pnpm turbo run lint typecheck test build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @dash/web exec playwright install --with-deps chromium
+
+      - name: End-to-end test affected packages
+        if: github.event_name == 'pull_request'
+        run: pnpm turbo run test:e2e --affected
+
+      - name: End-to-end test all packages
+        if: github.event_name == 'push'
+        run: pnpm turbo run test:e2e
