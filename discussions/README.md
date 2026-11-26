@@ -18,7 +18,7 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 |---|---|---|
 | ✓ | 01 Identity: concluded in #1 → build issues #11–#15 | |
 | ✓ | 02 Design direction: concluded in #2 → Characters theme first (#17, #18); Loud, disciplined (#19), Newspaper (#20) and the briefing (#21) later | |
-| 3 | [04 GitHub integration](./04-github-integration.md) | Decides what "Connect GitHub" means in onboarding and what slice 1 shows. |
+| ✓ | 04 GitHub integration: concluded in #4 → #25–#29 (owned App + guest PATs, read-only feed) | |
 | 3½ | [11 Objectives](./11-objectives.md) | The home screen leads with objectives, and nothing defines them yet. |
 | 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |
 | 5 | [05 Stack and repo layout](./05-stack-and-repo.md) | Mostly settled already (TS, Svelte, Go). Confirms libraries, such as the auth library from 01. |
