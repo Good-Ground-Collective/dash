@@ -31,12 +31,14 @@ const running: ZodFastifyInstance[] = [];
 
 class ServedAuth {
   readonly module = new AuthModule({
-    storage: memoryAdapter({
-      user: [],
-      session: [],
-      account: [],
-      verification: [],
-    }),
+    store: {
+      storage: memoryAdapter({
+        user: [],
+        session: [],
+        account: [],
+        verification: [],
+      }),
+    },
     servicePrincipalRepository: new RecordingServicePrincipalRepository(),
     secret,
     baseUrl: 'http://localhost:3000',

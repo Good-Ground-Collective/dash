@@ -1,13 +1,12 @@
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { makeSignature } from 'better-auth/crypto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
 import {
   BetterAuthIdentity,
   type IdentitySettings,
 } from '#src/auth/services/identity/identity.ts';
-import { KindPrincipalGuard } from '#src/auth/services/principal-guard/principal-guard.ts';
 
 const secret = 'test-secret-that-is-at-least-32-characters';
 const daySeconds = 60 * 60 * 24;
@@ -39,7 +38,6 @@ class IdentityFixture {
         account: [],
         verification: [],
       }),
-      guard: new KindPrincipalGuard(),
     });
   }
 
@@ -61,7 +59,7 @@ class IdentityFixture {
   }
 }
 
-describe('BetterAuthIdentity', () => {
+describe('BetterAuthIdentity cookies and lifetime', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -104,12 +102,34 @@ describe('BetterAuthIdentity', () => {
     expect(expiresAt.toISOString()).toBe('2026-01-31T00:00:00.000Z');
 
     vi.setSystemTime(new Date('2026-01-03T00:00:00Z'));
-    const session = await fixture.identity.auth.api.getSession({
+    const session = await fixture.identity.session({
       headers: new Headers({ cookie }),
     });
 
-    expect(session?.session.expiresAt.toISOString()).toBe(
-      '2026-02-02T00:00:00.000Z',
+    expect(session?.expiresAt.toISOString()).toBe('2026-02-02T00:00:00.000Z');
+  });
+});
+
+describe('BetterAuthIdentity sessions', () => {
+  it('reads the session as a principal with its kind', async () => {
+    const fixture = new IdentityFixture({ settings: localSettings });
+    const { cookie } = await fixture.signIn();
+
+    const session = await fixture.identity.session({
+      headers: new Headers({ cookie }),
+    });
+
+    expect(session).toMatchObject({ kind: 'user' });
+    expectTypeOf<NonNullable<typeof session>['kind']>().toEqualTypeOf<
+      'user' | 'service'
+    >();
+  });
+
+  it('reads no session without a cookie', async () => {
+    const fixture = new IdentityFixture({ settings: localSettings });
+
+    expect(await fixture.identity.session({ headers: new Headers() })).toBe(
+      null,
     );
   });
 

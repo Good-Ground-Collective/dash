@@ -18,7 +18,7 @@ const workflows = new DbosWorkflowRuntime({
   logLevel: config.logLevel,
 });
 const auth = new AuthModule({
-  storage: new DrizzleAuthStore({ database }).storage,
+  store: new DrizzleAuthStore({ database }),
   servicePrincipalRepository: new DrizzleServicePrincipalRepository({
     database,
   }),

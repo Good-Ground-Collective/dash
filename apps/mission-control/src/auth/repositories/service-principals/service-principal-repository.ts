@@ -44,6 +44,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
           kind: 'service',
         })
         .returning();
+
       const [profile] = await transaction
         .insert(serviceProfileTable)
         .values({
@@ -54,9 +55,11 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
           description: record.description,
         })
         .returning();
+
       if (principal === undefined || profile === undefined) {
         throw new ServicePrincipalNotStoredError();
       }
+
       return {
         id: principal.id,
         email: principal.email,

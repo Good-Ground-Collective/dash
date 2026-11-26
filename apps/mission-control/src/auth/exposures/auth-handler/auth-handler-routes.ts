@@ -16,11 +16,9 @@ const hopHeaders: ReadonlySet<string> = new Set([
  * the body bytes untouched, and the Web `Response` is copied back, `Set-Cookie` lines intact.
  */
 export class AuthHandlerRoutes {
-  private readonly baseUrl: string;
   private readonly identity: Identity;
 
-  constructor(props: { baseUrl: string; identity: Identity }) {
-    this.baseUrl = props.baseUrl;
+  constructor(props: { identity: Identity }) {
     this.identity = props.identity;
   }
 
@@ -50,15 +48,18 @@ export class AuthHandlerRoutes {
   }): Promise<FastifyReply> {
     const { response, reply } = props;
     reply.code(response.status);
+
     for (const [name, value] of response.headers) {
       if (name !== 'set-cookie' && !hopHeaders.has(name)) {
         reply.header(name, value);
       }
     }
+
     const cookies = response.headers.getSetCookie();
     if (cookies.length > 0) {
       reply.header('set-cookie', cookies);
     }
+
     return reply.send(
       response.body === null
         ? undefined
@@ -76,7 +77,8 @@ export class AuthHandlerRoutes {
         headers.append(name, item);
       }
     }
-    const url = new URL(request.url, this.baseUrl);
+
+    const url = new URL(request.url, this.identity.baseUrl);
     return Buffer.isBuffer(request.body)
       ? new Request(url, {
           method: request.method,

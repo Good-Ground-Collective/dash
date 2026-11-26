@@ -11,7 +11,7 @@ import {
 } from '#src/auth/contracts/principal.ts';
 import { ServicePrincipalForbiddenError } from '#src/auth/errors.ts';
 
-/** The passkey plugin's registration endpoints. */
+/** Matched by path, so the check holds once the passkey plugin is added. Keep in step with its endpoint names. */
 const passkeyRegistrationPaths: ReadonlySet<string> = new Set([
   '/passkey/generate-register-options',
   '/passkey/verify-registration',

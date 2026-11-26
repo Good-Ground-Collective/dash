@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
+import {
+  AppConfig,
+  developmentAuthSecret,
+} from '#src/platform/definitions/config/app-config.ts';
 import { ConfigError } from '#src/platform/errors.ts';
 
 const databaseUrl = 'postgres://dash:dash@127.0.0.1:54329/mission_control';
@@ -80,6 +83,26 @@ describe('AppConfig auth settings', () => {
   it('rejects an auth secret shorter than 32 characters', () => {
     expect(
       () => new AppConfig({ ...productionEnv, BETTER_AUTH_SECRET: 'short' }),
+    ).toThrow(ConfigError);
+  });
+
+  it('refuses the public development secret in production', () => {
+    expect(
+      () =>
+        new AppConfig({
+          ...productionEnv,
+          BETTER_AUTH_SECRET: developmentAuthSecret,
+        }),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects a production auth URL outside the cookie domain', () => {
+    expect(
+      () =>
+        new AppConfig({
+          ...productionEnv,
+          BETTER_AUTH_URL: 'https://mission-control.example.com',
+        }),
     ).toThrow(ConfigError);
   });
 

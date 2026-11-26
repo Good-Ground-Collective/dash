@@ -1,14 +1,13 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { AuthHandlerRoutes } from '#src/auth/exposures/auth-handler/auth-handler-routes.ts';
-import type { AuthStorage } from '#src/auth/repositories/auth-store/auth-store.ts';
+import type { AuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import type { ServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import {
   BetterAuthIdentity,
   type Identity,
   type IdentitySettings,
 } from '#src/auth/services/identity/identity.ts';
-import { KindPrincipalGuard } from '#src/auth/services/principal-guard/principal-guard.ts';
 import {
   type ServicePrincipals,
   StoredServicePrincipals,
@@ -23,21 +22,18 @@ export class AuthModule implements HttpModule {
 
   constructor(
     props: {
-      storage: AuthStorage;
+      store: AuthStore;
       servicePrincipalRepository: ServicePrincipalRepository;
     } & IdentitySettings,
   ) {
     this.identity = new BetterAuthIdentity({
       ...props,
-      guard: new KindPrincipalGuard(),
+      storage: props.store.storage,
     });
     this.servicePrincipals = new StoredServicePrincipals({
       repository: props.servicePrincipalRepository,
     });
-    const routes = new AuthHandlerRoutes({
-      baseUrl: props.baseUrl,
-      identity: this.identity,
-    });
+    const routes = new AuthHandlerRoutes({ identity: this.identity });
     this.plugin = async (app) => {
       routes.register(app);
     };

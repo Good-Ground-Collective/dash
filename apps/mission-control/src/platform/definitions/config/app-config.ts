@@ -5,6 +5,10 @@ import { ConfigError } from '#src/platform/errors.ts';
 const productionWebOrigin = 'https://dash.doublel.studio';
 const productionCookieDomain = new URL(productionWebOrigin).hostname;
 
+/** The secret `.env.example` ships for local use. It is public, so production refuses it. */
+export const developmentAuthSecret =
+  'dev-only-placeholder-secret-not-for-deploys';
+
 export const logLevelSchema = z.enum([
   'fatal',
   'error',
@@ -56,6 +60,30 @@ export const appConfigSchema = z
     {
       message: 'BETTER_AUTH_URL must use https in production',
       path: ['BETTER_AUTH_URL'],
+    },
+  )
+  .refine(
+    (env) => {
+      const host = new URL(env.BETTER_AUTH_URL).hostname;
+      return (
+        env.NODE_ENV !== 'production' ||
+        host === productionCookieDomain ||
+        host.endsWith(`.${productionCookieDomain}`)
+      );
+    },
+    {
+      message: `BETTER_AUTH_URL must be on ${productionCookieDomain} in production, or browsers drop the session cookie`,
+      path: ['BETTER_AUTH_URL'],
+    },
+  )
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' ||
+      env.BETTER_AUTH_SECRET !== developmentAuthSecret,
+    {
+      message:
+        'BETTER_AUTH_SECRET is the public development placeholder. Generate one, for example with `openssl rand -base64 32`',
+      path: ['BETTER_AUTH_SECRET'],
     },
   )
   .transform((env) => ({
