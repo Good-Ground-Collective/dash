@@ -8,7 +8,7 @@ Open questions live in [discussions](./discussions). Each one is a conversation 
 
 ```
 apps/web              SvelteKit web app (placeholder)
-apps/mission-control  Fastify server (placeholder)
+apps/mission-control  Fastify server with Drizzle and DBOS on Postgres
 packages/standards    Zod schemas shared between components
 packages/config       Shared tsconfig, ESLint and Stylelint config
 ```
@@ -57,6 +57,29 @@ Add `--filter <package>` to run a task in one package, for example `pnpm turbo r
 ## Lint gates
 
 ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Packages and the repo root pick the shared config up from `@dash/config/eslint`.
+
+## Mission Control
+
+Mission Control runs on Node 24's built-in TypeScript type stripping, so there is no build step: `node src/main.ts` is the entry point in every environment. It needs Postgres, which Docker Compose provides locally on port 54329:
+
+```sh
+cd apps/mission-control
+cp .env.example .env
+pnpm db:up
+pnpm dev
+```
+
+`pnpm dev` applies migrations, then starts the HTTP server and DBOS together and restarts on change. `pnpm dev` at the repository root does the same through Turborepo. Check it with `curl localhost:3000/healthz`.
+
+| Command            | What it does                                                     |
+| ------------------ | ---------------------------------------------------------------- |
+| `pnpm db:up`       | Start the local Postgres container                               |
+| `pnpm db:down`     | Stop it. The `dash-mission-control-pgdata` volume keeps the data |
+| `pnpm db:generate` | Generate a Drizzle migration from the `*-table.ts` files         |
+| `pnpm db:migrate`  | Apply pending migrations; deploys run this before `pnpm start`   |
+| `pnpm start`       | Start without watching                                           |
+
+Each module under `src/` is a folder with a `module.ts`, laid out in the roles preflight's `module-layout` rule enforces: `exposures/` for routes, `services/`, `repositories/` for Drizzle tables and queries, and `contracts/` for Zod schemas. A module's routes register in their own encapsulated Fastify scope. `src/heartbeat` is an example of every piece, a DBOS schedule and queue included, and goes once real modules land.
 
 ## CI
 
