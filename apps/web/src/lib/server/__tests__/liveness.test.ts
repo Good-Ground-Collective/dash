@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Liveness } from '#lib/server/liveness.ts';
+import { liveness } from '#lib/server/liveness.ts';
 
-describe('Liveness', () => {
+describe('StaticLiveness', () => {
   it('answers ok as uncached plain text', async () => {
-    const response = new Liveness().respond();
+    const response = liveness.respond();
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('ok');

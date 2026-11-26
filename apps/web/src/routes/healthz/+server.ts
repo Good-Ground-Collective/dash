@@ -1,6 +1,6 @@
-import { Liveness } from '#lib/server/liveness.ts';
+import { liveness } from '#lib/server/liveness.ts';
 import type { RequestHandler } from './$types';
 
-const get: RequestHandler = new Liveness().respond;
+const get: RequestHandler = liveness.respond;
 
 export { get as GET };

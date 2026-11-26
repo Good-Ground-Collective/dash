@@ -1,5 +1,10 @@
-/** Answers the container healthcheck and kamal-proxy. It never calls Mission Control, so web stays up while the API restarts. */
-export class Liveness {
+/** Answers the container healthcheck and kamal-proxy. */
+export interface Liveness {
+  readonly respond: () => Response;
+}
+
+/** Always answers ok. It never calls Mission Control, so web stays up while the API restarts. */
+export class StaticLiveness implements Liveness {
   readonly respond = (): Response =>
     new Response('ok', {
       headers: {
@@ -8,3 +13,5 @@ export class Liveness {
       },
     });
 }
+
+export const liveness: Liveness = new StaticLiveness();
