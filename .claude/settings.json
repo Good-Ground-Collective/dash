@@ -1,0 +1,10 @@
+{
+  "pluginConfigs": {
+    "flight-rules@flight-rules": {
+      "options": {
+        "tracker": "github",
+        "repo": "Good-Ground-Collective/dash"
+      }
+    }
+  }
+}
