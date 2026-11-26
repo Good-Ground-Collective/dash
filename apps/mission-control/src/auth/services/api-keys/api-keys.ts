@@ -32,6 +32,20 @@ export type ApiKeySettings = z.input<typeof apiKeySettingsSchema>;
 
 const statementsSchema = z.record(z.string(), z.array(z.string()));
 
+/** `permissions` as the store keeps it: JSON text of the statements. Text that isn't JSON is a Zod issue, not a SyntaxError. */
+const statementsTextSchema = z
+  .string()
+  .transform((value, context) => {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parsed;
+    } catch {
+      context.addIssue({ code: 'custom', message: 'permissions is not JSON' });
+      return z.NEVER;
+    }
+  })
+  .pipe(statementsSchema);
+
 const timestampSchema = z.coerce.date().transform((date) => date.toISOString());
 
 /** A row of the `apikey` model, as far as Dash reads it. `permissions` is stored as JSON text. */
@@ -39,12 +53,7 @@ const storedApiKeySchema = z.object({
   id: z.string(),
   referenceId: z.string(),
   start: z.string().nullable(),
-  permissions: z
-    .string()
-    .nullable()
-    .transform((value) =>
-      value === null ? null : statementsSchema.parse(JSON.parse(value)),
-    ),
+  permissions: statementsTextSchema.nullable(),
   createdAt: timestampSchema,
   expiresAt: timestampSchema.nullable(),
   lastRequest: timestampSchema.nullable(),

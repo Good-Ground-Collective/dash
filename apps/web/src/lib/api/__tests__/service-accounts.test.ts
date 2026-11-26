@@ -119,4 +119,21 @@ describe('HttpServiceAccounts failures', () => {
     expect(failure).toBeInstanceOf(MissionControlError);
     expect(failure).toMatchObject({ code: 'SESSION_NOT_FRESH', status: 403 });
   });
+
+  it('keeps the status when the error body isn’t JSON', async () => {
+    const recorder = new RecordingFetch({
+      response: () => new Response('<html>Bad gateway</html>', { status: 502 }),
+    });
+    const accounts = new HttpServiceAccounts({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    const failure = await accounts
+      .revokeKey({ keyId: 'k1' })
+      .catch((cause: unknown) => cause);
+
+    expect(failure).toBeInstanceOf(MissionControlError);
+    expect(failure).toMatchObject({ status: 502, code: 'UNKNOWN' });
+  });
 });

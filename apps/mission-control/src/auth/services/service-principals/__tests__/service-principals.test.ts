@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ZodError } from 'zod';
 
 import { InMemoryServicePrincipalRepository } from '#src/auth/__tests__/support/in-memory-service-principals.ts';
 import { ServicePrincipalOwnerError } from '#src/auth/errors.ts';
@@ -58,8 +57,11 @@ describe('StoredServicePrincipals', () => {
       servicePrincipals.create({
         name: 'Bench',
         ownerUserId,
+        benchId: 'studio-mac',
         description: ' ',
       }),
-    ).rejects.toBeInstanceOf(ZodError);
+    ).rejects.toMatchObject({
+      issues: [expect.objectContaining({ path: ['description'] })],
+    });
   });
 });

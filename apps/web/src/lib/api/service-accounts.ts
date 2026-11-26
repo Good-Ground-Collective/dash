@@ -9,6 +9,17 @@ import {
   type NewServiceAccount,
 } from '#lib/api/service-account-contracts.ts';
 
+/** A response body as JSON. An empty body or one that isn't JSON, such as a proxy's error page, fails to parse. */
+const jsonTextSchema = z.string().transform((value, context) => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
+  } catch {
+    context.addIssue({ code: 'custom', message: 'The body is not JSON' });
+    return z.NEVER;
+  }
+});
+
 const failureSchema = z.object({
   code: z.string().optional(),
   message: z.string().optional(),
@@ -83,8 +94,8 @@ export class HttpServiceAccounts implements ServiceAccountChanges {
       },
       body: JSON.stringify(props.body),
     });
-    const text = await response.text();
-    const json: unknown = text === '' ? null : JSON.parse(text);
+    const body = jsonTextSchema.safeParse(await response.text());
+    const json = body.success ? body.data : null;
 
     if (!response.ok) {
       const failure = failureSchema.safeParse(json);
