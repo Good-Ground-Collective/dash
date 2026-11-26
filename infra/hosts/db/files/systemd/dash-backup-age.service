@@ -1,0 +1,6 @@
+[Unit]
+Description=Alert if dash-db's newest backup is over 26 hours old
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dash-backup-alerts check-age

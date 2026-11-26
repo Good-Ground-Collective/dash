@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# Backup and WAL-archiving alerts for dash-db, sent with dash-notify.
+# Installed as /usr/local/sbin/dash-backup-alerts by provision.sh and run as
+# root by the dash-* systemd units. See README.md: Alerts.
+#
+#   backup-failed <unit>  a backup unit failed (its OnFailure=); always alerts
+#   backup-ok <type>      a backup finished; sends a recovery if one had failed
+#   check-age             alerts if the newest backup is too old, or missing
+#   check-archive         alerts if WAL archiving is failing or stalled
+#
+# An alert writes /var/lib/dash-alerts/<key>. While that file is there, the
+# same alert repeats at most every 6 hours, and the check that clears it sends
+# one recovery notice and removes it.
+set -euo pipefail
+
+STANZA=dash
+NOTIFY="${DASH_NOTIFY:-/usr/local/bin/dash-notify}"
+STATE_DIR="${DASH_ALERT_STATE_DIR:-/var/lib/dash-alerts}"
+MAX_AGE_HOURS="${DASH_BACKUP_MAX_AGE_HOURS:-26}"
+STALL_MINUTES="${DASH_ARCHIVE_STALL_MINUTES:-30}"
+RECHECK_SECONDS="${DASH_ARCHIVE_RECHECK_SECONDS:-90}"
+REPEAT_SECONDS=$((6 * 3600))
+HOST="$(hostname -s)"
+
+# postgres can't enter a sudo user's home, so psql/pgbackrest start in /.
+cd /
+
+now() { date +%s; }
+utc() { date -ud "@$1" '+%F %T UTC'; }
+
+# "always" skips the 6-hour repeat limit.
+raise_alert() {
+  local key="$1" title="$2" message="$3" priority="$4" always="${5:-}" last
+  install -d -m 700 "$STATE_DIR"
+  last="$(cat "$STATE_DIR/$key" 2>/dev/null || true)"
+  [[ "$last" =~ ^[0-9]+$ ]] || last=0
+
+  if [ -z "$always" ] && [ $(($(now) - last)) -lt "$REPEAT_SECONDS" ]; then
+    echo "${key}: still alerting, last sent $(utc "$last"); not repeating"
+    return 0
+  fi
+  "$NOTIFY" "$title" "$message" "$priority"
+  now >"$STATE_DIR/$key"
+  echo "${key}: alert sent"
+}
+
+# Sends one recovery notice for whichever of the keys are raised.
+clear_alerts() {
+  local title="$1" message="$2" key
+  local -a cleared=()
+  shift 2
+  for key in "$@"; do
+    [ -e "$STATE_DIR/$key" ] && cleared+=("$key")
+  done
+  [ "${#cleared[@]}" -gt 0 ] || return 0
+
+  "$NOTIFY" "$title" "${message} Cleared: ${cleared[*]}." 0
+  for key in "${cleared[@]}"; do rm -f "${STATE_DIR:?}/$key"; done
+  echo "recovery sent: ${cleared[*]}"
+}
+
+# Prints $1 then as much of the end of $2 as fits Pushover's 1024 characters.
+keep_tail_within_limit() {
+  local head="$1" body="$2" room
+  room=$((1024 - ${#head}))
+  [ "${#body}" -le "$room" ] || body="...${body: -$((room - 3))}"
+  printf '%s%s' "$head" "$body"
+}
+
+backup_failed() {
+  local unit="${1:?unit}" log
+  logger -t dash-backup -p user.err "${HOST} backup FAILED: ${unit}. See journalctl -u ${unit}"
+  log="$(journalctl -u "$unit" -n 10 --no-pager -o cat 2>&1 || true)"
+  raise_alert backup-failed "Dash backup FAILED on ${HOST}" \
+    "$(keep_tail_within_limit "Host: ${HOST}"$'\n'"Unit: ${unit}"$'\n\n'"Last journal lines:"$'\n' "$log")" 1 always
+}
+
+backup_ok() {
+  clear_alerts "Dash backups recovered on ${HOST}" \
+    "A ${1:-} backup of stanza ${STANZA} finished on ${HOST}." backup-failed
+}
+
+check_age() {
+  local info newest age err
+  err="$(mktemp)"
+  if ! info="$(runuser -u postgres -- pgbackrest --stanza="$STANZA" info --output=json 2>"$err")" ||
+    ! newest="$(jq -er --arg s "$STANZA" \
+      '[.[] | select(.name == $s) | .backup[]?.timestamp.stop] | max // ""' <<<"$info" 2>>"$err")"; then
+    raise_alert backup-stale "Dash backups: cannot read backup info on ${HOST}" \
+      "$(keep_tail_within_limit $'pgbackrest info failed:\n' "$(cat "$err")${info}")" 1
+    rm -f "$err"
+    return 0
+  fi
+  rm -f "$err"
+
+  if [ -z "$newest" ]; then
+    raise_alert backup-stale "Dash backups: no backup found on ${HOST}" \
+      "$(keep_tail_within_limit "pgBackRest has no backups for stanza ${STANZA}. Status: " \
+        "$(jq -r --arg s "$STANZA" '.[] | select(.name == $s) | .status.message' <<<"$info")")" 1
+    return 0
+  fi
+
+  age=$(($(now) - newest))
+  if [ "$age" -gt $((MAX_AGE_HOURS * 3600)) ]; then
+    raise_alert backup-stale "Dash backups: newest is $((age / 3600))h old on ${HOST}" \
+      "The newest ${STANZA} backup finished $(utc "$newest"), over ${MAX_AGE_HOURS}h ago. On ${HOST}: systemctl list-timers 'dash-*' and journalctl -u 'dash-pgbackrest@*'." 1
+    return 0
+  fi
+  echo "newest backup is $((age / 3600))h old: ok"
+  clear_alerts "Dash backups: fresh again on ${HOST}" \
+    "The newest ${STANZA} backup finished $(utc "$newest")." backup-stale
+}
+
+# Sets problem (archive-check, archive-failing, archive-stalled or empty) and
+# detail from pg_stat_archiver and the .ready files waiting in pg_wal. An idle
+# database has no .ready files, so it never looks stalled.
+archive_status() {
+  local row err in_recovery archived_at failed_at archived_wal failed_wal ready oldest_ready
+  problem="" detail=""
+  err="$(mktemp)"
+  if ! row="$(runuser -u postgres -- psql -XAtq -F ' ' -v ON_ERROR_STOP=1 -c "
+      SELECT pg_is_in_recovery(),
+        coalesce(extract(epoch FROM a.last_archived_time)::bigint, 0),
+        coalesce(extract(epoch FROM a.last_failed_time)::bigint, 0),
+        coalesce(a.last_archived_wal, '-'), coalesce(a.last_failed_wal, '-'),
+        r.n, coalesce(extract(epoch FROM now() - r.oldest)::bigint, 0)
+      FROM pg_stat_archiver a,
+        (SELECT count(*) AS n, min(modification) AS oldest
+         FROM pg_ls_archive_statusdir() WHERE name LIKE '%.ready') r" 2>"$err")"; then
+    problem=archive-check
+    detail="Could not query Postgres:"$'\n'"$(cat "$err")${row}"
+    rm -f "$err"
+    return 0
+  fi
+  rm -f "$err"
+
+  read -r in_recovery archived_at failed_at archived_wal failed_wal ready oldest_ready <<<"$row" || true
+  if ! [[ "$in_recovery" =~ ^[tf]$ && "$archived_at" =~ ^[0-9]+$ && "$failed_at" =~ ^[0-9]+$ &&
+    "$ready" =~ ^[0-9]+$ && "$oldest_ready" =~ ^-?[0-9]+$ ]]; then
+    problem=archive-check
+    detail="Unexpected pg_stat_archiver row:"$'\n'"${row}"
+    return 0
+  fi
+  [ "$in_recovery" = f ] || return 0
+
+  if [ "$failed_at" -gt "$archived_at" ]; then
+    problem=archive-failing
+    detail="archive_command last failed $(utc "$failed_at") on ${failed_wal}. Last success: ${archived_wal}. ${ready} WAL files waiting. See journalctl -u postgresql@18-main and the pgBackRest log in /var/log/pgbackrest."
+  elif [ "$ready" -gt 0 ] && [ "$oldest_ready" -gt $((STALL_MINUTES * 60)) ]; then
+    problem=archive-stalled
+    detail="${ready} WAL files are waiting to be archived; the oldest for $((oldest_ready / 60)) minutes. Last archived: ${archived_wal}."
+  fi
+}
+
+check_archive() {
+  local problem detail
+  archive_status
+  if [ -n "$problem" ]; then
+    # The archiver retries every minute; give a blip time to clear.
+    sleep "$RECHECK_SECONDS"
+    archive_status
+  fi
+
+  case "$problem" in
+    archive-check) raise_alert archive-check "Dash: cannot check WAL archiving on ${HOST}" "$(keep_tail_within_limit "" "$detail")" 1 ;;
+    archive-failing) raise_alert archive-failing "Dash: WAL archiving FAILING on ${HOST}" "$detail" 1 ;;
+    archive-stalled) raise_alert archive-stalled "Dash: WAL archiving stalled on ${HOST}" "$detail" 1 ;;
+    *)
+      echo "WAL archiving: ok"
+      clear_alerts "Dash: WAL archiving OK again on ${HOST}" "Archiving on ${HOST} checks out." \
+        archive-check archive-failing archive-stalled
+      ;;
+  esac
+}
+
+case "${1:-}" in
+  backup-failed) backup_failed "${2:-}" ;;
+  backup-ok) backup_ok "${2:-}" ;;
+  check-age) check_age ;;
+  check-archive) check_archive ;;
+  *)
+    echo "usage: dash-backup-alerts backup-failed <unit> | backup-ok <type> | check-age | check-archive" >&2
+    exit 2
+    ;;
+esac

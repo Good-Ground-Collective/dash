@@ -12,3 +12,5 @@ Group=postgres
 ExecStartPre=/usr/bin/pgbackrest --stanza=dash check
 ExecStart=/usr/bin/pgbackrest --stanza=dash --type=%i backup
 ExecStartPost=/usr/bin/pgbackrest --stanza=dash info
+# As root, and never failing the backup: a recovery notice if one had failed.
+ExecStartPost=-+/usr/local/sbin/dash-backup-alerts backup-ok %i

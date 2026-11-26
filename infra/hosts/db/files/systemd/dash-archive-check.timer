@@ -1,0 +1,9 @@
+[Unit]
+Description=Check dash-db WAL archiving every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+OnBootSec=10min
+
+[Install]
+WantedBy=timers.target

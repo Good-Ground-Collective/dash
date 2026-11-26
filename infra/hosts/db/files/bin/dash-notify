@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Sends one Pushover notification. Installed on dash-db as
+# /usr/local/bin/dash-notify by provision.sh. Runs as root, because the
+# credentials in /etc/dash/pushover.env are root-only.
+#
+# Usage: dash-notify <title> <message> [priority]
+# priority is -2..1 (default 0). 2 (emergency) needs retry/expire; not offered.
+# DASH_NOTIFY_TITLE_PREFIX is put in front of the title (tests use "[TEST] ").
+# DASH_NOTIFY_DRY_RUN=1 prints the notification instead of sending it.
+set -euo pipefail
+
+CREDS="${DASH_PUSHOVER_ENV:-/etc/dash/pushover.env}"
+API=https://api.pushover.net/1/messages.json
+
+priority="${3:-0}"
+if [ $# -lt 2 ] || [ $# -gt 3 ] || [ -z "$1" ] || [ -z "$2" ] || ! [[ "$priority" =~ ^(-2|-1|0|1)$ ]]; then
+  echo "usage: dash-notify <title> <message> [priority -2..1]" >&2
+  exit 2
+fi
+# Pushover's limits: 250 characters of title, 1024 of message.
+title="${DASH_NOTIFY_TITLE_PREFIX:-}$1"
+title="${title:0:250}"
+message="${2:0:1024}"
+
+if [ "${DASH_NOTIFY_DRY_RUN:-0}" = 1 ]; then
+  printf 'dry run (priority %s)\ntitle: %s\n%s\n' "$priority" "$title" "$message"
+  exit 0
+fi
+
+[ -r "$CREDS" ] || {
+  echo "dash-notify: cannot read $CREDS (run as root)" >&2
+  exit 1
+}
+token="" user=""
+while IFS='=' read -r name value; do
+  case "$name" in
+    PUSHOVER_APP_TOKEN) token="$value" ;;
+    PUSHOVER_USER_KEY) user="$value" ;;
+  esac
+done <"$CREDS"
+[[ "$token" =~ ^[A-Za-z0-9]+$ && "$user" =~ ^[A-Za-z0-9]+$ ]] || {
+  echo "dash-notify: no Pushover credentials in $CREDS" >&2
+  exit 1
+}
+
+# The credentials reach curl as a config file on stdin, never as arguments.
+if ! response="$(printf 'form-string = "token=%s"\nform-string = "user=%s"\n' "$token" "$user" |
+  curl -sS --fail-with-body --retry 3 --max-time 30 -K - \
+    --form-string "title=${title}" \
+    --form-string "message=${message}" \
+    --form-string "priority=${priority}" \
+    "$API")"; then
+  echo "dash-notify: Pushover rejected the message: ${response}" >&2
+  exit 1
+fi
+[[ "$response" == *'"status":1'* ]] || {
+  echo "dash-notify: unexpected Pushover response: ${response}" >&2
+  exit 1
+}

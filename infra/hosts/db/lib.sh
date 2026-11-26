@@ -20,15 +20,30 @@ need_tools() {
   for t in "$@"; do command -v "$t" >/dev/null || die "$t is required"; done
 }
 
+# Exports everything in ~/.zsh/secrets, if it exists.
+source_secrets() {
+  [ -f "$HOME/.zsh/secrets" ] || return 0
+  set -a
+  # shellcheck disable=SC1091
+  . "$HOME/.zsh/secrets"
+  set +a
+}
+
 load_linode_token() {
-  if [ -z "${LINODE_TOKEN:-}" ] && [ -z "${LINODE_API_KEY:-}" ] && [ -f "$HOME/.zsh/secrets" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    . "$HOME/.zsh/secrets"
-    set +a
+  if [ -z "${LINODE_TOKEN:-}" ] && [ -z "${LINODE_API_KEY:-}" ]; then
+    source_secrets
   fi
   LINODE_TOKEN="${LINODE_TOKEN:-${LINODE_API_KEY:-}}"
   [ -n "$LINODE_TOKEN" ] || die "set LINODE_TOKEN or LINODE_API_KEY (Object Storage read/write)"
+}
+
+# Pushover credentials for dash-db's alerts, from the env or ~/.zsh/secrets.
+load_pushover_creds() {
+  if [ -z "${PUSHOVER_APP_TOKEN:-}" ] || [ -z "${PUSHOVER_USER_KEY:-}" ]; then
+    source_secrets
+  fi
+  [ -n "${PUSHOVER_APP_TOKEN:-}" ] && [ -n "${PUSHOVER_USER_KEY:-}" ] ||
+    die "set PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY (backup alerts)"
 }
 
 # The token goes to curl through a file descriptor, not argv.
