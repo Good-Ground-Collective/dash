@@ -1,5 +1,5 @@
 {
-  "id": "3a5bb766-eab5-4eed-b0bf-4570684dc095",
+  "id": "5292684a-44b3-4707-a2fb-1c20fb3005c5",
   "prevId": "2dce8c80-bfad-411f-a129-4ecf9b7d8c6f",
   "version": "7",
   "dialect": "postgresql",
@@ -367,6 +367,12 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "slot": {
+          "name": "slot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "token_hash": {
           "name": "token_hash",
           "type": "text",
@@ -385,6 +391,13 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "setup_token_slot_unique": {
+          "name": "setup_token_slot_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slot"
+          ]
+        },
         "setup_token_token_hash_unique": {
           "name": "setup_token_token_hash_unique",
           "nullsNotDistinct": false,
@@ -394,7 +407,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "setup_token_slot_check": {
+          "name": "setup_token_slot_check",
+          "value": "\"setup_token\".\"slot\" = 'first-person'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.user": {

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   type AuthContext,
   type BetterAuthPlugin,
+  type DBAdapter,
   type DBTransactionAdapter,
   getCurrentAdapter,
 } from 'better-auth';
@@ -30,6 +31,8 @@ import type {
 
 const enrolmentPrefix = 'setup-enrolment:';
 const enrolmentLifetimeMilliseconds = 10 * 60 * 1000;
+/** The only value `setup_token.slot` accepts, so at most one token exists at a time. */
+const tokenSlot = 'first-person';
 
 interface StoredSetupToken {
   id: string;
@@ -39,7 +42,7 @@ interface StoredSetupToken {
 export interface Setup extends PasskeyEnrolmentSource {
   /** Stores the token hash and serves `GET /setup/status` and `POST /setup/begin`. */
   readonly plugin: BetterAuthPlugin;
-  /** Run at boot. While nobody has signed up, replaces any earlier token and returns the new one, to log once. Otherwise clears leftovers and returns `null`. */
+  /** Run at boot. While nobody has signed up, replaces the token and returns the new one, to log once. Otherwise clears any leftover and returns `null`. The token table holds one row, so racing boots leave one token, logged by the boot that stored it. */
   issue(props: { context: AuthContext }): Promise<string | null>;
 }
 
@@ -58,6 +61,7 @@ export class TokenSetup implements Setup {
       schema: {
         setupToken: {
           fields: {
+            slot: { type: 'string', required: true, unique: true },
             tokenHash: { type: 'string', required: true, unique: true },
             createdAt: { type: 'date', required: true },
           },
@@ -85,27 +89,17 @@ export class TokenSetup implements Setup {
   }
 
   async issue(props: { context: AuthContext }): Promise<string | null> {
-    const { adapter } = props.context;
-    const stale = await adapter.findMany<StoredSetupToken>({
-      model: 'setupToken',
-    });
-    for (const row of stale) {
-      await adapter.delete({
+    try {
+      return await this.replaceToken(props.context.adapter);
+    } catch (cause) {
+      const issuedElsewhere = await props.context.adapter.count({
         model: 'setupToken',
-        where: [{ field: 'id', value: row.id }],
       });
+      if (issuedElsewhere > 0) {
+        return null;
+      }
+      throw cause;
     }
-
-    if ((await this.countPeople(adapter)) > 0) {
-      return null;
-    }
-
-    const token = generateRandomString(40, 'a-z', 'A-Z', '0-9');
-    await adapter.create({
-      model: 'setupToken',
-      data: { tokenHash: this.hash(token), createdAt: new Date() },
-    });
-    return token;
   }
 
   async resolve(props: {
@@ -174,6 +168,31 @@ export class TokenSetup implements Setup {
       { method: 'setup-token' },
     );
     return person.id;
+  }
+
+  /** Swaps in a fresh token in one transaction. A boot racing this one fails on the single slot and leaves the other boot's token in place. */
+  private async replaceToken(adapter: DBAdapter): Promise<string | null> {
+    const token = generateRandomString(40, 'a-z', 'A-Z', '0-9');
+    const issued = await adapter.transaction(async (adapter) => {
+      await adapter.deleteMany({
+        model: 'setupToken',
+        where: [{ field: 'slot', value: tokenSlot }],
+      });
+      if ((await this.countPeople(adapter)) > 0) {
+        return false;
+      }
+
+      await adapter.create({
+        model: 'setupToken',
+        data: {
+          slot: tokenSlot,
+          tokenHash: this.hash(token),
+          createdAt: new Date(),
+        },
+      });
+      return true;
+    });
+    return issued ? token : null;
   }
 
   private async begin(props: {

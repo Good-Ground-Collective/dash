@@ -134,10 +134,17 @@ export const passkeyTable = pgTable(
 );
 
 /** The hash of the one-time token that lets the first person enrol, while nobody has. */
-export const setupTokenTable = pgTable('setup_token', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tokenHash: text('token_hash').notNull().unique(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const setupTokenTable = pgTable(
+  'setup_token',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slot: text('slot').notNull().unique(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check('setup_token_slot_check', sql`${table.slot} = 'first-person'`),
+  ],
+);

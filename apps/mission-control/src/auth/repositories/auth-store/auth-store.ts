@@ -19,13 +19,14 @@ export interface AuthStore {
   readonly storage: AuthStorage;
 }
 
-/** Better Auth's core models, stored in Mission Control's Postgres through Drizzle. */
+/** Better Auth's models in Mission Control's Postgres through Drizzle. Transactions are on, which the adapter leaves off by default, so multi-step writes such as setup enrolment commit or roll back together. */
 export class DrizzleAuthStore implements AuthStore {
   readonly storage: AuthStorage;
 
   constructor(props: { database: Database }) {
     this.storage = drizzleAdapter(props.database.orm, {
       provider: 'pg',
+      transaction: true,
       schema: {
         user: userTable,
         session: sessionTable,
