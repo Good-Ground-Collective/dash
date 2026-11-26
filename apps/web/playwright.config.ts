@@ -1,24 +1,67 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const port = 4319;
+const shellPort = 4319;
+const passkeyPort = 4320;
+const stubPort = 59998;
+const passkeyWebUrl = `http://localhost:${passkeyPort}`;
+const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
+const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
+const setupToken = process.env['DASH_E2E_SETUP_TOKEN'] ?? 'stub-setup-token';
 
 export default defineConfig({
   testDir: 'src',
   testMatch: '**/__tests__/*.e2e.test.ts',
   forbidOnly: Boolean(process.env['CI']),
   reporter: process.env['CI'] ? 'github' : 'list',
-  use: {
-    baseURL: `http://127.0.0.1:${port}`,
-  },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'node build',
-    url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: false,
-    env: {
-      HOST: '127.0.0.1',
-      PORT: String(port),
-      API_BASE_URL: 'http://127.0.0.1:59999',
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: '**/passkeys.e2e.test.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://127.0.0.1:${shellPort}`,
+      },
     },
-  },
+    {
+      name: 'passkeys',
+      testMatch: '**/passkeys.e2e.test.ts',
+      metadata: {
+        missionControlUrl: passkeyApiBaseUrl,
+        setupToken,
+        live: liveMissionControl !== undefined,
+      },
+      use: { ...devices['Desktop Chrome'], baseURL: passkeyWebUrl },
+    },
+  ],
+  webServer: [
+    {
+      command: 'node build',
+      url: `http://127.0.0.1:${shellPort}`,
+      reuseExistingServer: false,
+      env: {
+        HOST: '127.0.0.1',
+        PORT: String(shellPort),
+        API_BASE_URL: 'http://127.0.0.1:59999',
+      },
+    },
+    {
+      command: 'node build',
+      url: passkeyWebUrl,
+      reuseExistingServer: false,
+      env: {
+        HOST: 'localhost',
+        PORT: String(passkeyPort),
+        API_BASE_URL: passkeyApiBaseUrl,
+      },
+    },
+    ...(liveMissionControl === undefined
+      ? [
+          {
+            command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${stubPort} ${passkeyWebUrl}`,
+            url: `http://localhost:${stubPort}/api/auth/setup/status`,
+            reuseExistingServer: false,
+          },
+        ]
+      : []),
+  ],
 });

@@ -62,6 +62,13 @@ The theme comes from the `dash-theme` and `dash-mode` cookies (`characters`; `li
 
 `pnpm turbo run test:e2e --filter @dash/web` builds the app and runs the Playwright smoke test. Run `pnpm --filter @dash/web exec playwright install chromium` once first.
 
+The passkey e2e (`passkeys.e2e.test.ts`) drives setup, passkey settings, sign-out and autofill sign-in with Chromium's virtual authenticator. By default it runs against a small Mission Control stub, because CI has no Postgres. To run it against the real thing, start Mission Control on a fresh database with `DEV_WEB_ORIGIN=http://localhost:4320`, copy the setup token it logs, then run:
+
+```sh
+DASH_E2E_API_BASE_URL=http://localhost:3000 DASH_E2E_SETUP_TOKEN=<token> \
+  pnpm --filter @dash/web exec playwright test --project passkeys
+```
+
 ## Lint gates
 
 ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Packages and the repo root pick the shared config up from `@dash/config/eslint`.

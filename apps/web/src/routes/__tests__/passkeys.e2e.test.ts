@@ -1,0 +1,211 @@
+import {
+  type Browser,
+  type CDPSession,
+  expect,
+  type Page,
+  test,
+} from '@playwright/test';
+import { z } from 'zod';
+
+/** Set by the `passkeys` project in playwright.config.ts: the stub by default, or a live Mission Control. */
+export const passkeyProjectSettingsSchema = z.object({
+  missionControlUrl: z.url(),
+  setupToken: z.string().min(1),
+  live: z.boolean(),
+});
+
+/** One browser page with Chromium's virtual platform authenticator, shared by the serial flow. */
+class PasskeyDevice {
+  readonly page: Page;
+  private readonly cdp: CDPSession;
+  private readonly authenticatorId: string;
+
+  private constructor(props: {
+    page: Page;
+    cdp: CDPSession;
+    authenticatorId: string;
+  }) {
+    this.page = props.page;
+    this.cdp = props.cdp;
+    this.authenticatorId = props.authenticatorId;
+  }
+
+  /** Plugs in a second authenticator, a roaming security key, for as long as `use` runs. Mission Control excludes credentials the platform authenticator already holds, so a second passkey needs a second device. */
+  async withSecurityKey(use: () => Promise<void>): Promise<void> {
+    const { authenticatorId } = await this.cdp.send(
+      'WebAuthn.addVirtualAuthenticator',
+      {
+        options: {
+          protocol: 'ctap2',
+          transport: 'usb',
+          hasResidentKey: true,
+          hasUserVerification: true,
+          isUserVerified: true,
+          automaticPresenceSimulation: true,
+        },
+      },
+    );
+    try {
+      await use();
+    } finally {
+      await this.cdp.send('WebAuthn.removeVirtualAuthenticator', {
+        authenticatorId,
+      });
+    }
+  }
+
+  /** With presence off, prompts wait for a person who never comes. The virtual authenticator otherwise answers even a conditional (autofill) request by itself. */
+  async setPresence(present: boolean): Promise<void> {
+    await this.cdp.send('WebAuthn.setAutomaticPresenceSimulation', {
+      authenticatorId: this.authenticatorId,
+      enabled: present,
+    });
+  }
+
+  /** Requests the page itself makes to Mission Control's session lookup, which is the renewal. Server renders aren't seen here. */
+  async renewalsDuring(action: () => Promise<void>): Promise<number> {
+    let renewals = 0;
+    const count = (request: { url: () => string }): void => {
+      if (request.url() === `${missionControlUrl}/api/auth/get-session`) {
+        renewals += 1;
+      }
+    };
+    this.page.on('request', count);
+    await action();
+    await this.page.waitForLoadState('networkidle');
+    this.page.off('request', count);
+    return renewals;
+  }
+
+  static async open(props: {
+    browser: Browser;
+    baseURL: string;
+  }): Promise<PasskeyDevice> {
+    const context = await props.browser.newContext({
+      baseURL: props.baseURL,
+    });
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('WebAuthn.enable');
+    const { authenticatorId } = await cdp.send(
+      'WebAuthn.addVirtualAuthenticator',
+      {
+        options: {
+          protocol: 'ctap2',
+          transport: 'internal',
+          hasResidentKey: true,
+          hasUserVerification: true,
+          isUserVerified: true,
+          automaticPresenceSimulation: true,
+        },
+      },
+    );
+    return new PasskeyDevice({ page, cdp, authenticatorId });
+  }
+}
+
+test.describe.configure({ mode: 'serial' });
+
+let device: PasskeyDevice;
+let missionControlUrl = '';
+let setupToken = '';
+
+test.beforeAll(async ({ browser, baseURL, request }, testInfo) => {
+  const settings = passkeyProjectSettingsSchema.parse(
+    testInfo.project.metadata,
+  );
+  missionControlUrl = settings.missionControlUrl;
+  setupToken = settings.setupToken;
+  if (!settings.live) {
+    await request.post(`${missionControlUrl}/api/auth/__stub/reset`);
+  }
+  device = await PasskeyDevice.open({ browser, baseURL: baseURL ?? '' });
+});
+
+test('setup creates the first account with a passkey', async () => {
+  const { page } = device;
+  await page.goto('/setup');
+
+  await page.getByLabel('Setup token').fill(setupToken);
+  await page.getByLabel('Your name').fill('Ada Lovelace');
+  await page.getByLabel('Email').fill('ada@example.com');
+  await page
+    .getByRole('button', { name: 'Create account with a passkey' })
+    .click();
+
+  await expect(
+    page.getByRole('img', { name: 'Signed in as Ada Lovelace' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL('/');
+});
+
+test('a signed-in page load renews the session from the browser', async () => {
+  const renewals = await device.renewalsDuring(async () => {
+    await device.page.goto('/');
+  });
+
+  expect(renewals).toBe(1);
+});
+
+test('settings adds, renames and removes passkeys, keeping the last', async () => {
+  const { page } = device;
+  await page.getByRole('link', { name: 'Settings' }).click();
+  const passkeys = page.getByRole('list', { name: 'Your passkeys' });
+
+  await expect(passkeys.getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Remove' })).toBeDisabled();
+
+  await device.withSecurityKey(async () => {
+    await page.getByLabel('Add a passkey').fill('Backup key');
+    await page.getByRole('button', { name: 'Add passkey' }).click();
+    await expect(passkeys.getByRole('listitem')).toHaveCount(2);
+  });
+
+  await page.getByRole('button', { name: 'Rename Backup key' }).click();
+  await page.getByLabel('New name for Backup key').fill('Spare laptop');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(passkeys.getByText('Spare laptop')).toBeVisible();
+
+  await passkeys
+    .getByRole('listitem')
+    .filter({ hasText: 'Spare laptop' })
+    .getByRole('button', { name: 'Remove' })
+    .click();
+  await page.getByRole('button', { name: 'Remove passkey' }).click();
+  await expect(passkeys.getByRole('listitem')).toHaveCount(1);
+});
+
+test('signed out: no renewals, autofill-ready sign-in, setup closed', async () => {
+  const { page } = device;
+  await device.setPresence(false);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL('/sign-in');
+
+  const renewals = await device.renewalsDuring(async () => {
+    await page.goto('/');
+  });
+
+  expect(renewals).toBe(0);
+  await page.goto('/sign-in');
+  await expect(page.getByLabel('Email')).toHaveAttribute(
+    'autocomplete',
+    'username webauthn',
+  );
+  await page.goto('/setup');
+  await expect(page.getByRole('img', { name: 'Signed out' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Setup is done' }),
+  ).toBeVisible();
+});
+
+test('signs back in through passkey autofill, without a prompt', async () => {
+  const { page } = device;
+  await device.setPresence(true);
+
+  await page.goto('/sign-in');
+
+  await expect(
+    page.getByRole('img', { name: 'Signed in as Ada Lovelace' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL('/');
+});

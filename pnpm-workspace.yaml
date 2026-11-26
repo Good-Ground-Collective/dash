@@ -12,6 +12,7 @@ catalog:
   '@good-ground-collective/preflight': 0.7.0
   '@internationalized/date': 3.12.4
   '@playwright/test': 1.65.1
+  '@simplewebauthn/browser': 13.3.0
   '@simplewebauthn/server': 13.3.3
   '@sveltejs/adapter-node': 6.0.5
   '@sveltejs/kit': 3.4.0
