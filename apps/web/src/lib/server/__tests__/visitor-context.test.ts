@@ -112,6 +112,7 @@ describe('VisitorContext server-side fetches', () => {
       await visitorContext.fetchAsVisitor({
         request: new Request(url),
         browserCookie: 'better-auth.session_token=abc',
+        appOrigin: 'https://web.example.test',
         fetch,
       });
     }

@@ -12,13 +12,20 @@ export type OriginCookieForwarderProps = z.input<
 
 /** Decides which server-side requests carry the browser's cookies. */
 export interface CookieForwarder {
-  forward(props: { request: Request; cookie: string | null }): Request;
+  forward(props: CookieForwarding): Request;
+}
+
+/** A server-side request, the browser's Cookie header, and the origin the app is served from. */
+export interface CookieForwarding {
+  request: Request;
+  cookie: string | null;
+  appOrigin: string;
 }
 
 /**
- * Forwards only the session cookie, and only to requests bound for Mission Control's origin.
- * Those requests are marked `credentials: 'omit'`, because SvelteKit's server fetch otherwise
- * re-attaches every browser cookie when Mission Control's host is a subdomain of the app's.
+ * Sends only the session cookie, and only to Mission Control's origin. Every cross-origin request
+ * is marked `credentials: 'omit'`, because SvelteKit's server fetch otherwise re-attaches every
+ * browser cookie to hosts under the app's. Same-origin requests are left to SvelteKit.
  */
 export class OriginCookieForwarder implements CookieForwarder {
   private readonly apiOrigin: string;
@@ -29,9 +36,11 @@ export class OriginCookieForwarder implements CookieForwarder {
     ).origin;
   }
 
-  forward(props: { request: Request; cookie: string | null }): Request {
-    if (new URL(props.request.url).origin !== this.apiOrigin) {
-      return props.request;
+  forward(props: CookieForwarding): Request {
+    const origin = new URL(props.request.url).origin;
+    if (origin === props.appOrigin) return props.request;
+    if (origin !== this.apiOrigin) {
+      return new Request(props.request, { credentials: 'omit' });
     }
 
     const session = (props.cookie ?? '')

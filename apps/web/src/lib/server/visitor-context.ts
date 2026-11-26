@@ -36,6 +36,7 @@ export interface VisitorContext {
 export interface VisitorFetch {
   request: Request;
   browserCookie: string | null;
+  appOrigin: string;
   fetch: typeof fetch;
 }
 
@@ -61,6 +62,7 @@ export class CookieVisitorContext implements VisitorContext {
     this.fetchAsVisitor({
       request,
       browserCookie: event.request.headers.get('cookie'),
+      appOrigin: event.url.origin,
       fetch,
     });
 
@@ -94,6 +96,7 @@ export class CookieVisitorContext implements VisitorContext {
       this.cookieForwarder.forward({
         request: props.request,
         cookie: props.browserCookie,
+        appOrigin: props.appOrigin,
       }),
     );
   }
