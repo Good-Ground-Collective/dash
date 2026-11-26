@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Removes a restore-test cluster and everything restore.sh installed: Postgres,
 # pgBackRest, the PGDG repo, their config, data and logs. Runs as root on the
-# scratch box (dash-spare). Never run it on dash-db.
+# scratch box, and only if restore-test.sh marked it with /etc/dash-restore-scratch.
 set -euo pipefail
 
-if [ "$(hostname)" = dash-db ]; then
-  echo "refusing to tear down dash-db" >&2
+if [ "$(hostname)" = dash-db ] || [ ! -e /etc/dash-restore-scratch ]; then
+  echo "refusing: this box is not marked as a restore-test scratch box" >&2
   exit 1
 fi
 
@@ -31,4 +31,5 @@ if id postgres >/dev/null 2>&1; then
   deluser --quiet postgres
 fi
 apt-get update -q >/dev/null
+rm -f /etc/dash-restore-scratch
 echo "teardown: done"

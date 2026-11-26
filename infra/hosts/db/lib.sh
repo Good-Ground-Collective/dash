@@ -31,19 +31,20 @@ load_linode_token() {
   [ -n "$LINODE_TOKEN" ] || die "set LINODE_TOKEN or LINODE_API_KEY (Object Storage read/write)"
 }
 
+# The token goes to curl through a file descriptor, not argv.
 linode_api() {
   local method="$1" path="$2"
   shift 2
   curl -sS --fail-with-body -X "$method" \
-    -H "Authorization: Bearer ${LINODE_TOKEN}" \
+    -H @<(printf 'Authorization: Bearer %s\n' "$LINODE_TOKEN") \
     -H "Content-Type: application/json" \
     "$LINODE_API$path" "$@"
 }
 
-# Prints the id of the first Object Storage key with this label, or nothing.
-key_id_by_label() {
+# Prints the first Object Storage key with this label as JSON, or null.
+key_by_label() {
   linode_api GET "/object-storage/keys?page_size=500" |
-    jq -r --arg l "$1" '[.data[] | select(.label == $l)][0].id // empty'
+    jq -c --arg l "$1" '[.data[] | select(.label == $l)][0]'
 }
 
 # Creates a key limited to $BUCKET. Prints the API's JSON (holds the secret).

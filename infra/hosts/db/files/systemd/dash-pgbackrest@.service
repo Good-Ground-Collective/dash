@@ -8,8 +8,7 @@ OnFailure=dash-pgbackrest-failed@%n.service
 Type=oneshot
 User=postgres
 Group=postgres
-# check fails if WAL archiving is broken, so a quiet archive failure surfaces
-# here within a day.
+# Fails if WAL archiving is broken.
 ExecStartPre=/usr/bin/pgbackrest --stanza=dash check
 ExecStart=/usr/bin/pgbackrest --stanza=dash --type=%i backup
 ExecStartPost=/usr/bin/pgbackrest --stanza=dash info

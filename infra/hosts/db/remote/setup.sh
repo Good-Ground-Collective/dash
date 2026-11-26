@@ -32,11 +32,14 @@ install_file() {
   echo "updated $dst"
 }
 
-# 1. Backup secrets first, so a freshly minted key is never lost. pgBackRest
-# reads every file in /etc/pgbackrest/conf.d. archive_command runs as postgres
-# (and pg_ctlcluster strips any systemd environment), so the file is owned by
-# root and readable by the postgres group only.
+# Secrets first, so a freshly minted key is never lost (README: Secrets).
 install -d -m 755 /etc/pgbackrest /etc/pgbackrest/conf.d
+on_box_cipher="$(sed -n 's/^repo1-cipher-pass=//p' "$SECRETS" 2>/dev/null || true)"
+if [ -n "$on_box_cipher" ] && [ "$on_box_cipher" != "$CIPHER_PASS" ]; then
+  echo "the cipher passphrase on this box differs from the one supplied; refusing to replace it" >&2
+  exit 1
+fi
+unset on_box_cipher
 if [ -z "$S3_KEY" ]; then
   S3_KEY="$(sed -n 's/^repo1-s3-key=//p' "$SECRETS" 2>/dev/null || true)"
   S3_SECRET="$(sed -n 's/^repo1-s3-key-secret=//p' "$SECRETS" 2>/dev/null || true)"
@@ -49,12 +52,16 @@ printf '[global]\nrepo1-s3-key=%s\nrepo1-s3-key-secret=%s\nrepo1-cipher-pass=%s\
 if cmp -s "$secrets_tmp" "$SECRETS"; then
   rm -f "$secrets_tmp"
 else
+  if getent group postgres >/dev/null; then
+    chown root:postgres "$secrets_tmp"
+    chmod 640 "$secrets_tmp"
+  fi
   mv "$secrets_tmp" "$SECRETS"
   echo "updated $SECRETS"
 fi
 unset S3_KEY S3_SECRET CIPHER_PASS
 
-# 2. Swap: a 1 GB swapfile on top of Linode's small swap partition.
+# A 1 GB swapfile on top of Linode's small swap partition.
 if [ ! -f /swapfile ]; then
   fallocate -l 1G /swapfile
   chmod 600 /swapfile
@@ -64,16 +71,13 @@ fi
 swapon --show=NAME --noheadings | grep -qx /swapfile || swapon /swapfile
 grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
 
-# 3. Kernel settings: low swappiness, and let Postgres bind the tailnet IP
-# before tailscaled has brought it up at boot.
 if install_file "$SRC/sysctl-dash-db.conf" /etc/sysctl.d/60-dash-db.conf 644 root:root; then
   sysctl -q --system
 fi
 
-# 4. Packages.
 bash "$(dirname "${BASH_SOURCE[0]}")/install-packages.sh"
 
-# 5. Config. The secrets file was written before the postgres group existed.
+# On a fresh box the secrets file predates the postgres group.
 chown root:postgres "$SECRETS"
 chmod 640 "$SECRETS"
 rendered="$(mktemp)"
@@ -99,16 +103,14 @@ elif [ "$reload_pg" = 1 ]; then
   echo "reloaded $PG_UNIT"
 fi
 
-# A cluster restored by restore.sh carries archive_mode=off in
-# postgresql.auto.conf, which would override conf.d. Clear it.
+# A restored cluster's postgresql.auto.conf has archive_mode=off.
 if [ -n "$(runuser -u postgres -- psql -XAtc "SELECT 1 FROM pg_file_settings WHERE name = 'archive_mode' AND sourcefile LIKE '%postgresql.auto.conf'")" ]; then
   runuser -u postgres -- psql -XAtqc 'ALTER SYSTEM RESET archive_mode'
   systemctl restart "$PG_UNIT"
   echo "cleared archive_mode from postgresql.auto.conf; restarted $PG_UNIT"
 fi
 
-# 6. Role and database. The password is hex, so quoting it inline is safe; the
-# SQL goes over stdin so it never shows up in ps.
+# The password is hex, so inlining it is safe; stdin keeps it out of ps.
 runuser -u postgres -- psql -X -q -v ON_ERROR_STOP=1 <<SQL
 SELECT 'CREATE ROLE mission_control LOGIN'
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mission_control') \gexec
@@ -122,8 +124,6 @@ unset DB_PASSWORD
 
 pgbr() { runuser -u postgres -- pgbackrest --stanza=dash "$@"; }
 
-# 7. Backups: stanza, a check that WAL archiving works, and a first full
-# backup if the repo has none.
 pgbr stanza-create
 pgbr check
 if [ "$(pgbr info --output=json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)[0]["backup"]))')" = 0 ]; then

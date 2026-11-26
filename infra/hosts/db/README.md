@@ -23,7 +23,7 @@ On `dash-db`, it:
   - `shared_buffers = 256MB`, `effective_cache_size = 640MB`, `work_mem = 4MB`, `maintenance_work_mem = 64MB`
   - `max_connections = 50`
   - WAL archiving through pgBackRest, with `archive_timeout = 900`
-- replaces `pg_hba.conf` with `files/pg_hba.conf`: peer auth on the local socket, and scram-sha-256 from `100.64.0.0/10` for the `mission_control` role and database only
+- replaces `pg_hba.conf` with `files/pg_hba.conf`: peer auth on the local socket, and TLS-only (`hostssl`) scram-sha-256 from `100.64.0.0/10` for the `mission_control` role and database only
 - sets `net.ipv4.ip_nonlocal_bind = 1` and orders Postgres after `tailscaled`, so Postgres binds the tailnet IP at boot even if Tailscale is not up yet
 - creates the `mission_control` role and the `mission_control` database it owns, revokes `PUBLIC` access to that database, and sets the role's password from `infra.env` on every run
 - creates the pgBackRest stanza `dash`, checks that WAL archiving works, and takes a first full backup if the repo has none
@@ -43,7 +43,7 @@ It needs SSH as `dash` to `dash-db` over the tailnet, plus `curl`, `jq` and `ope
 
 ## Secrets
 
-Nothing secret is in this directory. Secrets travel to the box over SSH stdin, never as command arguments.
+Nothing secret is in this directory. Secrets travel to the box over SSH stdin, never as command arguments, and the Linode token reaches `curl` through a file descriptor. If `dash-db` already holds a different cipher passphrase than `infra.env`, `setup.sh` refuses to replace it.
 
 | Secret                         | Where it lives                                                         |
 | ------------------------------ | ---------------------------------------------------------------------- |
@@ -129,13 +129,13 @@ It:
 5. Runs `pgbackrest check`, which forces the WAL out to the repo.
 6. Mints a read-only key labelled `dash-pg-restore-<run>`, scoped to the bucket.
 7. On `dash-spare`, runs `remote/restore.sh` with the noted time as a point-in-time target, and counts the rows.
-8. Tears everything down: `remote/teardown.sh` drops the cluster and purges Postgres, pgBackRest, the PGDG repo, the `postgres` user and their files from `dash-spare`. It then revokes the key and drops the scratch table on `dash-db`.
+8. Tears everything down, even if a step failed: `remote/teardown.sh` drops the cluster and purges Postgres, pgBackRest, the PGDG repo, the `postgres` user and their files from `dash-spare`. It then revokes the key and drops the scratch table on `dash-db`.
 
-It exits non-zero unless the restored counts are exactly 100 and 50, with no rows from step 4.
+It exits non-zero unless the restored counts are exactly 100 and 50, with no rows from step 4. Before it touches anything, it refuses to run if the scratch host already has Postgres, a `postgres` user or `/var/lib/postgresql`. It marks the host with `/etc/dash-restore-scratch`, and `teardown.sh` refuses to run on a host without that mark.
 
 ### Result, 2026-11-26
 
-Run `20261126T184210Z`: **PASS.** A second run after the final script changes, `20261126T184700Z`, also passed with the same counts.
+Run `20261126T184210Z`: **PASS.** Later runs `20261126T184700Z` and `20261126T191858Z` (after the review fixes) passed with the same counts.
 
 ```text
 target time: 2026-11-26 18:42:19.511938+00
@@ -156,8 +156,9 @@ Afterwards, `dash-spare`'s installed package list was identical to a snapshot ta
 
 Other checks the same day:
 
-- **App path.** A throwaway `psql` unpacked in `/tmp` on `dash-app` (since removed) connected with `DASH_DATABASE_URL`. It saw `current_user = mission_control`, server `100.117.180.120` and client `100.107.66.72`, over TLS, on PostgreSQL 18.7. Connecting as `postgres` from `dash-app` was refused with `no pg_hba.conf entry`.
+- **App path.** A throwaway `psql` unpacked in `/tmp` on `dash-app` (since removed) connected with `DASH_DATABASE_URL`. It saw `current_user = mission_control`, server `100.117.180.120` and client `100.107.66.72`, over TLS, on PostgreSQL 18.7. Connecting as `postgres` from `dash-app` was refused with `no pg_hba.conf entry`. So was `mission_control` with `sslmode=disable`.
 - **Reboot.** After `dash-db` rebooted, Postgres was listening on `100.117.180.120:5432` and localhost, both swap devices were active, the timers were scheduled, and `pgbackrest check` passed.
+- **Cipher guard.** `provision.sh` with a wrong `DASH_PGBACKREST_CIPHER_PASS` stopped with "refusing to replace it", and archiving kept working.
 - **Failure hook.** A deliberately failing `dash-pgbackrest@bogus.service` logged `dash-db backup FAILED: dash-pgbackrest@bogus.service` under `dash-backup`.
 
 Run the test again after any change to the backup setup, and every few months anyway.

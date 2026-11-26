@@ -46,9 +46,7 @@ for attempt in $(seq 1 12); do
 done
 pgbr info
 
-# A cluster skeleton gives us Debian's config dir and unit; its data is
-# replaced by the restore. archive_mode=off keeps this copy from ever writing
-# WAL into the production repo.
+# archive_mode=off keeps this copy from ever writing into the production repo.
 pg_createcluster 18 main >/dev/null
 find "$DATA" -mindepth 1 -delete
 

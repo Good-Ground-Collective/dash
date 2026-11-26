@@ -14,7 +14,7 @@
 # API token, which is exactly what a real recovery has if dash-db is gone.
 set -euo pipefail
 
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 DB_HOST="${DASH_DB_HOST:-dash-db}"
@@ -29,7 +29,31 @@ cipher_pass="$(env_get DASH_PGBACKREST_CIPHER_PASS)"
 run_id="$(date -u +%Y%m%dT%H%M%SZ)"
 db_sql() { remote "$DB_HOST" 'sudo -u postgres psql -XAt -v ON_ERROR_STOP=1 -d postgres'; }
 
+bundle=""
+key_id=""
+table_created=0
+cleanup() {
+  set +e
+  echo "== 4. teardown"
+  if [ -n "$bundle" ]; then
+    remote "$SCRATCH_HOST" "sudo bash '$bundle/remote/teardown.sh' >/dev/null && echo 'teardown: done'; rm -rf '$bundle'"
+  fi
+  if [ -n "$key_id" ]; then
+    linode_api DELETE "/object-storage/keys/${key_id}" >/dev/null && echo "revoked key ${key_label}"
+  fi
+  if [ "$table_created" = 1 ]; then
+    echo "DROP TABLE IF EXISTS dash_restore_check" | db_sql >/dev/null && echo "dropped dash_restore_check on ${DB_HOST}"
+  fi
+}
+trap cleanup EXIT
+
+remote "$SCRATCH_HOST" 'test ! -e /var/lib/postgresql && ! id postgres >/dev/null 2>&1 && ! dpkg -s postgresql-common >/dev/null 2>&1' ||
+  die "${SCRATCH_HOST} already has Postgres on it; the restore test only runs on a box without it"
+bundle="$(push_bundle "$SCRATCH_HOST")"
+remote "$SCRATCH_HOST" 'sudo touch /etc/dash-restore-scratch'
+
 echo "== 1. marker rows and backup on ${DB_HOST} (run ${run_id})"
+table_created=1
 db_sql <<SQL
 CREATE TABLE IF NOT EXISTS dash_restore_check (
   run_id text NOT NULL, batch text NOT NULL, n int NOT NULL,
@@ -50,8 +74,7 @@ db_sql <<SQL
 INSERT INTO dash_restore_check (run_id, batch, n)
 SELECT '${run_id}', 'after-target', g FROM generate_series(1, 25) g;
 SQL
-# check switches to a new WAL segment and waits until it is archived, so the
-# rows above are in the repo before the restore starts.
+# check forces the WAL holding these rows out to the repo.
 remote "$DB_HOST" 'sudo -u postgres pgbackrest --stanza=dash --log-level-console=warn check'
 echo "target time: ${target}"
 echo "source counts:"
@@ -66,21 +89,8 @@ s3_secret="$(jq -r .secret_key <<<"$key_json")"
 unset key_json
 echo "created key ${key_label} (id ${key_id})"
 
-bundle=""
-cleanup() {
-  set +e
-  echo "== 4. teardown"
-  if [ -n "$bundle" ]; then
-    remote "$SCRATCH_HOST" "sudo bash '$bundle/remote/teardown.sh' >/dev/null && echo 'teardown: done'; rm -rf '$bundle'"
-  fi
-  linode_api DELETE "/object-storage/keys/${key_id}" >/dev/null && echo "revoked key ${key_label}"
-  echo "DROP TABLE IF EXISTS dash_restore_check" | db_sql >/dev/null && echo "dropped dash_restore_check on ${DB_HOST}"
-}
-trap cleanup EXIT
-
 echo "== 3. restore on ${SCRATCH_HOST}"
-bundle="$(push_bundle "$SCRATCH_HOST")"
-log="$(mktemp -t dash-restore)"
+log="$(mktemp "${TMPDIR:-/tmp}/dash-restore.XXXXXX")"
 if ! printf 'S3_KEY=%s\nS3_SECRET=%s\nCIPHER_PASS=%s\n' "$s3_key" "$s3_secret" "$cipher_pass" |
   remote "$SCRATCH_HOST" "sudo bash '$bundle/remote/restore.sh' '$target'" >"$log" 2>&1; then
   tail -40 "$log"

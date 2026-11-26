@@ -8,7 +8,7 @@
 # Remote step: copies remote/ and files/ to dash-db and runs remote/setup.sh.
 set -euo pipefail
 
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 DB_HOST="${DASH_DB_HOST:-dash-db}"
@@ -17,7 +17,6 @@ need_tools curl jq openssl ssh tar awk
 load_linode_token
 ensure_env_file
 
-# Bucket.
 if linode_api GET "/object-storage/buckets/${REGION}/${BUCKET}" >/dev/null 2>&1; then
   echo "bucket ${BUCKET}: exists"
 else
@@ -26,8 +25,7 @@ else
   echo "bucket ${BUCKET}: created"
 fi
 
-# Database password and cipher passphrase. infra.env is the source of truth;
-# both are generated once and re-applied on every run.
+# infra.env is the source of truth for both; generated once, re-applied each run.
 db_url="$(env_get DASH_DATABASE_URL)"
 if [ -n "$db_url" ]; then
   db_password="$(sed -E 's#^postgres://[^:]+:([^@]+)@.*#\1#' <<<"$db_url")"
@@ -44,15 +42,15 @@ if [ -z "$cipher_pass" ]; then
   echo "infra.env: wrote DASH_PGBACKREST_CIPHER_PASS"
 fi
 
-# Backup key. Its secret lives only on dash-db, so a fresh one is minted
-# whenever Linode has no key with this label (first run, or after the old key
-# was revoked, e.g. following a restore onto a new box).
-key_id="$(key_id_by_label "$KEY_LABEL")"
+# Minted only when Linode has no key with this label (README: Restore runbook).
+key_json="$(key_by_label "$KEY_LABEL")"
+key_id="$(jq -r '.id // empty' <<<"$key_json")"
 s3_key=""
 s3_secret=""
 if [ -n "$key_id" ]; then
-  remote "$DB_HOST" 'sudo grep -qs "^repo1-s3-key-secret=." /etc/pgbackrest/conf.d/dash-secrets.conf' ||
-    die "key ${KEY_LABEL} (id ${key_id}) exists but ${DB_HOST} does not hold its secret. Revoke it in Linode and re-run; a secret cannot be read back."
+  box_key="$(remote "$DB_HOST" 'sudo sed -n "s/^repo1-s3-key=//p" /etc/pgbackrest/conf.d/dash-secrets.conf 2>/dev/null' || true)"
+  [ "$box_key" = "$(jq -r .access_key <<<"$key_json")" ] ||
+    die "key ${KEY_LABEL} (id ${key_id}) exists but ${DB_HOST} does not hold it. Revoke it in Linode and re-run; a secret cannot be read back."
   echo "key ${KEY_LABEL}: exists (id ${key_id}), already on ${DB_HOST}"
 else
   key_json="$(create_bucket_key "$KEY_LABEL" read_write)"
