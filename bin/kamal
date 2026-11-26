@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Runs Kamal from its pinned official image, so deploys need Docker but no Ruby.
+# Run from the repository root, for example: bin/kamal deploy -c deploy/web.yml
+#
+# Secrets come from the environment (see .kamal/secrets). Locally, any that are
+# unset are filled from `gh` and from the DASH_* lines of $DASH_INFRA_ENV
+# (default ~/.config/dash/infra.env). Kamal logs the server in to the registry on
+# every deploy, so afterwards the server is logged out again: the images are
+# public, and the deployer's token shouldn't stay on the box. Set
+# KAMAL_REGISTRY_PASSWORD to a read:packages token to avoid lending it a broad one.
+set -euo pipefail
+
+image=ghcr.io/basecamp/kamal:v2.12.0@sha256:7b5be276aa17bbe122887f6a1ff12865f4848111989699b9786083be95d98415
+
+root=$(git rev-parse --show-toplevel)
+common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
+cd "$root"
+
+source bin/lib/infra-env.sh
+load_infra_env '^DASH_[A-Z0-9_]+$'
+if command -v gh >/dev/null; then
+  [[ -n ${KAMAL_REGISTRY_USERNAME:-} ]] || KAMAL_REGISTRY_USERNAME=$(gh api user --jq .login)
+  [[ -n ${KAMAL_REGISTRY_PASSWORD:-} ]] || KAMAL_REGISTRY_PASSWORD=$(gh auth token)
+  [[ -n ${NODE_AUTH_TOKEN:-} ]] || NODE_AUTH_TOKEN=$(gh auth token)
+fi
+export KAMAL_REGISTRY_USERNAME KAMAL_REGISTRY_PASSWORD NODE_AUTH_TOKEN
+
+run=(docker run --rm --interactive)
+[[ -t 0 && -t 1 ]] && run+=(--tty)
+run+=(
+  --volume "$root:$root" --workdir "$root"
+  --volume /var/run/docker.sock:/var/run/docker.sock
+  --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0='*'
+  --env KAMAL_REGISTRY_USERNAME --env KAMAL_REGISTRY_PASSWORD --env NODE_AUTH_TOKEN
+  --env DASH_BETTER_AUTH_SECRET --env DASH_DATABASE_URL
+)
+[[ $common == "$root"/* ]] || run+=(--volume "$common:$common")
+[[ -d $HOME/.ssh ]] && run+=(--volume "$HOME/.ssh:/root/.ssh:ro")
+if [[ -n ${SSH_AUTH_SOCK:-} ]]; then
+  if [[ $(uname -s) == Darwin ]]; then
+    run+=(--volume /run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock --env SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
+  else
+    run+=(--volume "$SSH_AUTH_SOCK:$SSH_AUTH_SOCK" --env SSH_AUTH_SOCK)
+  fi
+fi
+
+config_args=()
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case ${args[i]} in
+    -c | --config-file | -d | --destination) config_args+=("${args[i]}" "${args[i + 1]:-}") ;;
+    -c=* | --config-file=* | -d=* | --destination=*) config_args+=("${args[i]}") ;;
+  esac
+done
+
+logout() {
+  if ! "${run[@]}" "$image" registry logout --skip-local ${config_args[@]+"${config_args[@]}"} >/dev/null 2>&1; then
+    echo "warning: could not log the server out of ghcr.io; run: bin/kamal registry logout --skip-local ${config_args[*]-}" >&2
+  fi
+}
+case ${1:-} in
+  setup | deploy | redeploy | rollback) trap logout EXIT ;;
+esac
+
+"${run[@]}" "$image" "$@"
