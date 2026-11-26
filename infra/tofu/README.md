@@ -23,12 +23,12 @@ The Linode provider refuses to create a box from an image unless it has `authori
 
 Nothing secret lives in this directory. `tofu.sh` loads the files below and runs `tofu` with them, so the values never need to be in your interactive shell.
 
-| Variable                                         | Used for                                                | Where it lives                 |
-| ------------------------------------------------ | ------------------------------------------------------- | ------------------------------ |
-| `LINODE_TOKEN` (or `LINODE_API_KEY`)             | Linode provider, `bootstrap.sh`                         | Your shell or `~/.zsh/secrets` |
-| `CLOUDFLARE_API_TOKEN` (or `CLOUDFLARE_API_KEY`) | Cloudflare provider; needs DNS edit on `doublel.studio` | Your shell or `~/.zsh/secrets` |
-| `LINODE_OBJ_ACCESS_KEY`, `LINODE_OBJ_SECRET_KEY` | State bucket key, written by `bootstrap.sh`             | `~/.config/dash/infra.env`     |
-| `TF_VAR_tailscale_auth_key`                      | Tailscale join at first boot                            | `~/.config/dash/infra.env`     |
+| Variable                                                                                            | Used for                                                | Where it lives                 |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------ |
+| `LINODE_TOKEN` (or `LINODE_API_KEY`)                                                                | Linode provider, `bootstrap.sh`                         | Your shell or `~/.zsh/secrets` |
+| `CLOUDFLARE_API_TOKEN` (or `CLOUDFLARE_API_KEY` holding a scoped API token, not the Global API Key) | Cloudflare provider; needs DNS edit on `doublel.studio` | Your shell or `~/.zsh/secrets` |
+| `LINODE_OBJ_ACCESS_KEY`, `LINODE_OBJ_SECRET_KEY`                                                    | State bucket key, written by `bootstrap.sh`             | `~/.config/dash/infra.env`     |
+| `TF_VAR_tailscale_auth_key`                                                                         | Tailscale join at first boot                            | `~/.config/dash/infra.env`     |
 
 The Tailscale key is written into each box's user data, so it also ends up in the Linode metadata service and in OpenTofu state. Keep it pre-authorized, tagged `tag:dash` and short-lived (a day is plenty). After the first apply it is only needed again when a box is created or replaced, so any value satisfies the variable in between.
 
