@@ -12,17 +12,14 @@ When a discussion is settled, write its decisions into GitHub issues in the Dash
 
 ## Order
 
-| # | Discussion | Blocks |
-|---|---|---|
-| 01 | [Identity: users, service accounts, passkeys](./01-identity-and-auth.md) | onboarding design, Mission Control |
-| 02 | [Design direction](./02-design-direction.md) | every design session |
-| 03 | [Design: onboarding flow](./03-design-onboarding.md) | slice 1 build |
-| 04 | [GitHub integration](./04-github-integration.md) | slice 1 build, design of the GitHub views |
-| 05 | [Stack and repo layout](./05-stack-and-repo.md) | any code |
-| 06 | [Hosting and deploy](./06-hosting-and-deploy.md) | slice 1 ship |
-| 10 | [Infrastructure as code](./10-infrastructure-as-code.md) | first deploy, DNS for the passkey domain |
-| 07 | [Communication standards](./07-communication-standards.md) | slices 2 and 3 |
-| 08 | [Agent heartbeats](./08-agent-heartbeats.md) | slice 2 |
-| 09 | [Benches and the daemon](./09-benches-and-daemon.md) | slice 3 |
+Two tracks run side by side. Design doesn't wait on the stack, because mocks don't need code.
 
-01–06 and 10 make up slice 1: Mission Control, auth, the web app, deploy, and the GitHub view. 07–09 can wait until slice 1 is under way.
+| Step | Discussion | Why here |
+|---|---|---|
+| 1 | [01 Identity: users, service accounts, passkeys](./01-identity-and-auth.md) | Shapes the data model and every auth screen. The biggest model decision. |
+| 2 | [02 Design direction](./02-design-direction.md) | Sets the visual language before any mock gets made. |
+| 3 | [04 GitHub integration](./04-github-integration.md) | Decides what "Connect GitHub" means in onboarding and what slice 1 shows. |
+| 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |
+| 5 | [05 Stack and repo layout](./05-stack-and-repo.md) | Mostly settled already (TS, Svelte, Go). Confirms libraries, such as the auth library from 01. |
+| 6 | [06 Hosting and deploy](./06-hosting-and-deploy.md) + [10 Infrastructure as code](./10-infrastructure-as-code.md) | One session. Needed before the first deploy. Can run alongside 4 and 5. |
+| later | [07 Communication standards](./07-communication-standards.md) → [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
