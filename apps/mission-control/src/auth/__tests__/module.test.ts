@@ -17,7 +17,7 @@ import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 const secret = 'test-secret-that-is-at-least-32-characters';
 const webOrigin = 'http://localhost:5173';
 
-class RecordingServicePrincipalRepository implements ServicePrincipalRepository {
+class StubServicePrincipalRepository implements ServicePrincipalRepository {
   async create(record: ServicePrincipalRecord): Promise<ServicePrincipal> {
     return { ...record, createdAt: new Date().toISOString() };
   }
@@ -39,7 +39,7 @@ class ServedAuth {
         verification: [],
       }),
     },
-    servicePrincipalRepository: new RecordingServicePrincipalRepository(),
+    servicePrincipalRepository: new StubServicePrincipalRepository(),
     secret,
     baseUrl: 'http://localhost:3000',
     trustedOrigins: [webOrigin],
