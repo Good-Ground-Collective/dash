@@ -5,6 +5,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { z } from 'zod';
+import { ServiceAccountsStub } from './service-accounts-stub.ts';
 
 const sessionCookie = 'better-auth.session_token';
 const stubSetupToken = 'stub-setup-token';
@@ -47,7 +48,8 @@ interface StubReply {
 /**
  * Stands in for Mission Control's `/api/auth` in the web e2e tests, which run without Postgres.
  * It speaks the same paths and error codes but trusts every WebAuthn response: the real checks
- * are Mission Control's own tests. `POST /__stub/reset` forgets everyone.
+ * are Mission Control's own tests. `POST /__stub/reset` forgets everyone, and
+ * `POST /__stub/sign-in` signs a person straight in.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -55,6 +57,7 @@ export class MissionControlStub {
   private pendingSetup: StubPerson | null = null;
   private passkeys: StubPasskey[] = [];
   private sessions = new Set<string>();
+  private readonly serviceAccounts = new ServiceAccountsStub();
 
   constructor(props: { webOrigin: string }) {
     this.webOrigin = props.webOrigin;
@@ -102,6 +105,8 @@ export class MissionControlStub {
     switch (path) {
       case '/__stub/reset':
         return this.reset();
+      case '/__stub/sign-in':
+        return this.signInDirectly();
       case '/get-session':
         return this.getSession(session);
       case '/setup/status':
@@ -139,7 +144,7 @@ export class MissionControlStub {
       case '/passkey/delete-passkey':
         return this.remove(props.body);
       default:
-        return this.fail(404, 'NOT_FOUND');
+        return this.serviceAccounts.route(props);
     }
   }
 
@@ -148,7 +153,18 @@ export class MissionControlStub {
     this.pendingSetup = null;
     this.passkeys = [];
     this.sessions = new Set();
+    this.serviceAccounts.reset();
     return { status: 200, body: { status: true } };
+  }
+
+  /** Signs a person in without a passkey, for suites that test pages behind sign-in. */
+  private signInDirectly(): StubReply {
+    this.person ??= {
+      id: randomUUID(),
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+    };
+    return this.newSession();
   }
 
   private getSession(session: string | null): StubReply {

@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
+import {
+  type ServiceAccount,
+  serviceAccountListSchema,
+} from '#lib/api/service-account-contracts.ts';
 
 export const missionControlBaseUrlSchema = z.url({ protocol: /^https?$/u });
 
@@ -54,8 +58,16 @@ export interface PasskeyReads {
   listPasskeys(): Promise<Passkey[]>;
 }
 
+/** Reads the service account page renders from. */
+export interface ServiceAccountReads {
+  /** The signed-in person's service accounts with their keys, oldest first. */
+  listServiceAccounts(): Promise<ServiceAccount[]>;
+}
+
 /** Mission Control over HTTP. Calls include credentials; on the server only the session cookie is forwarded. */
-export class HttpMissionControl implements MissionControl, PasskeyReads {
+export class HttpMissionControl
+  implements MissionControl, PasskeyReads, ServiceAccountReads
+{
   private readonly baseUrl: URL;
   private readonly fetcher: typeof fetch;
   private readonly timeoutMs: number;
@@ -91,6 +103,14 @@ export class HttpMissionControl implements MissionControl, PasskeyReads {
     return passkeys.toSorted(
       (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
     );
+  }
+
+  async listServiceAccounts(): Promise<ServiceAccount[]> {
+    const list = await this.getJson({
+      path: 'api/auth/service-accounts/list',
+      schema: serviceAccountListSchema,
+    });
+    return list.serviceAccounts;
   }
 
   private async getJson<T>(props: {

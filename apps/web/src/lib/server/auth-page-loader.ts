@@ -5,9 +5,11 @@ import {
   missionControlBaseUrlSchema,
   type Passkey,
   type PasskeyReads,
+  type ServiceAccountReads,
   type Viewer,
   viewerSchema,
 } from '#lib/api/mission-control.ts';
+import type { ServiceAccount } from '#lib/api/service-account-contracts.ts';
 
 export const authPageLoaderPropsSchema = z.object({
   apiBaseUrl: missionControlBaseUrlSchema,
@@ -35,11 +37,20 @@ export interface SettingsPageData {
   passkeys: Passkey[] | null;
 }
 
-/** Loads for the pages around signing in. Signed-in visitors skip setup and sign-in; signed-out ones are sent to sign in from settings. */
+export interface ServiceAccountsPageData {
+  viewer: Viewer;
+  /** `null` when Mission Control couldn't list them. */
+  serviceAccounts: ServiceAccount[] | null;
+}
+
+/** Loads for the pages around signing in. Signed-in visitors skip setup and sign-in; signed-out ones are sent to sign in from settings and service accounts. */
 export interface AuthPageLoader {
   readonly setup: (event: AuthPageLoadEvent) => Promise<SetupPageData>;
   readonly signIn: (event: AuthPageLoadEvent) => Promise<SignInPageData>;
   readonly settings: (event: AuthPageLoadEvent) => Promise<SettingsPageData>;
+  readonly serviceAccounts: (
+    event: AuthPageLoadEvent,
+  ) => Promise<ServiceAccountsPageData>;
 }
 
 export class MissionControlAuthPageLoader implements AuthPageLoader {
@@ -74,6 +85,24 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
     }
   };
 
+  readonly serviceAccounts = async (
+    event: AuthPageLoadEvent,
+  ): Promise<ServiceAccountsPageData> => {
+    const viewer = await this.viewer(event);
+    if (viewer === null) redirect(303, '/sign-in');
+    try {
+      return {
+        viewer,
+        serviceAccounts: await this.reads(event).listServiceAccounts(),
+      };
+    } catch (error) {
+      console.warn(
+        `Mission Control did not list service accounts: ${String(error)}`,
+      );
+      return { viewer, serviceAccounts: null };
+    }
+  };
+
   private async viewer(event: AuthPageLoadEvent): Promise<Viewer | null> {
     return shellDataSchema.parse(await event.parent()).viewer;
   }
@@ -89,7 +118,7 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
     }
   }
 
-  private reads(event: AuthPageLoadEvent): PasskeyReads {
+  private reads(event: AuthPageLoadEvent): PasskeyReads & ServiceAccountReads {
     return new HttpMissionControl({
       baseUrl: this.apiBaseUrl,
       fetch: event.fetch,

@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 const shellPort = 4319;
 const passkeyPort = 4320;
 const stubPort = 59998;
+const serviceAccountsPort = 4321;
+const serviceAccountsStubPort = 59997;
+const serviceAccountsWebUrl = `http://localhost:${serviceAccountsPort}`;
+const serviceAccountsStubUrl = `http://localhost:${serviceAccountsStubPort}`;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -16,7 +20,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: '**/passkeys.e2e.test.ts',
+      testIgnore: [
+        '**/passkeys.e2e.test.ts',
+        '**/service-accounts.e2e.test.ts',
+      ],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: `http://127.0.0.1:${shellPort}`,
@@ -31,6 +38,12 @@ export default defineConfig({
         live: liveMissionControl !== undefined,
       },
       use: { ...devices['Desktop Chrome'], baseURL: passkeyWebUrl },
+    },
+    {
+      name: 'service-accounts',
+      testMatch: '**/service-accounts.e2e.test.ts',
+      metadata: { missionControlUrl: serviceAccountsStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: serviceAccountsWebUrl },
     },
   ],
   webServer: [
@@ -53,6 +66,21 @@ export default defineConfig({
         PORT: String(passkeyPort),
         API_BASE_URL: passkeyApiBaseUrl,
       },
+    },
+    {
+      command: 'node build',
+      url: serviceAccountsWebUrl,
+      reuseExistingServer: false,
+      env: {
+        HOST: 'localhost',
+        PORT: String(serviceAccountsPort),
+        API_BASE_URL: serviceAccountsStubUrl,
+      },
+    },
+    {
+      command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${serviceAccountsStubPort} ${serviceAccountsWebUrl}`,
+      url: `${serviceAccountsStubUrl}/api/auth/setup/status`,
+      reuseExistingServer: false,
     },
     ...(liveMissionControl === undefined
       ? [
