@@ -1,7 +1,8 @@
-import type {
-  AuthContext,
-  BetterAuthOptions,
-  BetterAuthPlugin,
+import {
+  type AuthContext,
+  type BetterAuthOptions,
+  type BetterAuthPlugin,
+  getCurrentAdapter,
 } from 'better-auth';
 import { createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 
@@ -25,7 +26,7 @@ type BeforeHooks = NonNullable<
 export interface PrincipalGuard {
   /** Adds `kind` to Better Auth's `user` and refuses web sessions and passkeys to service principals. */
   readonly plugin: BetterAuthPlugin;
-  /** Rejects with `ServicePrincipalForbiddenError` unless `userId` is a person. Fails closed for an unknown id. */
+  /** Rejects with `ServicePrincipalForbiddenError` unless `userId` is a person. Fails closed for an unknown id. Reads inside the caller's transaction, so a user created in it is visible. */
   assertPerson(props: {
     context: AuthContext;
     userId: string;
@@ -66,7 +67,8 @@ export class KindPrincipalGuard implements PrincipalGuard {
     userId: string;
     action: string;
   }): Promise<void> {
-    const principal = await props.context.adapter.findOne<{ kind: string }>({
+    const adapter = await getCurrentAdapter(props.context.adapter);
+    const principal = await adapter.findOne<{ kind: string }>({
       model: 'user',
       where: [{ field: 'id', value: props.userId }],
       select: ['kind'],

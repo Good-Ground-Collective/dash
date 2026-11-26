@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { parseEnv } from 'node:util';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -84,6 +87,19 @@ describe('AppConfig auth settings', () => {
     expect(
       () => new AppConfig({ ...productionEnv, BETTER_AUTH_SECRET: 'short' }),
     ).toThrow(ConfigError);
+  });
+});
+
+describe('AppConfig auth secret', () => {
+  it('knows the secret .env.example ships', async () => {
+    const example = parseEnv(
+      await readFile(
+        new URL('../../../../../.env.example', import.meta.url),
+        'utf8',
+      ),
+    );
+
+    expect(example['BETTER_AUTH_SECRET']).toBe(developmentAuthSecret);
   });
 
   it('refuses the public development secret in production', () => {
