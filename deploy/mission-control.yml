@@ -36,7 +36,8 @@ env:
     # dash-db accepts only TLS, and node-postgres otherwise connects in plain text.
     # There's no CA for dash-db's certificate yet, and the link runs inside
     # Tailscale's WireGuard, so this encrypts without verifying. An sslmode in
-    # DATABASE_URL takes precedence.
+    # DATABASE_URL takes precedence. Follow-up (#42): pin dash-db's CA with
+    # sslrootcert and switch to verify-full.
     PGSSLMODE: no-verify
   secret:
     - BETTER_AUTH_SECRET
