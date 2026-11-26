@@ -15,6 +15,7 @@ DB_HOST="${DASH_DB_HOST:-dash-db}"
 
 need_tools curl jq openssl ssh tar awk
 load_linode_token
+load_pushover_creds
 ensure_env_file
 
 if linode_api GET "/object-storage/buckets/${REGION}/${BUCKET}" >/dev/null 2>&1; then
@@ -74,7 +75,7 @@ bundle="$(push_bundle "$DB_HOST")"
 trap 'remote "$DB_HOST" "rm -rf $bundle" || true' EXIT
 
 # Secrets go over stdin, never argv.
-printf 'DB_PASSWORD=%s\nCIPHER_PASS=%s\nS3_KEY=%s\nS3_SECRET=%s\n' \
-  "$db_password" "$cipher_pass" "$s3_key" "$s3_secret" |
+printf 'DB_PASSWORD=%s\nCIPHER_PASS=%s\nS3_KEY=%s\nS3_SECRET=%s\nPUSHOVER_APP_TOKEN=%s\nPUSHOVER_USER_KEY=%s\n' \
+  "$db_password" "$cipher_pass" "$s3_key" "$s3_secret" "$PUSHOVER_APP_TOKEN" "$PUSHOVER_USER_KEY" |
   remote "$DB_HOST" "sudo bash '$bundle/remote/setup.sh' '$tailnet_ip'"
 echo "done"

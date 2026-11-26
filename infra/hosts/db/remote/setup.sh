@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Configures dash-db. Runs as root, started by provision.sh. Safe to re-run.
 # Usage: setup.sh <tailnet-ip>, with secrets on stdin as NAME=value lines:
-# DB_PASSWORD, CIPHER_PASS, and S3_KEY / S3_SECRET (empty to keep the key
-# already on the box).
+# DB_PASSWORD, CIPHER_PASS, S3_KEY / S3_SECRET (empty to keep the key already
+# on the box), and PUSHOVER_APP_TOKEN / PUSHOVER_USER_KEY for alerts (empty to
+# keep the ones already on the box).
 set -euo pipefail
 
 TAILNET_IP="${1:?tailnet IP}"
@@ -12,11 +13,14 @@ PG_CLUSTER=main
 PG_CONF_DIR="/etc/postgresql/${PG_VERSION}/${PG_CLUSTER}"
 PG_UNIT="postgresql@${PG_VERSION}-${PG_CLUSTER}.service"
 SECRETS=/etc/pgbackrest/conf.d/dash-secrets.conf
+PUSHOVER=/etc/dash/pushover.env
 
-DB_PASSWORD="" CIPHER_PASS="" S3_KEY="" S3_SECRET=""
+DB_PASSWORD="" CIPHER_PASS="" S3_KEY="" S3_SECRET="" PUSHOVER_APP_TOKEN="" PUSHOVER_USER_KEY=""
 while IFS='=' read -r name value; do
   case "$name" in
-    DB_PASSWORD | CIPHER_PASS | S3_KEY | S3_SECRET) printf -v "$name" '%s' "$value" ;;
+    DB_PASSWORD | CIPHER_PASS | S3_KEY | S3_SECRET | PUSHOVER_APP_TOKEN | PUSHOVER_USER_KEY)
+      printf -v "$name" '%s' "$value"
+      ;;
   esac
 done
 [[ "$DB_PASSWORD" =~ ^[0-9a-f]{32,}$ ]] || { echo "DB_PASSWORD missing or not hex" >&2; exit 1; }
@@ -63,6 +67,27 @@ else
 fi
 unset S3_KEY S3_SECRET CIPHER_PASS
 
+# Pushover credentials for dash-notify. Only root-run units read them.
+if [ -z "$PUSHOVER_APP_TOKEN" ] && [ -z "$PUSHOVER_USER_KEY" ] && [ -f "$PUSHOVER" ]; then
+  PUSHOVER_APP_TOKEN="$(sed -n 's/^PUSHOVER_APP_TOKEN=//p' "$PUSHOVER")"
+  PUSHOVER_USER_KEY="$(sed -n 's/^PUSHOVER_USER_KEY=//p' "$PUSHOVER")"
+fi
+[[ "$PUSHOVER_APP_TOKEN" =~ ^[A-Za-z0-9]+$ && "$PUSHOVER_USER_KEY" =~ ^[A-Za-z0-9]+$ ]] ||
+  { echo "Pushover credentials missing or malformed, and none on the box" >&2; exit 1; }
+install -d -m 755 /etc/dash
+pushover_tmp="$(mktemp /etc/dash/.pushover.XXXXXX)"
+chmod 600 "$pushover_tmp"
+printf 'PUSHOVER_APP_TOKEN=%s\nPUSHOVER_USER_KEY=%s\n' "$PUSHOVER_APP_TOKEN" "$PUSHOVER_USER_KEY" >"$pushover_tmp"
+pushover_changed=0
+if cmp -s "$pushover_tmp" "$PUSHOVER"; then
+  rm -f "$pushover_tmp"
+else
+  mv "$pushover_tmp" "$PUSHOVER"
+  pushover_changed=1
+  echo "updated $PUSHOVER"
+fi
+unset PUSHOVER_APP_TOKEN PUSHOVER_USER_KEY
+
 # A 1 GB swapfile on top of Linode's small swap partition.
 if [ ! -f /swapfile ]; then
   fallocate -l 1G /swapfile
@@ -94,6 +119,8 @@ reload_pg=0
 install_file "$SRC/pg_hba.conf" "$PG_CONF_DIR/pg_hba.conf" 640 postgres:postgres && reload_pg=1
 
 install_file "$SRC/pgbackrest.conf" /etc/pgbackrest/pgbackrest.conf 644 root:root || true
+install_file "$SRC/bin/dash-notify" /usr/local/bin/dash-notify 755 root:root || true
+install_file "$SRC/bin/dash-backup-alerts" /usr/local/sbin/dash-backup-alerts 755 root:root || true
 for unit in "$SRC"/systemd/dash-*; do
   install_file "$unit" "/etc/systemd/system/$(basename "$unit")" 644 root:root || true
 done
@@ -136,5 +163,11 @@ if [ "$(pgbr info --output=json | python3 -c 'import json,sys; print(len(json.lo
   pgbr --type=full backup
 fi
 
-systemctl enable -q --now dash-pgbackrest-full.timer dash-pgbackrest-diff.timer
+systemctl enable -q --now dash-pgbackrest-full.timer dash-pgbackrest-diff.timer \
+  dash-backup-age.timer dash-archive-check.timer
+if [ "$pushover_changed" = 1 ]; then
+  /usr/local/bin/dash-notify "Dash backups: alerting enabled on $(hostname -s)" \
+    "Test notification: provision.sh installed new Pushover credentials. Backup failures, stale backups and WAL archiving problems on this box now alert here."
+  echo "sent a test notification"
+fi
 echo "dash-db: ok"

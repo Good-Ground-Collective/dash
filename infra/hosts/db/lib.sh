@@ -31,6 +31,18 @@ load_linode_token() {
   [ -n "$LINODE_TOKEN" ] || die "set LINODE_TOKEN or LINODE_API_KEY (Object Storage read/write)"
 }
 
+# Pushover credentials for dash-db's alerts, from the env or ~/.zsh/secrets.
+load_pushover_creds() {
+  if { [ -z "${PUSHOVER_APP_TOKEN:-}" ] || [ -z "${PUSHOVER_USER_KEY:-}" ]; } && [ -f "$HOME/.zsh/secrets" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$HOME/.zsh/secrets"
+    set +a
+  fi
+  [ -n "${PUSHOVER_APP_TOKEN:-}" ] && [ -n "${PUSHOVER_USER_KEY:-}" ] ||
+    die "set PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY (backup alerts)"
+}
+
 # The token goes to curl through a file descriptor, not argv.
 linode_api() {
   local method="$1" path="$2"

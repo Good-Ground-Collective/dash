@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh
+      - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh infra/hosts/db/files/bin/*
 
   verify:
     runs-on: ubuntu-latest
