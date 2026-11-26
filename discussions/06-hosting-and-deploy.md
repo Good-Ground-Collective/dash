@@ -2,7 +2,7 @@
 
 ## What we know
 - The plan is to trial **fly.io**.
-- The domain is **`dash.doublel.studio`**. The passkey RP ID is bound to it (see [01](./01-identity-and-auth.md)).
+- The domain is **`dash.doublel.studio`**. The passkey RP ID is bound to it (see #1 (concluded)).
 
 ## Questions
 1. **Subdomains:** where do the API and webhooks live? `dash.doublel.studio` alone with path routing, or `api.dash.doublel.studio`? Where is DNS hosted, and how do we point it at Fly?
