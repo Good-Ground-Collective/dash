@@ -1,8 +1,8 @@
 import { type Auth, betterAuth, type BetterAuthOptions } from 'better-auth';
 import { z } from 'zod';
 
-import type { AuthStorage } from '#src/auth/repositories/auth-store/auth-store.ts';
 import { principalKindSchema } from '#src/auth/contracts/principal.ts';
+import type { AuthStorage } from '#src/auth/repositories/auth-store/auth-store.ts';
 import {
   KindPrincipalGuard,
   type PrincipalGuard,
