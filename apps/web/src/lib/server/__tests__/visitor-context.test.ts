@@ -98,3 +98,29 @@ describe('VisitorContext client hints', () => {
     expect(() => new VisitorContext({ apiBaseUrl: 'not a url' })).toThrow();
   });
 });
+
+describe('VisitorContext server-side fetches', () => {
+  it('sends the visitor cookie to Mission Control only', async () => {
+    const sent: Request[] = [];
+    const fetch: typeof globalThis.fetch = async (input) => {
+      sent.push(new Request(input));
+      return new Response(null, { status: 204 });
+    };
+
+    for (const url of [
+      'https://api.example.test/api/auth/get-session',
+      'https://elsewhere.example.test/data',
+    ]) {
+      await visitorContext.fetchAsVisitor({
+        request: new Request(url),
+        browserCookie: 'session=abc',
+        fetch,
+      });
+    }
+
+    expect(sent.map((request) => request.headers.get('cookie'))).toEqual([
+      'session=abc',
+      null,
+    ]);
+  });
+});

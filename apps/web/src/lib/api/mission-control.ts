@@ -38,9 +38,8 @@ export class HttpMissionControl implements MissionControl {
 
   constructor(props: HttpMissionControlProps) {
     const valid = httpMissionControlPropsSchema.parse(props);
-    this.baseUrl = new URL(
-      valid.baseUrl.endsWith('/') ? valid.baseUrl : `${valid.baseUrl}/`,
-    );
+    this.baseUrl = new URL(valid.baseUrl);
+    if (!this.baseUrl.pathname.endsWith('/')) this.baseUrl.pathname += '/';
     this.fetcher = valid.fetch;
     this.timeoutMs = valid.timeoutMs;
   }

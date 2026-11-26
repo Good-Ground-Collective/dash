@@ -45,12 +45,11 @@ export class VisitorContext {
     });
 
   readonly handleFetch: HandleFetch = async ({ event, request, fetch }) =>
-    fetch(
-      this.cookieForwarder.forward({
-        request,
-        cookie: event.request.headers.get('cookie'),
-      }),
-    );
+    this.fetchAsVisitor({
+      request,
+      browserCookie: event.request.headers.get('cookie'),
+      fetch,
+    });
 
   async visit(visit: Visit): Promise<Response> {
     const preference = themePreferenceReader.read({
@@ -76,5 +75,19 @@ export class VisitorContext {
     }
 
     return response;
+  }
+
+  /** Makes a server-side request, carrying the visitor's cookies when it goes to Mission Control. */
+  async fetchAsVisitor(props: {
+    request: Request;
+    browserCookie: string | null;
+    fetch: typeof fetch;
+  }): Promise<Response> {
+    return props.fetch(
+      this.cookieForwarder.forward({
+        request: props.request,
+        cookie: props.browserCookie,
+      }),
+    );
   }
 }

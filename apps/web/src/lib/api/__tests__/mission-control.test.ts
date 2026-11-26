@@ -53,7 +53,7 @@ describe('HttpMissionControl', () => {
       respond: async () => Response.json(null),
     });
     const missionControl = new HttpMissionControl({
-      baseUrl: 'https://api.example.test/mc',
+      baseUrl: 'https://api.example.test/mc?region=eu',
       fetch: recorder.fetch,
     });
 
