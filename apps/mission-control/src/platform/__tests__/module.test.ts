@@ -70,6 +70,8 @@ const config = new AppConfig({
   PORT: '0',
   LOG_LEVEL: 'silent',
   DATABASE_URL: 'postgres://dash:dash@127.0.0.1:54329/mission_control',
+  BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters',
+  BETTER_AUTH_URL: 'http://localhost:3000',
 });
 
 describe('PlatformModule', () => {

@@ -4,6 +4,17 @@ import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { ConfigError } from '#src/platform/errors.ts';
 
 const databaseUrl = 'postgres://dash:dash@127.0.0.1:54329/mission_control';
+const productionEnv = {
+  NODE_ENV: 'production',
+  DATABASE_URL: databaseUrl,
+  BETTER_AUTH_SECRET: 'production-secret-that-is-long-enough',
+  BETTER_AUTH_URL: 'https://api.dash.doublel.studio',
+};
+const developmentEnv = {
+  ...productionEnv,
+  NODE_ENV: 'development',
+  BETTER_AUTH_URL: 'http://localhost:3000',
+};
 
 describe('AppConfig', () => {
   it('fails fast when a required variable is missing', () => {
@@ -16,7 +27,7 @@ describe('AppConfig', () => {
     expect(
       () =>
         new AppConfig({
-          NODE_ENV: 'production',
+          ...productionEnv,
           DATABASE_URL: 'mysql://127.0.0.1/db',
         }),
     ).toThrow(ConfigError);
@@ -26,8 +37,7 @@ describe('AppConfig', () => {
     expect(
       () =>
         new AppConfig({
-          NODE_ENV: 'development',
-          DATABASE_URL: databaseUrl,
+          ...developmentEnv,
           DEV_WEB_ORIGIN: 'http://localhost:5173/',
         }),
     ).toThrow(ConfigError);
@@ -37,28 +47,54 @@ describe('AppConfig', () => {
     expect(
       () =>
         new AppConfig({
-          NODE_ENV: 'production',
-          DATABASE_URL: databaseUrl,
+          ...productionEnv,
           PORT: '',
         }),
     ).toThrow(ConfigError);
   });
 
   it('allows only the production web origin outside development', () => {
-    const config = new AppConfig({
-      NODE_ENV: 'production',
-      DATABASE_URL: databaseUrl,
-    });
+    const config = new AppConfig(productionEnv);
 
     expect(config.corsOrigins).toEqual(['https://dash.doublel.studio']);
     expect(config.port).toBe(3000);
   });
+});
+
+describe('AppConfig auth settings', () => {
+  it('shares secure auth cookies with dash.doublel.studio in production', () => {
+    const config = new AppConfig(productionEnv);
+
+    expect(config.authCookieDomain).toBe('dash.doublel.studio');
+    expect(config.secureCookies).toBe(true);
+    expect(config.authBaseUrl).toBe('https://api.dash.doublel.studio');
+  });
+
+  it('keeps auth cookies host-only and non-secure in development', () => {
+    const config = new AppConfig(developmentEnv);
+
+    expect(config.authCookieDomain).toBeUndefined();
+    expect(config.secureCookies).toBe(false);
+  });
+
+  it('rejects an auth secret shorter than 32 characters', () => {
+    expect(
+      () => new AppConfig({ ...productionEnv, BETTER_AUTH_SECRET: 'short' }),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects a plain-http auth URL in production', () => {
+    expect(
+      () =>
+        new AppConfig({
+          ...productionEnv,
+          BETTER_AUTH_URL: 'http://api.dash.doublel.studio',
+        }),
+    ).toThrow(ConfigError);
+  });
 
   it('adds the local web origin in development', () => {
-    const config = new AppConfig({
-      NODE_ENV: 'development',
-      DATABASE_URL: databaseUrl,
-    });
+    const config = new AppConfig(developmentEnv);
 
     expect(config.corsOrigins).toEqual([
       'https://dash.doublel.studio',
