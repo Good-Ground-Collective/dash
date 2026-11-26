@@ -52,4 +52,4 @@ State lives in Linode Object Storage, in the `dash-tfstate` bucket in `us-southe
 ./tofu.sh apply dash.tfplan
 ```
 
-A saved plan file holds the Tailscale key in plain text. Keep it out of the repo (`*.tfplan` is ignored) and delete it after the apply. CI runs `tofu fmt -check` and `tofu validate` only; plans and applies run by hand.
+A saved plan file holds the Tailscale key in plain text. Keep it out of the repo (`*.tfplan` is ignored) and delete it after the apply. CI runs shellcheck on `bootstrap.sh` and `tofu.sh`, then `tofu fmt -check` and `tofu validate`; plans and applies run by hand.
