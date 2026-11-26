@@ -54,7 +54,6 @@ bin/image-secret-scan "$repository:$version" "$base" $(printf '%s\n' "${secrets[
 
 if [[ $push == --push ]]; then
   # A throwaway Docker config, so the push credential never reaches a keychain or ~/.docker.
-  # Pushing needs write:packages, so it uses GHCR_PUSH_TOKEN, not Kamal's read-only pull token.
   config=$(mktemp -d)
   trap 'rm -rf "$config"' EXIT
   username=${GHCR_PUSH_USERNAME:-$(gh api user --jq .login)}
