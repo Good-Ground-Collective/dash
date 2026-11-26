@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '#lib/auth-ui/auth-form.css';
   import { AlertDialog } from 'bits-ui';
 
   let {

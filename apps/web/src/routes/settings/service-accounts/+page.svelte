@@ -420,10 +420,4 @@
     align-items: center;
     gap: var(--space-1);
   }
-
-  :global(.auth-button.small) {
-    min-height: 2.25rem;
-    padding: 0 var(--space-3);
-    font-size: var(--font-size-sm);
-  }
 </style>
