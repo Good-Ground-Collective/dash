@@ -2,12 +2,17 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
+import { BrokenApiKeys } from '#src/auth/__tests__/support/broken-api-keys.ts';
+import { InMemoryServicePrincipalRepository } from '#src/auth/__tests__/support/in-memory-service-principals.ts';
 import { ServiceAccountHarness } from '#src/auth/__tests__/support/service-account-harness.ts';
 import {
   issuedApiKeySchema,
   type NewServiceAccount,
   serviceAccountListSchema,
 } from '#src/auth/contracts/service-account.ts';
+import { ApiKeyNotIssuedError } from '#src/auth/errors.ts';
+import { OwnedServiceAccounts } from '#src/auth/services/service-accounts/service-accounts.ts';
+import { StoredServicePrincipals } from '#src/auth/services/service-principals/service-principals.ts';
 
 const studioBench: NewServiceAccount = {
   kind: 'bench',
@@ -169,10 +174,7 @@ describe('OwnedServiceAccounts revoking', () => {
     const issued = await harness.post({
       path: '/service-accounts/keys/create',
       cookie,
-      body: {
-        serviceAccountId: created.serviceAccount.id,
-        scopes: ['telemetry:write'],
-      },
+      body: { serviceAccountId: created.serviceAccount.id },
     });
     const second = issuedApiKeySchema.parse(await issued.json());
 
@@ -183,6 +185,7 @@ describe('OwnedServiceAccounts revoking', () => {
     });
 
     expect(revoked.status).toBe(200);
+    expect(second.key.scopes).toEqual(studioBench.scopes);
     expect(harness.tables.apikey.map((row) => row.id)).toEqual([second.key.id]);
   });
 });
@@ -252,5 +255,26 @@ describe('OwnedServiceAccounts revoking accounts', () => {
 
     expect(response.status).toBe(403);
     expect(harness.tables.apikey).toHaveLength(1);
+  });
+});
+
+describe('OwnedServiceAccounts creating when the key fails', () => {
+  it('removes the account again, so the bench id stays free', async () => {
+    const repository = new InMemoryServicePrincipalRepository();
+    const accounts = new OwnedServiceAccounts({
+      servicePrincipals: new StoredServicePrincipals({ repository }),
+      apiKeys: new BrokenApiKeys(),
+    });
+    const owner = { ownerUserId: '0b6a3c3e-4f7e-4c1c-9a57-2a7f3d1f0c11' };
+    repository.addPrincipal({ id: owner.ownerUserId, kind: 'user' });
+
+    const created = accounts.create({
+      context: await new ServiceAccountHarness().auth.identity.auth.$context,
+      ...owner,
+      input: studioBench,
+    });
+
+    await expect(created).rejects.toBeInstanceOf(ApiKeyNotIssuedError);
+    await expect(repository.listOwnedBy(owner)).resolves.toEqual([]);
   });
 });

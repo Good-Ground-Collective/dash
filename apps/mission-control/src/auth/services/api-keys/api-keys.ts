@@ -16,7 +16,6 @@ import {
   ApiKeyNotIssuedError,
 } from '#src/auth/errors.ts';
 
-/** The api-key plugin's model name. */
 const apiKeyModel = 'apikey';
 /** Characters of the secret kept after the prefix, to recognise a key by. */
 const identifyingCharacters = 6;
@@ -84,14 +83,12 @@ export interface ApiKeys {
     context: AuthContext;
     principalIds: readonly string[];
   }): Promise<Map<string, ApiKeySummary[]>>;
-  /** The principal a key belongs to, or `null`. */
   ownerOf(props: {
     context: AuthContext;
     keyId: string;
   }): Promise<string | null>;
   /** Deletes the key, so the next request with it fails. `false` when it didn't exist. */
   revoke(props: { context: AuthContext; keyId: string }): Promise<boolean>;
-  /** Deletes every key a principal holds. */
   revokeAllFor(props: {
     context: AuthContext;
     principalId: string;

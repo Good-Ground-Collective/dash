@@ -24,6 +24,10 @@ export const serviceProfileTable = pgTable(
     benchId: text('bench_id'),
     agentName: text('agent_name'),
     description: text('description').notNull(),
+    scopes: text('scopes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

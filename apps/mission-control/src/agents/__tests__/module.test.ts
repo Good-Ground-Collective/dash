@@ -171,6 +171,32 @@ describe('POST /api/agents/:agentName/heartbeats without a body', () => {
     expect(keyed.statusCode).toBe(201);
     expect(served.heartbeats.records).toMatchObject([{ sentAt: null }]);
   });
+
+  it('takes an empty application/json body as a heartbeat, and still refuses malformed JSON', async () => {
+    const served = await ServedAgents.start();
+    const { secret } = await served.keyFor(bench);
+    const headers = {
+      authorization: `Bearer ${secret}`,
+      'content-type': 'application/json',
+    };
+
+    const empty = await served.app.inject({
+      method: 'POST',
+      url: '/api/agents/claude-code/heartbeats',
+      headers,
+      payload: '',
+    });
+    const malformed = await served.app.inject({
+      method: 'POST',
+      url: '/api/agents/claude-code/heartbeats',
+      headers,
+      payload: '{"sentAt":',
+    });
+
+    expect(empty.statusCode).toBe(201);
+    expect(malformed.statusCode).toBe(400);
+    expect(served.heartbeats.records).toHaveLength(1);
+  });
 });
 
 describe('POST /api/agents/:agentName/heartbeats refusals', () => {

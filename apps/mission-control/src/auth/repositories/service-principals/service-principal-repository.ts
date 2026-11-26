@@ -11,6 +11,7 @@ import {
   ServicePrincipalNotStoredError,
 } from '#src/auth/errors.ts';
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
+import type { ApiKeyScope } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
 import { serviceProfileTable } from '#src/auth/repositories/service-principals/service-principals-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
@@ -22,6 +23,7 @@ export interface ServicePrincipalRecord {
   benchId: string | null;
   agentName: string | null;
   description: string;
+  scopes: ApiKeyScope[];
 }
 
 export interface ServicePrincipalRepository {
@@ -29,7 +31,7 @@ export interface ServicePrincipalRepository {
   findKind(props: { id: string }): Promise<PrincipalKind | null>;
   /** Stores the `service` principal and its profile together, or neither. Rejects with `ServiceAccountTakenError` when the bench or agent already has one. */
   create(record: ServicePrincipalRecord): Promise<ServicePrincipal>;
-  /** The service principal with this id, or `null`. */
+  /** `null` for an unknown id and for a person's id alike. */
   find(props: { id: string }): Promise<ServicePrincipal | null>;
   /** Service principals a person owns, oldest first. */
   listOwnedBy(props: { ownerUserId: string }): Promise<ServicePrincipal[]>;
@@ -125,6 +127,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
       benchId: row.profile.benchId,
       agentName: row.profile.agentName,
       description: row.profile.description,
+      scopes: row.profile.scopes,
       createdAt: row.profile.createdAt.toISOString(),
     });
   }
@@ -151,6 +154,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
           benchId: record.benchId,
           agentName: record.agentName,
           description: record.description,
+          scopes: record.scopes,
         })
         .returning();
 

@@ -116,13 +116,13 @@ Mission Control's tests don't need Postgres, and CI runs none: auth tests use Be
 
 Benches and agents authenticate with API keys from Better Auth's api-key plugin. Each key belongs to a service principal (`references: "user"`). People manage them at `/settings/service-accounts`, backed by `/api/auth/service-accounts/{list,create,revoke}` and `/api/auth/service-accounts/keys/{create,revoke}`. Creating or revoking needs a passkey sign-in from the last 15 minutes, like passkey changes. The plugin's own `/api/auth/api-key/*` endpoints are closed.
 
-- A **bench** account (`bench_id`, one per machine) may report for any agent on that bench. Its keys never expire.
+- A **bench** account (`bench_id`, one per machine) may report for any agent on that bench. Agents aren't registered to benches yet, so in practice a bench key may report any agent name, even one that also has an agent account; the heartbeat's `bench_id` tells them apart. Its keys never expire.
 - An **agent** account (`agent_name`) may report only as that agent. Its keys expire after 90 days.
 - Keys start `dash_live_` in production and `dash_dev_` elsewhere. Only a hash is stored, the key is shown once, and its first characters are kept to recognise it. `last_used_at` updates on every use.
-- Scopes live in `src/auth/definitions/api-key-scopes`: `heartbeat:write` and `telemetry:write` so far.
+- Scopes live in `src/auth/definitions/api-key-scopes`: `heartbeat:write` and `telemetry:write` so far. They are chosen when an account is created, and every key it is issued, including replacements, gets exactly those.
 - Revoking deletes the key, or the account with all its keys, so the next request with it fails.
 
-Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequest` hook, which accepts `Authorization: Bearer dash_…` or `x-api-key`, and read the caller with `agentAuthentication.caller(request)`. The first such route is `POST /api/agents/:agentName/heartbeats` (`heartbeat:write`, optional body `{ "sentAt": "<ISO time>" }`), which stores a row in `agent_heartbeat` and answers 201.
+Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequest` hook, which accepts `Authorization: Bearer dash_…` or `x-api-key`, and read the caller with `agentAuthentication.caller(request)`. The first such route is `POST /api/agents/:agentName/heartbeats` (`heartbeat:write`, optional body `{ "sentAt": "<ISO time>" }`; an empty body is fine, with or without `Content-Type: application/json`), which stores a row in `agent_heartbeat` and answers 201.
 
 ## CI
 

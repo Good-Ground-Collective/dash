@@ -26,7 +26,7 @@ import type { ServicePrincipals } from '#src/auth/services/service-principals/se
 
 const daySeconds = 60 * 60 * 24;
 
-/** How long each kind's keys live. Bench keys never expire; agent keys run away from a bench and are rotated. */
+/** How long each kind's keys live. Bench keys never expire. Agent keys run away from a bench, such as in CI, so they expire and get rotated. */
 const keyLifetimeSeconds = {
   bench: null,
   agent: 90 * daySeconds,
@@ -45,7 +45,7 @@ export interface ServiceAccounts {
     ownerUserId: string;
     input: NewServiceAccount;
   }): Promise<CreatedServiceAccount>;
-  /** Issues another key to an account, such as to rotate one. */
+  /** Issues another key to an account, such as to rotate one. It gets the scopes chosen when the account was created, never more. */
   issueKey(props: {
     context: AuthContext;
     ownerUserId: string;
@@ -57,7 +57,7 @@ export interface ServiceAccounts {
     ownerUserId: string;
     serviceAccountId: string;
   }): Promise<void>;
-  /** Deletes one key. */
+  /** Deletes one key. Another person's key answers `ApiKeyNotFoundError`, as if it didn't exist. */
   revokeKey(props: {
     context: AuthContext;
     ownerUserId: string;
@@ -137,6 +137,7 @@ export class OwnedServiceAccounts implements ServiceAccounts {
       name: input.name,
       ownerUserId: props.ownerUserId,
       description: input.description,
+      scopes: input.scopes,
       benchId: input.kind === 'bench' ? input.benchId : undefined,
       agentName: input.kind === 'agent' ? input.agentName : undefined,
     });
@@ -145,7 +146,7 @@ export class OwnedServiceAccounts implements ServiceAccounts {
       const apiKey = await this.apiKeys.issue({
         context: props.context,
         principalId: principal.id,
-        scopes: input.scopes,
+        scopes: principal.scopes,
         lifetimeSeconds: keyLifetimeSeconds[input.kind],
       });
       return {
@@ -171,7 +172,7 @@ export class OwnedServiceAccounts implements ServiceAccounts {
     return this.apiKeys.issue({
       context: props.context,
       principalId: principal.id,
-      scopes: input.scopes,
+      scopes: principal.scopes,
       lifetimeSeconds: keyLifetimeSeconds[this.kindOf(principal)],
     });
   }
@@ -244,6 +245,7 @@ export class OwnedServiceAccounts implements ServiceAccounts {
       benchId: principal.benchId,
       agentName: principal.agentName,
       description: principal.description,
+      scopes: principal.scopes,
       createdAt: principal.createdAt,
       keys: props.keys,
     };

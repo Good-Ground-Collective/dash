@@ -10,7 +10,7 @@ import type { ServicePrincipalRepository } from '#src/auth/repositories/service-
 export interface ServicePrincipals {
   /** Creates a `service` principal owned by a person, with a synthetic `svc-<id>@service.invalid` email. */
   create(props: NewServicePrincipal): Promise<ServicePrincipal>;
-  /** The service principal with this id, or `null`. */
+  /** `null` for an unknown id and for a person's id alike. */
   find(props: { id: string }): Promise<ServicePrincipal | null>;
   /** The service principals a person owns, oldest first. */
   listOwnedBy(props: { ownerUserId: string }): Promise<ServicePrincipal[]>;
@@ -41,6 +41,7 @@ export class StoredServicePrincipals implements ServicePrincipals {
       benchId: input.benchId ?? null,
       agentName: input.agentName ?? null,
       description: input.description,
+      scopes: input.scopes,
     });
   }
 

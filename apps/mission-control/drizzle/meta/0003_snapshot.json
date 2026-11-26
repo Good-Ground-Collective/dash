@@ -1,5 +1,5 @@
 {
-  "id": "a170795e-ee75-4097-a3ea-b736190c4957",
+  "id": "b5acf9be-60fb-462c-8d66-9711d386fb7d",
   "prevId": "5292684a-44b3-4707-a2fb-1c20fb3005c5",
   "version": "7",
   "dialect": "postgresql",
@@ -894,6 +894,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "scopes": {
+          "name": "scopes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
         },
         "created_at": {
           "name": "created_at",

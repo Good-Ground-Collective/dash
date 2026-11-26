@@ -32,6 +32,7 @@ CREATE TABLE "apikey" (
 	"metadata" text
 );
 --> statement-breakpoint
+ALTER TABLE "service_profile" ADD COLUMN "scopes" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
 ALTER TABLE "agent_heartbeat" ADD CONSTRAINT "agent_heartbeat_reported_by_user_id_fk" FOREIGN KEY ("reported_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "apikey" ADD CONSTRAINT "apikey_reference_id_user_id_fk" FOREIGN KEY ("reference_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agent_heartbeat_agent_name_received_at_idx" ON "agent_heartbeat" USING btree ("agent_name","received_at");--> statement-breakpoint

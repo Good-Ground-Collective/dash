@@ -7,7 +7,7 @@ import type { AgentHeartbeatRepository } from '#src/agents/repositories/agent-he
 import type { AgentCaller } from '#src/auth/contracts/service-account.ts';
 
 export interface AgentHeartbeats {
-  /** Records that `agentName` is alive. An agent key may report only as itself; a bench key reports for agents on its bench. */
+  /** Records that `agentName` is alive. An agent key may report only as itself. A bench key may report any agent name, including one that also has an agent account: agents aren't registered to benches yet, and the stored `benchId` tells the two apart. */
   report(props: {
     caller: AgentCaller;
     agentName: string;

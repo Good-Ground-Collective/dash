@@ -1,29 +1,12 @@
 import { z } from 'zod';
 
-/** Coarse permission statements an API key carries, written `<resource>:<action>`. Add one when a feature needs it. */
+/** Coarse permission statements an API key carries, written `<resource>:<action>`. Add one when a feature needs it, and label it in the web app's service account wording. */
 export const apiKeyScopeSchema = z.enum(['heartbeat:write', 'telemetry:write']);
 
 export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 
 /** Better Auth's permission statements: actions per resource. */
 export type ApiKeyStatements = Record<string, string[]>;
-
-export interface ApiKeyScopeDefinition {
-  readonly label: string;
-  readonly description: string;
-}
-
-/** Every scope, with what it lets a key do. Typed by the enum, so a new scope must be described here. */
-export const apiKeyScopeDefinitions = {
-  'heartbeat:write': {
-    label: 'Heartbeats',
-    description: 'Report that an agent is alive.',
-  },
-  'telemetry:write': {
-    label: 'Telemetry',
-    description: 'Send an agent’s usage and activity.',
-  },
-} as const satisfies Record<ApiKeyScope, ApiKeyScopeDefinition>;
 
 export interface ApiKeyScopeRegistry {
   /** All scopes, in the order the UI offers them. */

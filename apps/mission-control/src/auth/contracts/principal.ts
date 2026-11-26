@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { apiKeyScopeSchema } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+
 export const principalKindSchema = z
   .enum(['user', 'service'])
   .describe(
@@ -28,6 +30,10 @@ export const newServicePrincipalSchema = z
       .optional()
       .describe('Set for an agent account. Unset for a bench account.'),
     description: z.string().trim().min(1),
+    scopes: z
+      .array(apiKeyScopeSchema)
+      .default([])
+      .describe('The most its API keys may do. Every key gets these.'),
   })
   .refine(
     (principal) =>
@@ -49,6 +55,7 @@ export const servicePrincipalSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  scopes: z.array(apiKeyScopeSchema),
   createdAt: z.iso.datetime({ offset: true }),
 });
 

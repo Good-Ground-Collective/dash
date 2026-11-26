@@ -26,7 +26,9 @@ const scopesSchema = z
 const accountDetailsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(500),
-  scopes: scopesSchema.describe('What the first key may do.'),
+  scopes: scopesSchema.describe(
+    'What the account’s keys may do, now and when rotated.',
+  ),
 });
 
 export const newServiceAccountSchema = z.discriminatedUnion('kind', [
@@ -42,10 +44,7 @@ export const newServiceAccountSchema = z.discriminatedUnion('kind', [
 
 export type NewServiceAccount = z.input<typeof newServiceAccountSchema>;
 
-export const newApiKeySchema = z.object({
-  serviceAccountId: z.uuid(),
-  scopes: scopesSchema,
-});
+export const newApiKeySchema = z.object({ serviceAccountId: z.uuid() });
 
 export type NewApiKey = z.input<typeof newApiKeySchema>;
 
@@ -90,6 +89,7 @@ export const serviceAccountSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  scopes: z.array(apiKeyScopeSchema),
   createdAt: z.iso.datetime({ offset: true }),
   keys: z.array(apiKeySummarySchema),
 });
