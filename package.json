@@ -12,11 +12,16 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "lint:root": "eslint .",
+    "typecheck:root": "tsc --noEmit"
   },
   "devDependencies": {
+    "@dash/config": "workspace:*",
+    "eslint": "catalog:",
     "prettier": "catalog:",
     "turbo": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:"
   }
 }

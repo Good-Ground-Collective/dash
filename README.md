@@ -31,7 +31,7 @@ The workspace uses pnpm and Turborepo, on Node 24 LTS.
    export NODE_AUTH_TOKEN=$(gh auth token)
    ```
 
-   Any token with `read:packages` works. The `gh` CLI token has it once you run `gh auth refresh -s read:packages`.
+   Put the `export` line in your shell profile (or a tool such as direnv) so new shells keep the token. Any token with `read:packages` works. The `gh` CLI token has it once you run `gh auth refresh -s read:packages`.
 
 4. Install:
 
@@ -41,22 +41,22 @@ The workspace uses pnpm and Turborepo, on Node 24 LTS.
 
 ## Everyday commands
 
-| Command                                    | What it does                                            |
-| ------------------------------------------ | ------------------------------------------------------- |
-| `pnpm turbo run lint typecheck test build` | Everything CI runs                                      |
-| `pnpm lint`                                | ESLint with preflight, plus Stylelint in `apps/web`     |
-| `pnpm typecheck`                           | `tsc --noEmit` in every package                         |
-| `pnpm test`                                | Vitest in every package                                 |
-| `pnpm build`                               | Build every package                                     |
-| `pnpm vitest`                              | Vitest across all projects from the root, in watch mode |
-| `pnpm format`                              | Prettier, writing changes                               |
-| `pnpm format:check`                        | Prettier, check only                                    |
+| Command                                    | What it does                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `pnpm turbo run lint typecheck test build` | The CI checks, apart from `pnpm format:check`; CI limits pull requests to affected packages           |
+| `pnpm lint`                                | ESLint with preflight on the root and each package with a `lint` script, plus Stylelint in `apps/web` |
+| `pnpm typecheck`                           | `tsc --noEmit` on the root and each package with a `typecheck` script                                 |
+| `pnpm test`                                | Vitest in each package with a `test` script                                                           |
+| `pnpm build`                               | Build each package with a `build` script                                                              |
+| `pnpm vitest`                              | Vitest across all projects from the root, in watch mode                                               |
+| `pnpm format`                              | Prettier, writing changes                                                                             |
+| `pnpm format:check`                        | Prettier, check only                                                                                  |
 
 Add `--filter <package>` to run a task in one package, for example `pnpm turbo run test --filter @dash/standards`.
 
 ## Lint gates
 
-ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Tests sit in a `__tests__/` folder beside the code they cover. Packages pick the shared config up from `@dash/config/eslint`.
+ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Packages and the repo root pick the shared config up from `@dash/config/eslint`.
 
 ## CI
 

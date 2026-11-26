@@ -8,6 +8,9 @@
     "./stylelint": "./stylelint.config.js",
     "./tsconfig/base.json": "./tsconfig/base.json"
   },
+  "scripts": {
+    "lint": "eslint ."
+  },
   "dependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
     "@good-ground-collective/preflight": "catalog:",
