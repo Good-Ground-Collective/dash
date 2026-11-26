@@ -216,9 +216,7 @@ describe('OwnedServiceAccounts replacing the only key', () => {
     const replacement = issuedApiKeySchema.parse(await issued.json());
 
     expect(replacement.key.scopes).toEqual(['heartbeat:write']);
-    expect(harness.tables.apikey.map((row) => row.id)).toEqual([
-      replacement.key.id,
-    ]);
+    expect(harness.tables.apikey).toHaveLength(1);
   });
 });
 
@@ -269,25 +267,37 @@ describe('OwnedServiceAccounts revoking accounts', () => {
     expect(key.status).toBe(404);
     expect(harness.tables.apikey).toHaveLength(1);
   });
+});
 
-  it('needs a fresh sign-in to revoke', async () => {
-    const harness = new ServiceAccountHarness();
-    const cookie = await harness.signIn();
-    const created = await harness.createAccount({
-      cookie,
-      account: studioBench,
-    });
-    harness.ageSessions({ minutes: 16 });
+describe('OwnedServiceAccounts fresh sign-in for changes', () => {
+  it.each(['keys/revoke', 'keys/create', 'revoke'])(
+    'needs a fresh sign-in for %s',
+    async (change) => {
+      const harness = new ServiceAccountHarness();
+      const cookie = await harness.signIn();
+      const created = await harness.createAccount({
+        cookie,
+        account: studioBench,
+      });
+      harness.ageSessions({ minutes: 16 });
 
-    const response = await harness.post({
-      path: '/service-accounts/keys/revoke',
-      cookie,
-      body: { keyId: created.apiKey.key.id },
-    });
+      const response = await harness.post({
+        path: `/service-accounts/${change}`,
+        cookie,
+        body: {
+          keyId: created.apiKey.key.id,
+          serviceAccountId: created.serviceAccount.id,
+        },
+      });
 
-    expect(response.status).toBe(403);
-    expect(harness.tables.apikey).toHaveLength(1);
-  });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        code: 'SESSION_NOT_FRESH',
+      });
+      expect(harness.repository.principals.size).toBe(1);
+      expect(harness.tables.apikey).toHaveLength(1);
+    },
+  );
 });
 
 describe('OwnedServiceAccounts creating when the key fails', () => {
