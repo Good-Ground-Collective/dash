@@ -32,6 +32,7 @@ export class ProbeHealthCheck implements HealthCheck {
       }
       seen.add(probe.name);
     }
+
     this.probes = props.probes;
     this.timeoutMilliseconds = probeHealthCheckPropsSchema.parse({
       timeoutMilliseconds: props.timeoutMilliseconds,
