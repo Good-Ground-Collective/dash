@@ -4,9 +4,10 @@
 #
 # Secrets come from the environment (see .kamal/secrets). Locally, any that are
 # unset are filled from `gh` and from the DASH_* lines of $DASH_INFRA_ENV
-# (default ~/.config/dash/infra.env). After a command that logs the server in to
-# the registry, the server is logged out again: the images are public, and the
-# deployer's token shouldn't stay on the box.
+# (default ~/.config/dash/infra.env). Kamal logs the server in to the registry on
+# every deploy, so afterwards the server is logged out again: the images are
+# public, and the deployer's token shouldn't stay on the box. Set
+# KAMAL_REGISTRY_PASSWORD to a read:packages token to avoid lending it a broad one.
 set -euo pipefail
 
 image=ghcr.io/basecamp/kamal:v2.12.0@sha256:7b5be276aa17bbe122887f6a1ff12865f4848111989699b9786083be95d98415
@@ -15,14 +16,8 @@ root=$(git rev-parse --show-toplevel)
 common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
 cd "$root"
 
-infra_env=${DASH_INFRA_ENV:-$HOME/.config/dash/infra.env}
-if [[ -r $infra_env ]]; then
-  while IFS='=' read -r name value; do
-    if [[ $name =~ ^DASH_[A-Z0-9_]+$ && -z ${!name:-} ]]; then
-      export "$name=$value"
-    fi
-  done <"$infra_env"
-fi
+source bin/lib/infra-env.sh
+load_infra_env '^DASH_[A-Z0-9_]+$'
 if command -v gh >/dev/null; then
   [[ -n ${KAMAL_REGISTRY_USERNAME:-} ]] || KAMAL_REGISTRY_USERNAME=$(gh api user --jq .login)
   [[ -n ${KAMAL_REGISTRY_PASSWORD:-} ]] || KAMAL_REGISTRY_PASSWORD=$(gh auth token)
@@ -59,10 +54,12 @@ for ((i = 0; i < ${#args[@]}; i++)); do
 done
 
 logout() {
-  "${run[@]}" "$image" registry logout --skip-local ${config_args[@]+"${config_args[@]}"} >/dev/null 2>&1 || true
+  if ! "${run[@]}" "$image" registry logout --skip-local ${config_args[@]+"${config_args[@]}"} >/dev/null 2>&1; then
+    echo "warning: could not log the server out of ghcr.io; run: bin/kamal registry logout --skip-local ${config_args[*]-}" >&2
+  fi
 }
 case ${1:-} in
-  setup | deploy | redeploy | rollback | registry) trap logout EXIT ;;
+  setup | deploy | redeploy | rollback) trap logout EXIT ;;
 esac
 
 "${run[@]}" "$image" "$@"

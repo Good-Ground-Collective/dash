@@ -5,22 +5,30 @@
 # Usage: bin/image <web|mission-control> [--push]
 set -euo pipefail
 
-app=${1:?usage: bin/image <web|mission-control> [--push]}
+usage='usage: bin/image <web|mission-control> [--push]'
+app=${1:-}
 push=${2:-}
 case $app in
   web | mission-control) ;;
-  *) echo "unknown app: $app" >&2 && exit 2 ;;
+  *) echo "$usage" >&2 && exit 2 ;;
 esac
+if [[ -n $push && $push != --push ]] || (($# > 2)); then
+  echo "$usage" >&2
+  exit 2
+fi
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-dockerfile=apps/$app/Dockerfile
-repository=ghcr.io/good-ground-collective/dash-$app
-version=$(git rev-parse HEAD)
+source bin/lib/infra-env.sh
+
 if [[ -n $push && -n $(git status --porcelain) ]]; then
   echo "refusing to push from a dirty tree: the tag must name the commit it was built from" >&2
   exit 1
 fi
+
+dockerfile=apps/$app/Dockerfile
+repository=ghcr.io/good-ground-collective/dash-$app
+version=$(git rev-parse HEAD)
 base=$(sed -n 's/^ARG NODE_IMAGE=//p' "$dockerfile")
 
 if [[ -z ${NODE_AUTH_TOKEN:-} ]]; then
@@ -32,17 +40,13 @@ docker buildx build --platform linux/amd64 --load \
   --secret id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN \
   --file "$dockerfile" --tag "$repository:$version" .
 
-infra_env=${DASH_INFRA_ENV:-$HOME/.config/dash/infra.env}
-if [[ -r $infra_env ]]; then
-  while IFS='=' read -r name value; do
-    if [[ $name =~ ^[A-Z][A-Z0-9_]*$ && -z ${!name:-} ]]; then
-      export "$name=$value"
-    fi
-  done <"$infra_env"
-fi
+# Load every secret in infra.env, not only the app's, so the scan proves none of them leaked.
+load_infra_env '^[A-Z][A-Z0-9_]*$'
 secrets=(NODE_AUTH_TOKEN)
-for name in KAMAL_REGISTRY_PASSWORD DASH_BETTER_AUTH_SECRET DASH_DATABASE_URL $(compgen -e | grep -E '^(DASH|TF_VAR|LINODE)_' || true); do
-  [[ -n ${!name:-} ]] && secrets+=("$name")
+for name in KAMAL_REGISTRY_PASSWORD $(compgen -e | grep -E '^(DASH|TF_VAR|LINODE)_' || true); do
+  if [[ -n ${!name:-} ]]; then
+    secrets+=("$name")
+  fi
 done
 bin/image-secret-scan "$repository:$version" "$base" $(printf '%s\n' "${secrets[@]}" | sort -u)
 
@@ -53,6 +57,7 @@ if [[ $push == --push ]]; then
   username=${KAMAL_REGISTRY_USERNAME:-$(gh api user --jq .login)}
   auth=$(printf '%s:%s' "$username" "${KAMAL_REGISTRY_PASSWORD:-$NODE_AUTH_TOKEN}" | base64 | tr -d '\n')
   printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$auth" >"$config/config.json"
+
   DOCKER_CONFIG=$config docker push --quiet "$repository:$version"
   echo "pushed $repository:$version"
 fi
