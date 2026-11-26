@@ -21,6 +21,6 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 | ✓ | 04 GitHub integration: concluded in #4 → #25–#29 (owned App + guest PATs, read-only feed) | |
 | 3½ | [11 Objectives](./11-objectives.md) | The home screen leads with objectives, and nothing defines them yet. |
 | 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |
-| ✓ | 05 Stack: concluded in #5 → #32–#34 (pnpm/Turbo, SvelteKit 3 + Fastify on two origins, Drizzle, DBOS, preflight) | |
-| 6 | [06 Hosting and deploy](./06-hosting-and-deploy.md) + [10 Infrastructure as code](./10-infrastructure-as-code.md) | One session. Needed before the first deploy. Can run alongside 4 and 5. |
+| ✓ | 05 Stack: concluded in #5 → #32–#34 (pnpm/Turbo, SvelteKit 3 + Fastify on two origins, Drizzle, DBOS, SSE for realtime, preflight) | |
+| 6 | [06 Hosting and deploy](./06-hosting-and-deploy.md) + [10 Infrastructure as code](./10-infrastructure-as-code.md) | One session. Needed before the first deploy. Can run alongside the slice-1 build. |
 | later | [07 Communication standards](./07-communication-standards.md) → [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
