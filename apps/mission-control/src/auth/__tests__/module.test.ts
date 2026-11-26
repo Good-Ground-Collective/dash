@@ -37,11 +37,14 @@ class ServedAuth {
         session: [],
         account: [],
         verification: [],
+        passkey: [],
+        setupToken: [],
       }),
     },
     servicePrincipalRepository: new StubServicePrincipalRepository(),
     secret,
     baseUrl: 'http://localhost:3000',
+    webOrigin,
     trustedOrigins: [webOrigin],
     secureCookies: false,
   });
@@ -108,6 +111,27 @@ describe('AuthModule session lookup', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toBeNull();
+  });
+});
+
+describe('AuthModule setup', () => {
+  it('opens setup at boot while nobody has signed up', async () => {
+    const served = new ServedAuth();
+    const app = await served.build();
+    running.push(app);
+    await app.ready();
+
+    const response = await app.inject({ url: '/api/auth/setup/status' });
+
+    expect(response.json()).toEqual({ open: true });
+  });
+
+  it('keeps setup closed at boot once a person exists', async () => {
+    const served = await ServedAuth.start();
+
+    const response = await served.app.inject({ url: '/api/auth/setup/status' });
+
+    expect(response.json()).toEqual({ open: false });
   });
 });
 

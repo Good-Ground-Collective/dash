@@ -38,6 +38,15 @@ export class AuthModule implements HttpModule {
     const routes = new AuthHandlerRoutes({ identity: this.identity });
     this.plugin = async (app) => {
       routes.register(app);
+      app.addHook('onReady', async () => {
+        const token = await this.identity.issueSetupToken();
+        if (token !== null) {
+          app.log.warn(
+            { setupToken: token },
+            'Nobody has signed up yet. Open /setup in Dash and enter this one-time setup token. It is replaced at every boot until someone signs up.',
+          );
+        }
+      });
     };
   }
 }

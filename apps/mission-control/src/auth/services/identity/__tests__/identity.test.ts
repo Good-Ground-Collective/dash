@@ -14,6 +14,7 @@ const daySeconds = 60 * 60 * 24;
 const localSettings: IdentitySettings = {
   secret,
   baseUrl: 'http://localhost:3000',
+  webOrigin: 'http://localhost:5173',
   trustedOrigins: ['http://localhost:5173'],
   secureCookies: false,
 };
@@ -21,6 +22,7 @@ const localSettings: IdentitySettings = {
 const productionSettings: IdentitySettings = {
   secret,
   baseUrl: 'https://api.dash.doublel.studio',
+  webOrigin: 'https://dash.doublel.studio',
   trustedOrigins: ['https://dash.doublel.studio'],
   cookieDomain: 'dash.doublel.studio',
   secureCookies: true,
@@ -37,6 +39,8 @@ class IdentityFixture {
         session: [],
         account: [],
         verification: [],
+        passkey: [],
+        setupToken: [],
       }),
     });
   }

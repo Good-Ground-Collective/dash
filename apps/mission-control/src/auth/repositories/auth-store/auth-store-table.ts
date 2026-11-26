@@ -3,9 +3,11 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -104,3 +106,38 @@ export const verificationTable = pgTable(
   },
   (table) => [index('verification_identifier_idx').on(table.identifier)],
 );
+
+/** A person's WebAuthn credential, as the passkey plugin stores it. */
+export const passkeyTable = pgTable(
+  'passkey',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => userTable.id, { onDelete: 'cascade' }),
+    credentialID: text('credential_id').notNull(),
+    counter: integer('counter').notNull(),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    aaguid: text('aaguid'),
+  },
+  (table) => [
+    index('passkey_user_id_idx').on(table.userId),
+    uniqueIndex('passkey_credential_id_idx').on(table.credentialID),
+  ],
+);
+
+/** The hash of the one-time token that lets the first person enrol, while nobody has. */
+export const setupTokenTable = pgTable('setup_token', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -15,6 +15,13 @@
       "when": 1795703293334,
       "tag": "0001_auth_principals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795709883288,
+      "tag": "0002_passkeys_setup_token",
+      "breakpoints": true
     }
   ]
 }

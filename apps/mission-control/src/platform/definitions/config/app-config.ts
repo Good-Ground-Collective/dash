@@ -112,6 +112,8 @@ export class AppConfig {
   readonly logLevel: LogLevel;
   readonly port: number;
   readonly secureCookies: boolean;
+  /** The web app's origin, where passkey ceremonies run: production's, or `DEV_WEB_ORIGIN` in development. */
+  readonly webOrigin: string;
 
   /** Parses `env`, throwing a `ConfigError` that lists every problem so boot fails fast. */
   constructor(env: NodeJS.ProcessEnv) {
@@ -131,6 +133,10 @@ export class AppConfig {
     this.secureCookies = config.environment === 'production';
     this.authCookieDomain =
       config.environment === 'production' ? productionCookieDomain : undefined;
+    this.webOrigin =
+      config.environment === 'development'
+        ? config.devWebOrigin
+        : productionWebOrigin;
     this.corsOrigins =
       config.environment === 'development'
         ? [productionWebOrigin, config.devWebOrigin]
