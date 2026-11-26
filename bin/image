@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Builds an app's linux/amd64 image, proves it holds no credentials, and with
+# --push publishes it to GHCR tagged with the commit SHA for `kamal deploy
+# --skip-push --version <sha>`. Run from anywhere in the repository.
+# Usage: bin/image <web|mission-control> [--push]
+set -euo pipefail
+
+app=${1:?usage: bin/image <web|mission-control> [--push]}
+push=${2:-}
+case $app in
+  web | mission-control) ;;
+  *) echo "unknown app: $app" >&2 && exit 2 ;;
+esac
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+dockerfile=apps/$app/Dockerfile
+repository=ghcr.io/good-ground-collective/dash-$app
+version=$(git rev-parse HEAD)
+if [[ -n $push && -n $(git status --porcelain) ]]; then
+  echo "refusing to push from a dirty tree: the tag must name the commit it was built from" >&2
+  exit 1
+fi
+base=$(sed -n 's/^ARG NODE_IMAGE=//p' "$dockerfile")
+
+if [[ -z ${NODE_AUTH_TOKEN:-} ]]; then
+  NODE_AUTH_TOKEN=$(gh auth token)
+fi
+export NODE_AUTH_TOKEN
+
+docker buildx build --platform linux/amd64 --load \
+  --secret id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN \
+  --file "$dockerfile" --tag "$repository:$version" .
+
+infra_env=${DASH_INFRA_ENV:-$HOME/.config/dash/infra.env}
+if [[ -r $infra_env ]]; then
+  while IFS='=' read -r name value; do
+    if [[ $name =~ ^[A-Z][A-Z0-9_]*$ && -z ${!name:-} ]]; then
+      export "$name=$value"
+    fi
+  done <"$infra_env"
+fi
+secrets=(NODE_AUTH_TOKEN)
+for name in KAMAL_REGISTRY_PASSWORD DASH_BETTER_AUTH_SECRET DASH_DATABASE_URL $(compgen -e | grep -E '^(DASH|TF_VAR|LINODE)_' || true); do
+  [[ -n ${!name:-} ]] && secrets+=("$name")
+done
+bin/image-secret-scan "$repository:$version" "$base" $(printf '%s\n' "${secrets[@]}" | sort -u)
+
+if [[ $push == --push ]]; then
+  config=$(mktemp -d)
+  trap 'rm -rf "$config"' EXIT
+  printf '%s' "${KAMAL_REGISTRY_PASSWORD:-$NODE_AUTH_TOKEN}" |
+    DOCKER_CONFIG=$config docker login ghcr.io --username "${KAMAL_REGISTRY_USERNAME:-$(gh api user --jq .login)}" --password-stdin >/dev/null
+  DOCKER_CONFIG=$config docker push --quiet "$repository:$version"
+  echo "pushed $repository:$version"
+fi
