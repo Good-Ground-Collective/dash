@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { HealthReport } from '#src/health/contracts/health-report.ts';
+import { DuplicateProbeNameError } from '#src/health/errors.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 
 export const probeHealthCheckPropsSchema = z.object({
@@ -24,6 +25,13 @@ export class ProbeHealthCheck implements HealthCheck {
       typeof probeHealthCheckPropsSchema
     >,
   ) {
+    const seen = new Set<string>();
+    for (const probe of props.probes) {
+      if (seen.has(probe.name)) {
+        throw new DuplicateProbeNameError({ probeName: probe.name });
+      }
+      seen.add(probe.name);
+    }
     this.probes = props.probes;
     this.timeoutMilliseconds = probeHealthCheckPropsSchema.parse({
       timeoutMilliseconds: props.timeoutMilliseconds,

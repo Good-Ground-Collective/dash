@@ -110,4 +110,20 @@ describe('PlatformModule', () => {
     await expect(platform.stop()).rejects.toThrow(AggregateError);
     expect(events).toEqual(['launch', 'close']);
   });
+
+  it('shuts down once when stop is called twice at the same time', async () => {
+    const events: string[] = [];
+    const platform = new PlatformModule({
+      config,
+      database: new RecordingDatabase({ events }),
+      workflows: new RecordingWorkflowRuntime({ events, shutdownFails: false }),
+      httpModules: [],
+      workflowModules: [],
+    });
+    await platform.start();
+
+    await Promise.all([platform.stop(), platform.stop()]);
+
+    expect(events).toEqual(['launch', 'shutdown', 'close']);
+  });
 });

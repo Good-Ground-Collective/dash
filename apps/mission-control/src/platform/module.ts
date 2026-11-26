@@ -17,6 +17,7 @@ export interface PlatformModuleProps {
 export class PlatformModule {
   private readonly props: PlatformModuleProps;
   private readonly server: HttpServer;
+  private stopping: Promise<void> | null = null;
   private stopServer: (() => Promise<void>) | null = null;
 
   constructor(props: PlatformModuleProps) {
@@ -45,8 +46,13 @@ export class PlatformModule {
     await app.listen({ host: config.host, port: config.port });
   }
 
-  /** Attempts every step even when an earlier one fails, then reports all failures together. */
+  /** Attempts every step even when an earlier one fails, then reports all failures together. A repeat call reuses the first shutdown. */
   async stop(): Promise<void> {
+    this.stopping ??= this.stopOnce();
+    return this.stopping;
+  }
+
+  private async stopOnce(): Promise<void> {
     const steps = [
       async () => this.stopServer?.(),
       async () => this.props.workflows.shutdown(),
