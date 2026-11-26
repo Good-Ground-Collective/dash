@@ -101,6 +101,9 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
+# SvelteKit adapter-node output
+apps/web/build/
+
 # vitepress build output
 **/.vitepress/dist
 
