@@ -1,6 +1,7 @@
 import { desc } from 'drizzle-orm';
 
 import type { Heartbeat } from '#src/heartbeat/contracts/heartbeat.ts';
+import { HeartbeatNotRecordedError } from '#src/heartbeat/errors.ts';
 import { heartbeatsTable } from '#src/heartbeat/repositories/heartbeats/heartbeats-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
@@ -31,7 +32,7 @@ export class DrizzleHeartbeatRepository implements HeartbeatRepository {
       .values({ firedAt: props.firedAt })
       .returning();
     if (row === undefined) {
-      throw new Error('Insert into example_heartbeats returned no row');
+      throw new HeartbeatNotRecordedError();
     }
     return this.toHeartbeat(row);
   }

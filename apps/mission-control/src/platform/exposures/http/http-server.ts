@@ -39,12 +39,15 @@ export class HttpServer {
           ? { level: logLevel, transport: { target: 'pino-pretty' } }
           : { level: logLevel },
     }).withTypeProvider<ZodTypeProvider>();
+
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
+
     await app.register(cors, {
       origin: [...this.props.config.corsOrigins],
       credentials: true,
     });
+
     for (const module of this.props.modules) {
       await app.register(module.plugin);
     }

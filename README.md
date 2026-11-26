@@ -79,7 +79,7 @@ pnpm dev
 | `pnpm db:migrate`  | Apply pending migrations; deploys run this before `pnpm start`   |
 | `pnpm start`       | Start without watching                                           |
 
-Each module under `src/` is a folder with a `module.ts`, laid out in the roles preflight's `module-layout` rule enforces: `exposures/` for routes, `services/`, `repositories/` for Drizzle tables and queries, and `contracts/` for Zod schemas. A module's routes register in their own encapsulated Fastify scope. `src/heartbeat` is an example of every piece, a DBOS schedule and queue included, and goes once real modules land.
+Each module under `src/` is a folder with a `module.ts`, and its routes register in their own encapsulated Fastify scope. Preflight's `module-layout` rule sets the folders inside a module. `src/heartbeat` is an example of every piece, a DBOS schedule and queue included, and goes once real modules land.
 
 ## CI
 

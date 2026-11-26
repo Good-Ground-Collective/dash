@@ -37,4 +37,21 @@ describe('LiveModule', () => {
       'event: heartbeat\ndata: {"id":"one"}\n\n',
     );
   });
+
+  it('ends open streams so the server can close', async () => {
+    app = await new HttpServer({
+      config: { corsOrigins: [], environment: 'test', logLevel: 'silent' },
+      modules: [new LiveModule({ liveEvents: new InProcessLiveEvents() })],
+    }).build();
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const response = await fetch(`${address}/events`);
+    const reader = response.body?.getReader();
+    await reader?.read();
+
+    await app.close();
+    const end = await reader?.read();
+    app = undefined;
+
+    expect(end?.done).toBe(true);
+  });
 });

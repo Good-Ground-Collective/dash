@@ -5,6 +5,14 @@ import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
+class HungProbe implements HealthProbe {
+  readonly name = 'database';
+
+  async check(): Promise<void> {
+    await new Promise<never>(() => {});
+  }
+}
+
 class StubProbe implements HealthProbe {
   readonly healthy: boolean;
   readonly name: string;
@@ -69,6 +77,34 @@ describe('HealthModule', () => {
     expect(response.json()).toEqual({
       status: 'unavailable',
       checks: { database: 'failing', workflows: 'ok' },
+    });
+  });
+});
+
+describe('HealthModule probe timeout', () => {
+  let app: ZodFastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('counts a probe that never answers as failing', async () => {
+    app = await new HttpServer({
+      config: { corsOrigins: [], environment: 'test', logLevel: 'silent' },
+      modules: [
+        new HealthModule({
+          probes: [new HungProbe()],
+          timeoutMilliseconds: 20,
+        }),
+      ],
+    }).build();
+
+    const response = await app.inject({ url: '/healthz' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      status: 'unavailable',
+      checks: { database: 'failing' },
     });
   });
 });

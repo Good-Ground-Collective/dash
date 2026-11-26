@@ -7,22 +7,33 @@ const databaseUrl = 'postgres://dash:dash@127.0.0.1:54329/mission_control';
 
 describe('AppConfig', () => {
   it('fails fast when a required variable is missing', () => {
-    expect(() => AppConfig.fromEnvironment({ NODE_ENV: 'production' })).toThrow(
+    expect(() => new AppConfig({ NODE_ENV: 'production' })).toThrow(
       ConfigError,
     );
   });
 
+  it('rejects a database URL that is not Postgres', () => {
+    expect(
+      () =>
+        new AppConfig({
+          NODE_ENV: 'production',
+          DATABASE_URL: 'mysql://127.0.0.1/db',
+        }),
+    ).toThrow(ConfigError);
+  });
+
   it('allows only the production web origin outside development', () => {
-    const config = AppConfig.fromEnvironment({
+    const config = new AppConfig({
       NODE_ENV: 'production',
       DATABASE_URL: databaseUrl,
     });
 
     expect(config.corsOrigins).toEqual(['https://dash.doublel.studio']);
+    expect(config.port).toBe(3000);
   });
 
   it('adds the local web origin in development', () => {
-    const config = AppConfig.fromEnvironment({
+    const config = new AppConfig({
       NODE_ENV: 'development',
       DATABASE_URL: databaseUrl,
     });

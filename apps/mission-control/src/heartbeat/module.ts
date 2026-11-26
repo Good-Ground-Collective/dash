@@ -2,7 +2,10 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { HeartbeatsRoutes } from '#src/heartbeat/exposures/heartbeats/heartbeats-routes.ts';
 import type { HeartbeatRepository } from '#src/heartbeat/repositories/heartbeats/heartbeat-repository.ts';
-import { HeartbeatRecorder } from '#src/heartbeat/services/heartbeat-recorder/heartbeat-recorder.ts';
+import {
+  type HeartbeatRecorder,
+  LiveHeartbeatRecorder,
+} from '#src/heartbeat/services/heartbeat-recorder/heartbeat-recorder.ts';
 import { HeartbeatWorkflows } from '#src/heartbeat/services/heartbeat-workflows/heartbeat-workflows.ts';
 import type { LiveEvents } from '#src/live/services/live-events/live-events.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
@@ -21,7 +24,7 @@ export class HeartbeatModule implements HttpModule, WorkflowModule {
     liveEvents: LiveEvents;
     repository: HeartbeatRepository;
   }) {
-    this.recorder = new HeartbeatRecorder(props);
+    this.recorder = new LiveHeartbeatRecorder(props);
     this.workflows = new HeartbeatWorkflows({ recorder: this.recorder });
     const routes = new HeartbeatsRoutes({ repository: props.repository });
     this.plugin = async (app) => {

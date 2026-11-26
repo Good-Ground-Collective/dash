@@ -29,8 +29,11 @@ export class PlatformModule {
 
   async start(): Promise<void> {
     const { config, workflowModules, workflows } = this.props;
+
     const app = await this.server.build();
+    this.stopServer = () => app.close();
     await app.ready();
+
     for (const module of workflowModules) {
       module.registerWorkflows();
     }
@@ -38,13 +41,32 @@ export class PlatformModule {
     for (const module of workflowModules) {
       await module.activate();
     }
-    this.stopServer = () => app.close();
+
     await app.listen({ host: config.host, port: config.port });
   }
 
+  /** Attempts every step even when an earlier one fails, then reports all failures together. */
   async stop(): Promise<void> {
-    await this.stopServer?.();
-    await this.props.workflows.shutdown();
-    await this.props.database.close();
+    const steps = [
+      async () => this.stopServer?.(),
+      async () => this.props.workflows.shutdown(),
+      async () => this.props.database.close(),
+    ];
+    const failures: Error[] = [];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch (cause) {
+        failures.push(
+          cause instanceof Error ? cause : new Error(String(cause)),
+        );
+      }
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        'Mission Control did not stop cleanly',
+      );
+    }
   }
 }

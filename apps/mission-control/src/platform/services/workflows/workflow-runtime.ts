@@ -1,7 +1,11 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
+import { z } from 'zod';
 
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
-import type { LogLevel } from '#src/platform/definitions/config/app-config.ts';
+import {
+  logLevelSchema,
+  postgresUrlSchema,
+} from '#src/platform/definitions/config/app-config.ts';
 import { WorkflowRuntimeError } from '#src/platform/errors.ts';
 
 const dbosLogLevels = {
@@ -12,15 +16,29 @@ const dbosLogLevels = {
   debug: 'debug',
   trace: 'debug',
   silent: 'error',
-} as const satisfies Record<LogLevel, 'debug' | 'info' | 'warn' | 'error'>;
+} as const satisfies Record<
+  z.infer<typeof logLevelSchema>,
+  'debug' | 'info' | 'warn' | 'error'
+>;
 
-/** DBOS lifecycle. DBOS keeps its system tables in the `dbos` schema of the application database. */
-export class WorkflowRuntime implements HealthProbe {
+export const workflowRuntimePropsSchema = z.object({
+  databaseUrl: postgresUrlSchema,
+  logLevel: logLevelSchema,
+});
+
+/** Starts and stops the durable workflow engine. */
+export interface WorkflowRuntime extends HealthProbe {
+  launch(): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
+/** DBOS keeps its system tables in the `dbos` schema of the application database. */
+export class DbosWorkflowRuntime implements WorkflowRuntime {
   readonly name = 'workflows';
-  private readonly props: { databaseUrl: string; logLevel: LogLevel };
+  private readonly props: z.output<typeof workflowRuntimePropsSchema>;
 
-  constructor(props: { databaseUrl: string; logLevel: LogLevel }) {
-    this.props = props;
+  constructor(props: z.input<typeof workflowRuntimePropsSchema>) {
+    this.props = workflowRuntimePropsSchema.parse(props);
   }
 
   async check(): Promise<void> {

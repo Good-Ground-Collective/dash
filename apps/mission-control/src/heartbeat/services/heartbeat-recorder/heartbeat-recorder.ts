@@ -2,8 +2,12 @@ import type { Heartbeat } from '#src/heartbeat/contracts/heartbeat.ts';
 import type { HeartbeatRepository } from '#src/heartbeat/repositories/heartbeats/heartbeat-repository.ts';
 import type { LiveEvents } from '#src/live/services/live-events/live-events.ts';
 
+export interface HeartbeatRecorder {
+  record(props: { firedAt: Date }): Promise<Heartbeat>;
+}
+
 /** Stores a heartbeat and pushes it to connected browsers. */
-export class HeartbeatRecorder {
+export class LiveHeartbeatRecorder implements HeartbeatRecorder {
   private readonly liveEvents: LiveEvents;
   private readonly repository: HeartbeatRepository;
 

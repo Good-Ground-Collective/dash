@@ -1,17 +1,35 @@
+import { z } from 'zod';
+
 import type { HealthReport } from '#src/health/contracts/health-report.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 
-/** Runs every probe concurrently and reports each one, so one failure doesn't hide another. */
-export class HealthCheck {
-  private readonly probes: readonly HealthProbe[];
+const timeoutMillisecondsSchema = z.number().int().positive();
 
-  constructor(props: { probes: readonly HealthProbe[] }) {
+export interface HealthCheck {
+  run(): Promise<HealthReport>;
+}
+
+/**
+ * Runs every probe concurrently, so one failure doesn't hide another, and counts a probe
+ * that outlasts `timeoutMilliseconds` as failing so `/healthz` answers promptly.
+ */
+export class ProbeHealthCheck implements HealthCheck {
+  private readonly probes: readonly HealthProbe[];
+  private readonly timeoutMilliseconds: number;
+
+  constructor(props: {
+    probes: readonly HealthProbe[];
+    timeoutMilliseconds: number;
+  }) {
     this.probes = props.probes;
+    this.timeoutMilliseconds = timeoutMillisecondsSchema.parse(
+      props.timeoutMilliseconds,
+    );
   }
 
   async run(): Promise<HealthReport> {
     const results = await Promise.allSettled(
-      this.probes.map((probe) => probe.check()),
+      this.probes.map((probe) => this.withTimeout(probe)),
     );
     const checks = Object.fromEntries(
       this.probes.map((probe, index) => [
@@ -21,5 +39,15 @@ export class HealthCheck {
     ) satisfies HealthReport['checks'];
     const healthy = Object.values(checks).every((status) => status === 'ok');
     return { status: healthy ? 'ok' : 'unavailable', checks };
+  }
+
+  private async withTimeout(probe: HealthProbe): Promise<void> {
+    const signal = AbortSignal.timeout(this.timeoutMilliseconds);
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
+      });
+    });
+    await Promise.race([probe.check(), timedOut]);
   }
 }

@@ -5,12 +5,12 @@ import { LiveModule } from '#src/live/module.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
-import { Database } from '#src/platform/services/database/database.ts';
-import { WorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
+import { PostgresDatabase } from '#src/platform/services/database/database.ts';
+import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
 
 const config = AppConfig.fromEnvironment();
-const database = new Database({ url: config.databaseUrl });
-const workflows = new WorkflowRuntime({
+const database = new PostgresDatabase({ url: config.databaseUrl });
+const workflows = new DbosWorkflowRuntime({
   databaseUrl: config.databaseUrl,
   logLevel: config.logLevel,
 });

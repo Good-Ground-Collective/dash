@@ -2,6 +2,7 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 
 import type { HeartbeatRecorder } from '#src/heartbeat/services/heartbeat-recorder/heartbeat-recorder.ts';
 import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
+import { WorkflowRuntimeError } from '#src/platform/errors.ts';
 
 const queueName = 'example-heartbeats';
 const scheduleName = 'example-heartbeat-every-30-seconds';
@@ -20,9 +21,9 @@ export class HeartbeatWorkflows implements WorkflowModule {
 
   async activate(): Promise<void> {
     if (this.scheduled === null) {
-      throw new Error(
-        'Register the heartbeat workflows before activating them',
-      );
+      throw new WorkflowRuntimeError({
+        message: 'Register the heartbeat workflows before activating them',
+      });
     }
     await DBOS.registerQueue(queueName, { workerConcurrency: 1 });
     await DBOS.applySchedules([
