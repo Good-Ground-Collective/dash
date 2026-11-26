@@ -4,11 +4,16 @@ FROM ${NODE_IMAGE} AS build
 ENV CI=1 COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 WORKDIR /repo
 RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN,required=true \
+    echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$HOME/.npmrc" \
+    && pnpm fetch \
+    && rm "$HOME/.npmrc"
 COPY . .
 RUN --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN,required=true \
     echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$HOME/.npmrc" \
-    && pnpm install --frozen-lockfile --filter '@dash/mission-control...' \
-    && pnpm --filter @dash/mission-control deploy --prod --legacy /srv/mission-control \
+    && pnpm install --frozen-lockfile --prefer-offline --filter '@dash/mission-control...' \
+    && pnpm --filter @dash/mission-control deploy --prod --legacy --prefer-offline /srv/mission-control \
     && rm "$HOME/.npmrc"
 
 FROM ${NODE_IMAGE}
