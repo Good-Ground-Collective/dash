@@ -20,8 +20,9 @@ When a discussion is settled, write its decisions into GitHub issues in the Dash
 | 04 | [GitHub integration](./04-github-integration.md) | slice 1 build, design of the GitHub views |
 | 05 | [Stack and repo layout](./05-stack-and-repo.md) | any code |
 | 06 | [Hosting and deploy](./06-hosting-and-deploy.md) | slice 1 ship |
+| 10 | [Infrastructure as code](./10-infrastructure-as-code.md) | first deploy, DNS for the passkey domain |
 | 07 | [Communication standards](./07-communication-standards.md) | slices 2 and 3 |
 | 08 | [Agent heartbeats](./08-agent-heartbeats.md) | slice 2 |
 | 09 | [Benches and the daemon](./09-benches-and-daemon.md) | slice 3 |
 
-01–06 make up slice 1: Mission Control, auth, the web app, deploy, and the GitHub view. 07–09 can wait until slice 1 is under way.
+01–06 and 10 make up slice 1: Mission Control, auth, the web app, deploy, and the GitHub view. 07–09 can wait until slice 1 is under way.
