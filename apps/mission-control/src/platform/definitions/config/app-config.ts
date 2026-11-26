@@ -101,6 +101,8 @@ export type Environment = z.infer<typeof environmentSchema>;
 
 /** Typed settings parsed once from the environment at boot. */
 export class AppConfig {
+  /** Service account keys start `dash_live_` in production and `dash_dev_` elsewhere, so a key shows where it works. */
+  readonly apiKeyPrefix: 'dash_live_' | 'dash_dev_';
   readonly authBaseUrl: string;
   /** Set in production so the session cookie reaches the web app's server on the parent domain. Host-only elsewhere. */
   readonly authCookieDomain: string | undefined;
@@ -131,6 +133,8 @@ export class AppConfig {
     this.authSecret = config.authSecret;
     this.authBaseUrl = config.authBaseUrl;
     this.secureCookies = config.environment === 'production';
+    this.apiKeyPrefix =
+      config.environment === 'production' ? 'dash_live_' : 'dash_dev_';
     this.authCookieDomain =
       config.environment === 'production' ? productionCookieDomain : undefined;
     this.webOrigin =

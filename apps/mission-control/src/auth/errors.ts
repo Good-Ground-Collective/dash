@@ -87,3 +87,99 @@ export class SessionNotFreshError extends APIError {
     });
   }
 }
+
+export class ServiceAccountNotFoundError extends APIError {
+  override name = 'ServiceAccountNotFoundError';
+
+  constructor() {
+    super('NOT_FOUND', {
+      code: 'SERVICE_ACCOUNT_NOT_FOUND',
+      message: 'You have no service account with that id.',
+    });
+  }
+}
+
+export class ServiceAccountTakenError extends APIError {
+  override name = 'ServiceAccountTakenError';
+
+  constructor(props: { identifier: string }) {
+    super('CONFLICT', {
+      code: 'SERVICE_ACCOUNT_TAKEN',
+      message: `A service account for “${props.identifier}” already exists. Issue it a new key instead.`,
+    });
+  }
+}
+
+export class ApiKeyNotFoundError extends APIError {
+  override name = 'ApiKeyNotFoundError';
+
+  constructor() {
+    super('NOT_FOUND', {
+      code: 'API_KEY_NOT_FOUND',
+      message: 'None of your service accounts has a key with that id.',
+    });
+  }
+}
+
+/** The api-key plugin's own endpoints would let a person mint keys for themselves, so Dash answers them as if they didn't exist. */
+export class ApiKeyEndpointClosedError extends APIError {
+  override name = 'ApiKeyEndpointClosedError';
+
+  constructor() {
+    super('NOT_FOUND', {
+      code: 'NOT_FOUND',
+      message: 'Manage keys under /service-accounts.',
+    });
+  }
+}
+
+export class ApiKeyNotIssuedError extends Error {
+  override name = 'ApiKeyNotIssuedError';
+
+  constructor() {
+    super('The api-key plugin returned no key');
+  }
+}
+
+/** Fastify answers with `statusCode` and `code`. */
+export class ApiKeyMissingError extends Error {
+  override name = 'ApiKeyMissingError';
+  readonly statusCode = 401;
+  readonly code = 'API_KEY_MISSING';
+
+  constructor() {
+    super(
+      'Send a service account key as `Authorization: Bearer dash_…` or `x-api-key`.',
+    );
+  }
+}
+
+export class ApiKeyRejectedError extends Error {
+  override name = 'ApiKeyRejectedError';
+  readonly statusCode = 401;
+  readonly code = 'API_KEY_REJECTED';
+
+  constructor() {
+    super('That API key is unknown, revoked or expired.');
+  }
+}
+
+export class ApiKeyScopeError extends Error {
+  override name = 'ApiKeyScopeError';
+  readonly statusCode = 403;
+  readonly code = 'API_KEY_SCOPE_MISSING';
+
+  constructor(props: { scope: string }) {
+    super(`This key lacks the \`${props.scope}\` scope.`);
+  }
+}
+
+export class AgentCallerMissingError extends Error {
+  override name = 'AgentCallerMissingError';
+
+  constructor() {
+    super(
+      'No agent caller on this request. Add the route’s `onRequest` hook from `authentication.require`.',
+    );
+  }
+}

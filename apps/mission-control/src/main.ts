@@ -1,3 +1,5 @@
+import { AgentsModule } from '#src/agents/module.ts';
+import { DrizzleAgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import { AuthModule } from '#src/auth/module.ts';
 import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
@@ -28,6 +30,7 @@ const auth = new AuthModule({
   trustedOrigins: config.corsOrigins,
   cookieDomain: config.authCookieDomain,
   secureCookies: config.secureCookies,
+  apiKeyPrefix: config.apiKeyPrefix,
 });
 const liveEvents = new InProcessLiveEvents();
 const heartbeat = new HeartbeatModule({
@@ -42,6 +45,10 @@ const platform = new PlatformModule({
   httpModules: [
     new HealthModule({ probes: [database, workflows] }),
     auth,
+    new AgentsModule({
+      authentication: auth.agentAuthentication,
+      heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
+    }),
     new LiveModule({ liveEvents }),
     heartbeat,
   ],

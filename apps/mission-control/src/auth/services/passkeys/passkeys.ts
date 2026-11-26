@@ -6,8 +6,11 @@ import { z } from 'zod';
 import {
   LastPasskeyError,
   PasskeyEnrolmentRejectedError,
-  SessionNotFreshError,
 } from '#src/auth/errors.ts';
+import {
+  type FreshSession,
+  MaxAgeFreshSession,
+} from '#src/auth/services/fresh-session/fresh-session.ts';
 import type { PrincipalGuard } from '#src/auth/services/principal-guard/principal-guard.ts';
 import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts';
 
@@ -79,7 +82,7 @@ export class WebAuthnPasskeys implements Passkeys {
   readonly plugins: readonly BetterAuthPlugin[];
   private readonly guard: PrincipalGuard;
   private readonly sources: readonly PasskeyEnrolmentSource[];
-  private readonly freshAgeSeconds: number;
+  private readonly freshSession: FreshSession;
 
   constructor(
     props: {
@@ -90,7 +93,9 @@ export class WebAuthnPasskeys implements Passkeys {
     const settings = passkeySettingsSchema.parse(props);
     this.guard = props.guard;
     this.sources = props.sources;
-    this.freshAgeSeconds = settings.freshAgeSeconds;
+    this.freshSession = new MaxAgeFreshSession({
+      maxAgeSeconds: settings.freshAgeSeconds,
+    });
 
     this.plugins = [
       passkey({
@@ -190,13 +195,7 @@ export class WebAuthnPasskeys implements Passkeys {
             return;
           }
 
-          const age =
-            Date.now() - new Date(session.session.createdAt).getTime();
-          if (age >= this.freshAgeSeconds * 1000) {
-            throw new SessionNotFreshError({
-              freshMinutes: Math.round(this.freshAgeSeconds / 60),
-            });
-          }
+          this.freshSession.assert(session.session);
 
           if (context.path === '/passkey/delete-passkey') {
             const owned = await context.context.adapter.count({

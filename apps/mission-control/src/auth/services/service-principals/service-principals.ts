@@ -10,6 +10,12 @@ import type { ServicePrincipalRepository } from '#src/auth/repositories/service-
 export interface ServicePrincipals {
   /** Creates a `service` principal owned by a person, with a synthetic `svc-<id>@service.invalid` email. */
   create(props: NewServicePrincipal): Promise<ServicePrincipal>;
+  /** The service principal with this id, or `null`. */
+  find(props: { id: string }): Promise<ServicePrincipal | null>;
+  /** The service principals a person owns, oldest first. */
+  listOwnedBy(props: { ownerUserId: string }): Promise<ServicePrincipal[]>;
+  /** Deletes a service principal with its profile and keys. `false` when it didn't exist. */
+  remove(props: { id: string }): Promise<boolean>;
 }
 
 export class StoredServicePrincipals implements ServicePrincipals {
@@ -36,5 +42,19 @@ export class StoredServicePrincipals implements ServicePrincipals {
       agentName: input.agentName ?? null,
       description: input.description,
     });
+  }
+
+  async find(props: { id: string }): Promise<ServicePrincipal | null> {
+    return this.repository.find(props);
+  }
+
+  async listOwnedBy(props: {
+    ownerUserId: string;
+  }): Promise<ServicePrincipal[]> {
+    return this.repository.listOwnedBy(props);
+  }
+
+  async remove(props: { id: string }): Promise<boolean> {
+    return this.repository.remove(props);
   }
 }
