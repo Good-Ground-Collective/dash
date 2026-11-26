@@ -33,6 +33,11 @@ env:
   clear:
     BETTER_AUTH_URL: https://api.dash.doublel.studio
     LOG_LEVEL: info
+    # dash-db accepts only TLS, and node-postgres otherwise connects in plain text.
+    # There's no CA for dash-db's certificate yet, and the link runs inside
+    # Tailscale's WireGuard, so this encrypts without verifying. An sslmode in
+    # DATABASE_URL takes precedence.
+    PGSSLMODE: no-verify
   secret:
     - BETTER_AUTH_SECRET
     - DATABASE_URL
