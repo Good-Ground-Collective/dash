@@ -20,7 +20,6 @@ const newAccountSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 const accountRefSchema = z.object({ serviceAccountId: z.string() });
-const newKeySchema = accountRefSchema.extend({ scopes: scopesSchema });
 const keyRefSchema = z.object({ keyId: z.string() });
 
 interface StubKey {
@@ -39,6 +38,7 @@ interface StubAccount {
   benchId: string | null;
   agentName: string | null;
   description: string;
+  scopes: string[];
   createdAt: string;
   keys: StubKey[];
 }
@@ -69,7 +69,7 @@ export class ServiceAccountsStub {
       case '/service-accounts/create':
         return this.create(newAccountSchema.parse(body));
       case '/service-accounts/keys/create':
-        return this.issue(newKeySchema.parse(body));
+        return this.issue(accountRefSchema.parse(body));
       case '/service-accounts/keys/revoke':
         return this.revokeKey(keyRefSchema.parse(body));
       case '/service-accounts/revoke':
@@ -101,15 +101,16 @@ export class ServiceAccountsStub {
       benchId: input.kind === 'bench' ? input.benchId : null,
       agentName: input.kind === 'agent' ? input.agentName : null,
       description: input.description,
+      scopes: input.scopes,
       createdAt: new Date().toISOString(),
       keys: [],
     };
     this.accounts.push(account);
-    const apiKey = this.newKey({ account, scopes: input.scopes });
+    const apiKey = this.newKey({ account });
     return { status: 200, body: { serviceAccount: account, apiKey } };
   }
 
-  private issue(input: z.infer<typeof newKeySchema>): StubAnswer {
+  private issue(input: z.infer<typeof accountRefSchema>): StubAnswer {
     const account = this.accounts.find(
       (candidate) => candidate.id === input.serviceAccountId,
     );
@@ -118,7 +119,7 @@ export class ServiceAccountsStub {
     }
     return {
       status: 200,
-      body: this.newKey({ account, scopes: input.scopes }),
+      body: this.newKey({ account }),
     };
   }
 
@@ -136,15 +137,12 @@ export class ServiceAccountsStub {
     return { status: 200, body: { success: true } };
   }
 
-  private newKey(props: {
-    account: StubAccount;
-    scopes: string[];
-  }): StubIssuedKey {
+  private newKey(props: { account: StubAccount }): StubIssuedKey {
     const secret = `dash_dev_${randomBytes(32).toString('hex')}`;
     const key: StubKey = {
       id: randomUUID(),
       start: secret.slice(0, 15),
-      scopes: props.scopes,
+      scopes: props.account.scopes,
       createdAt: new Date().toISOString(),
       expiresAt:
         props.account.kind === 'agent'

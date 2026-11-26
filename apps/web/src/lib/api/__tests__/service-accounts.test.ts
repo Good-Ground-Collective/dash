@@ -30,6 +30,7 @@ describe('HttpServiceAccounts', () => {
             benchId: 'studio-mac',
             agentName: null,
             description: 'The desk machine',
+            scopes: ['heartbeat:write'],
             createdAt: '2026-11-26T18:00:00.000Z',
             keys: [],
           },
@@ -64,6 +65,36 @@ describe('HttpServiceAccounts', () => {
       'https://api.example.test/api/auth/service-accounts/create',
     );
     expect(recorder.calls[0]?.init?.credentials).toBe('include');
+  });
+});
+
+describe('HttpServiceAccounts new keys', () => {
+  it('sends only the account: Mission Control picks the scopes', async () => {
+    const recorder = new RecordingFetch({
+      response: () =>
+        Response.json({
+          key: {
+            id: 'k2',
+            start: 'dash_dev_AbCdEf',
+            scopes: ['heartbeat:write'],
+            createdAt: '2026-11-26T18:00:00.000Z',
+            expiresAt: null,
+            lastUsedAt: null,
+          },
+          secret: 'dash_dev_AbCdEfSecret',
+        }),
+    });
+    const accounts = new HttpServiceAccounts({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    const issued = await accounts.issueKey({ serviceAccountId: 'a1' });
+
+    expect(issued.key.scopes).toEqual(['heartbeat:write']);
+    expect(recorder.calls[0]?.init?.body).toBe(
+      JSON.stringify({ serviceAccountId: 'a1' }),
+    );
   });
 });
 

@@ -2,12 +2,20 @@ import { z } from 'zod';
 
 export const apiKeyScopeSchema = z.enum(['heartbeat:write', 'telemetry:write']);
 
+/** Scopes as Mission Control reports them. Ones this build doesn't know yet are dropped, so a scope added there first doesn't break the page. */
+export const reportedScopesSchema = z.array(z.string()).transform((values) =>
+  values.flatMap((value) => {
+    const known = apiKeyScopeSchema.safeParse(value);
+    return known.success ? [known.data] : [];
+  }),
+);
+
 export const serviceAccountKindSchema = z.enum(['bench', 'agent']);
 
 export const apiKeySummarySchema = z.object({
   id: z.string(),
   start: z.string().nullable(),
-  scopes: z.array(apiKeyScopeSchema),
+  scopes: reportedScopesSchema,
   createdAt: z.coerce.date(),
   expiresAt: z.coerce.date().nullable(),
   lastUsedAt: z.coerce.date().nullable(),
@@ -20,6 +28,9 @@ export const serviceAccountSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  scopes: reportedScopesSchema.describe(
+    'Every key the account is issued gets these.',
+  ),
   createdAt: z.coerce.date(),
   keys: z.array(apiKeySummarySchema),
 });

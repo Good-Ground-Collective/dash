@@ -41,7 +41,25 @@ const units: readonly { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] =
   ];
 
 /** What the service account page says about accounts, keys and errors. */
-export class ServiceAccountWording {
+export interface ServiceAccountWording {
+  scopeLabel(scope: ApiKeyScope): string;
+  scopeDescription(scope: ApiKeyScope): string;
+  /** “Bench · studio-mac” or “Agent · ci-reviewer”. */
+  identity(account: ServiceAccount): string;
+  /** The latest use of any of the account's keys, or `null` if none was used. */
+  lastUsed(account: ServiceAccount): Date | null;
+  /** “Used 4 minutes ago”, or “Never used”. Within a minute it is “just now”. */
+  used(lastUsedAt: Date | null, now: Date): string;
+  /** “Never expires”, “Expires Feb 24, 2027” or “Expired”. */
+  expiry(key: ApiKeySummary, now: Date): string;
+  /** A key's visible start with an ellipsis, so it reads as a fragment. */
+  start(key: ApiKeySummary): string;
+  /** A sentence for the person, from Mission Control's error code or message. */
+  explain(cause: unknown): string;
+}
+
+/** The page's wording in US English, with dates in UTC. */
+export class EnglishServiceAccountWording implements ServiceAccountWording {
   scopeLabel(scope: ApiKeyScope): string {
     return scopeLabels[scope];
   }
@@ -50,14 +68,12 @@ export class ServiceAccountWording {
     return scopeDescriptions[scope];
   }
 
-  /** “Bench · studio-mac” or “Agent · ci-reviewer”. */
   identity(account: ServiceAccount): string {
     return account.kind === 'bench'
       ? `Bench · ${account.benchId ?? ''}`
       : `Agent · ${account.agentName ?? ''}`;
   }
 
-  /** The latest use of any of the account's keys, or `null` if none was used. */
   lastUsed(account: ServiceAccount): Date | null {
     const used = account.keys
       .map((key) => key.lastUsedAt?.getTime())
@@ -65,7 +81,6 @@ export class ServiceAccountWording {
     return used.length === 0 ? null : new Date(Math.max(...used));
   }
 
-  /** “Used 4 minutes ago”, or “Never used”. Within a minute it is “just now”. */
   used(lastUsedAt: Date | null, now: Date): string {
     if (lastUsedAt === null) return 'Never used';
     const seconds = Math.round((lastUsedAt.getTime() - now.getTime()) / 1000);
@@ -80,19 +95,16 @@ export class ServiceAccountWording {
     return `Used ${relativeFormat.format(Math.round(seconds / unit.seconds), unit.unit)}`;
   }
 
-  /** “Never expires”, “Expires Feb 24, 2027” or “Expired”. */
   expiry(key: ApiKeySummary, now: Date): string {
     if (key.expiresAt === null) return 'Never expires';
     if (key.expiresAt.getTime() <= now.getTime()) return 'Expired';
     return `Expires ${dateFormat.format(key.expiresAt)}`;
   }
 
-  /** A key's visible start with an ellipsis, so it reads as a fragment. */
   start(key: ApiKeySummary): string {
     return key.start === null ? 'Key' : `${key.start}…`;
   }
 
-  /** A sentence for the person, from Mission Control's error code or message. */
   explain(cause: unknown): string {
     if (!(cause instanceof MissionControlError)) {
       return 'Something went wrong. Try again.';
@@ -101,4 +113,5 @@ export class ServiceAccountWording {
   }
 }
 
-export const serviceAccountWording = new ServiceAccountWording();
+export const serviceAccountWording: ServiceAccountWording =
+  new EnglishServiceAccountWording();

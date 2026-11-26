@@ -159,6 +159,7 @@ describe('MissionControlAuthPageLoader service accounts', () => {
                 benchId: null,
                 agentName: 'ci-reviewer',
                 description: 'Runs in Actions',
+                scopes: ['heartbeat:write'],
                 createdAt: '2026-11-20T00:00:00.000Z',
                 keys: [],
               },

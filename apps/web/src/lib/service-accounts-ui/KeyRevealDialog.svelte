@@ -8,16 +8,22 @@
   }: { secret: string | null; accountName: string; onDone: () => void } =
     $props();
 
-  let copied = $state(false);
+  let copied = $state<'no' | 'yes' | 'failed'>('no');
+  let field = $state<HTMLInputElement | null>(null);
 
   const copy = async (): Promise<void> => {
     if (secret === null) return;
-    await navigator.clipboard.writeText(secret);
-    copied = true;
+    try {
+      await navigator.clipboard.writeText(secret);
+      copied = 'yes';
+    } catch {
+      copied = 'failed';
+      field?.select();
+    }
   };
 
   const close = (): void => {
-    copied = false;
+    copied = 'no';
     onDone();
   };
 </script>
@@ -56,13 +62,19 @@
               id="revealed-key"
               class="key"
               readonly
+              bind:this={field}
               value={secret ?? ''}
               onfocus={(event) => event.currentTarget.select()}
             />
             <button class="auth-button" type="button" onclick={copy}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied === 'yes' ? 'Copied' : 'Copy'}
             </button>
           </div>
+          {#if copied === 'failed'}
+            <p class="hint" role="status">
+              Couldn’t copy. Select the key and copy it yourself.
+            </p>
+          {/if}
           <p class="hint">
             Send it as <code>Authorization: Bearer &lt;key&gt;</code>.
           </p>

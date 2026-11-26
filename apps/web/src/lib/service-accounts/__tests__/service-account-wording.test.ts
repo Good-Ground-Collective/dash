@@ -29,6 +29,7 @@ class Samples {
       benchId: 'studio-mac',
       agentName: null,
       description: 'The desk machine',
+      scopes: ['heartbeat:write'],
       createdAt: new Date('2026-11-01T00:00:00Z'),
       keys,
     };

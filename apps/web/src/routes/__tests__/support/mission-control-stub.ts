@@ -48,8 +48,9 @@ interface StubReply {
 /**
  * Stands in for Mission Control's `/api/auth` in the web e2e tests, which run without Postgres.
  * It speaks the same paths and error codes but trusts every WebAuthn response: the real checks
- * are Mission Control's own tests. `POST /__stub/reset` forgets everyone, and
- * `POST /__stub/sign-in` signs a person straight in.
+ * are Mission Control's own tests. `POST /__stub/reset` forgets everyone,
+ * `POST /__stub/sign-in` signs a person straight in, and `POST /__stub/age-session` makes
+ * service account changes answer `SESSION_NOT_FRESH` until the next passkey sign-in.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -57,6 +58,7 @@ export class MissionControlStub {
   private pendingSetup: StubPerson | null = null;
   private passkeys: StubPasskey[] = [];
   private sessions = new Set<string>();
+  private sessionStale = false;
   private readonly serviceAccounts = new ServiceAccountsStub();
 
   constructor(props: { webOrigin: string }) {
@@ -107,6 +109,9 @@ export class MissionControlStub {
         return this.reset();
       case '/__stub/sign-in':
         return this.signInDirectly();
+      case '/__stub/age-session':
+        this.sessionStale = true;
+        return { status: 200, body: { status: true } };
       case '/get-session':
         return this.getSession(session);
       case '/setup/status':
@@ -143,8 +148,12 @@ export class MissionControlStub {
         return this.rename(props.body);
       case '/passkey/delete-passkey':
         return this.remove(props.body);
-      default:
+      case '/service-accounts/list':
         return this.serviceAccounts.route(props);
+      default:
+        return this.sessionStale
+          ? this.fail(403, 'SESSION_NOT_FRESH')
+          : this.serviceAccounts.route(props);
     }
   }
 
@@ -153,6 +162,7 @@ export class MissionControlStub {
     this.pendingSetup = null;
     this.passkeys = [];
     this.sessions = new Set();
+    this.sessionStale = false;
     this.serviceAccounts.reset();
     return { status: 200, body: { status: true } };
   }
@@ -259,7 +269,9 @@ export class MissionControlStub {
     const known = this.passkeys.some(
       (passkey) => passkey.credentialId === input.response.id,
     );
-    return known ? this.newSession() : this.fail(401, 'PASSKEY_NOT_FOUND');
+    if (!known) return this.fail(401, 'PASSKEY_NOT_FOUND');
+    this.sessionStale = false;
+    return this.newSession();
   }
 
   private rename(body: string): StubReply {

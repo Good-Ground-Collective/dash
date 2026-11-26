@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 import {
-  type ApiKeyScope,
   type CreatedServiceAccount,
   createdServiceAccountSchema,
   type IssuedApiKey,
@@ -27,10 +26,8 @@ export type HttpServiceAccountsProps = z.input<
 /** Changes to the signed-in person's service accounts, from the browser. Each needs a fresh passkey sign-in, or rejects with code `SESSION_NOT_FRESH`. */
 export interface ServiceAccountChanges {
   create(input: NewServiceAccount): Promise<CreatedServiceAccount>;
-  issueKey(props: {
-    serviceAccountId: string;
-    scopes: ApiKeyScope[];
-  }): Promise<IssuedApiKey>;
+  /** Mission Control gives the key the scopes chosen when the account was created. */
+  issueKey(props: { serviceAccountId: string }): Promise<IssuedApiKey>;
   revokeKey(props: { keyId: string }): Promise<void>;
   revokeAccount(props: { serviceAccountId: string }): Promise<void>;
 }
@@ -55,10 +52,7 @@ export class HttpServiceAccounts implements ServiceAccountChanges {
     });
   }
 
-  async issueKey(props: {
-    serviceAccountId: string;
-    scopes: ApiKeyScope[];
-  }): Promise<IssuedApiKey> {
+  async issueKey(props: { serviceAccountId: string }): Promise<IssuedApiKey> {
     return this.post({
       path: 'keys/create',
       body: props,
@@ -104,7 +98,7 @@ export class HttpServiceAccounts implements ServiceAccountChanges {
     return props.schema.parse(json);
   }
 
-  /** The client the browser uses: global `fetch`. */
+  /** For the page: global `fetch`, which sends the person's Mission Control session cookie because every call sets `credentials: 'include'`. */
   static inBrowser(props: { baseUrl: string }): HttpServiceAccounts {
     return new HttpServiceAccounts({
       baseUrl: props.baseUrl,

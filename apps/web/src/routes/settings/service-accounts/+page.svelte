@@ -4,8 +4,6 @@
   import { API_BASE_URL } from '$app/env/public';
   import { MissionControlError } from '#lib/api/mission-control-error.ts';
   import {
-    type ApiKeyScope,
-    apiKeyScopeSchema,
     type NewServiceAccount,
     type ServiceAccount,
   } from '#lib/api/service-account-contracts.ts';
@@ -26,13 +24,18 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let creating = $state(false);
+  let createError = $state<string | null>(null);
   let pending = $state<(() => Promise<void>) | null>(null);
   let revealed = $state<{ secret: string; accountName: string } | null>(null);
   let now = $state(new Date());
 
   let serviceAccounts: ServiceAccount[] = $derived(data.serviceAccounts ?? []);
 
-  const change = async (action: () => Promise<void>): Promise<void> => {
+  /** Runs a change. A stale session parks it for `confirmAndRetry`; other failures land in `report`, the page's error line unless told otherwise. */
+  const change = async (
+    action: () => Promise<void>,
+    report: (message: string) => void = (message) => (error = message),
+  ): Promise<void> => {
     busy = true;
     error = null;
     try {
@@ -45,11 +48,12 @@
         cause instanceof MissionControlError &&
         cause.code === 'SESSION_NOT_FRESH'
       ) {
+        creating = false;
         pending = action;
       } else if (passkeyWording.isCancellation(cause)) {
         pending = null;
       } else {
-        error = wording.explain(cause);
+        report(wording.explain(cause));
       }
     } finally {
       busy = false;
@@ -65,34 +69,32 @@
     });
   };
 
+  /** The dialog stays open until Mission Control creates the account, so a refusal doesn't lose what was typed. A stale session closes it; the retry replays `input`. */
   const create = (input: NewServiceAccount): void => {
-    creating = false;
-    void change(async () => {
-      const created = await accounts.create(input);
-      revealed = {
-        secret: created.apiKey.secret,
-        accountName: created.serviceAccount.name,
-      };
-    });
-  };
-
-  /** A new key gets the scopes the account's keys already have, or every scope when it has none. */
-  const scopesFor = (account: ServiceAccount): ApiKeyScope[] => {
-    const held = new Set(account.keys.flatMap((key) => key.scopes));
-    return held.size === 0
-      ? [...apiKeyScopeSchema.options]
-      : apiKeyScopeSchema.options.filter((scope) => held.has(scope));
+    createError = null;
+    void change(
+      async () => {
+        const created = await accounts.create(input);
+        creating = false;
+        revealed = {
+          secret: created.apiKey.secret,
+          accountName: created.serviceAccount.name,
+        };
+      },
+      (message) => (createError = message),
+    );
   };
 
   const issueKey = (account: ServiceAccount): void => {
     void change(async () => {
-      const issued = await accounts.issueKey({
-        serviceAccountId: account.id,
-        scopes: scopesFor(account),
-      });
+      const issued = await accounts.issueKey({ serviceAccountId: account.id });
       revealed = { secret: issued.secret, accountName: account.name };
     });
   };
+
+  $effect(() => {
+    if (!creating) createError = null;
+  });
 </script>
 
 <svelte:head>
@@ -109,7 +111,12 @@
         any agent on that machine; an agent key reports only as itself.
       </p>
     </div>
-    <CreateServiceAccountDialog bind:open={creating} {busy} onCreate={create} />
+    <CreateServiceAccountDialog
+      bind:open={creating}
+      {busy}
+      error={createError}
+      onCreate={create}
+    />
   </header>
 
   {#if pending}
@@ -178,6 +185,12 @@
               wording.lastUsed(account),
               now,
             )}
+          </p>
+          <p class="detail account-scopes">
+            <span class="muted">Keys may</span>
+            {#each account.scopes as scope (scope)}
+              <span class="scope">{wording.scopeLabel(scope)}</span>
+            {/each}
           </p>
 
           {#if account.keys.length === 0}
@@ -400,8 +413,11 @@
     gap: var(--space-2) var(--space-3);
   }
 
-  .scopes {
+  .scopes,
+  .account-scopes {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-1);
   }
 

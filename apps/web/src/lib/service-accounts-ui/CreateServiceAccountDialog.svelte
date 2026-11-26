@@ -12,10 +12,13 @@
   let {
     open = $bindable(false),
     busy,
+    error,
     onCreate,
   }: {
     open: boolean;
     busy: boolean;
+    /** Why Mission Control refused the last create. The dialog stays open with what was typed. */
+    error: string | null;
     onCreate: (input: NewServiceAccount) => void;
   } = $props();
 
@@ -172,7 +175,7 @@
             </div>
 
             <fieldset class="scopes">
-              <legend>The key may</legend>
+              <legend>Its keys may</legend>
               <Checkbox.Group bind:value={scopes} name="scopes">
                 {#each apiKeyScopeSchema.options as scope (scope)}
                   <label class="scope">
@@ -213,6 +216,9 @@
               </Checkbox.Group>
             </fieldset>
 
+            {#if error}
+              <p class="auth-error" role="alert">{error}</p>
+            {/if}
             <div class="actions">
               <Dialog.Close>
                 {#snippet child({ props: closeProps })}
