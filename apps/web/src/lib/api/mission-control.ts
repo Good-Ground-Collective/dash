@@ -30,7 +30,7 @@ export interface MissionControl {
   getViewer(): Promise<Viewer | null>;
 }
 
-/** Mission Control over HTTP. Every call carries the browser's cookies. */
+/** Mission Control over HTTP. Calls include credentials; on the server only the session cookie is forwarded. */
 export class HttpMissionControl implements MissionControl {
   private readonly baseUrl: URL;
   private readonly fetcher: typeof fetch;

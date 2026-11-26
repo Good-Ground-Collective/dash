@@ -15,7 +15,11 @@ export interface CookieForwarder {
   forward(props: { request: Request; cookie: string | null }): Request;
 }
 
-/** Forwards only the session cookie, and only to requests bound for Mission Control's origin. */
+/**
+ * Forwards only the session cookie, and only to requests bound for Mission Control's origin.
+ * Those requests are marked `credentials: 'omit'`, because SvelteKit's server fetch otherwise
+ * re-attaches every browser cookie when Mission Control's host is a subdomain of the app's.
+ */
 export class OriginCookieForwarder implements CookieForwarder {
   private readonly apiOrigin: string;
 
@@ -26,21 +30,18 @@ export class OriginCookieForwarder implements CookieForwarder {
   }
 
   forward(props: { request: Request; cookie: string | null }): Request {
-    if (
-      props.cookie === null ||
-      new URL(props.request.url).origin !== this.apiOrigin
-    ) {
+    if (new URL(props.request.url).origin !== this.apiOrigin) {
       return props.request;
     }
 
-    const session = props.cookie
+    const session = (props.cookie ?? '')
       .split(';')
       .map((pair) => pair.trim())
       .filter((pair) => sessionCookie.names.includes(pair.split('=')[0] ?? ''));
-    if (session.length === 0) return props.request;
 
     const headers = new Headers(props.request.headers);
-    headers.set('cookie', session.join('; '));
-    return new Request(props.request, { headers });
+    headers.delete('cookie');
+    if (session.length > 0) headers.set('cookie', session.join('; '));
+    return new Request(props.request, { headers, credentials: 'omit' });
   }
 }

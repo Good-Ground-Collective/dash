@@ -30,15 +30,16 @@ describe('OriginCookieForwarder', () => {
     expect(forwarded.headers.get('cookie')).toBe(
       'better-auth.session_token=abc',
     );
+    expect(forwarded.credentials).toBe('omit');
   });
 
   it('sends no cookie when the browser has no session cookie', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
     );
-    expect(forwarder.forward({ request, cookie: 'dash-mode=dark' })).toBe(
-      request,
-    );
+    const forwarded = forwarder.forward({ request, cookie: 'dash-mode=dark' });
+    expect(forwarded.headers.get('cookie')).toBeNull();
+    expect(forwarded.credentials).toBe('omit');
   });
 
   it('never sends the cookie to another origin', () => {
@@ -50,11 +51,13 @@ describe('OriginCookieForwarder', () => {
     expect(forwarded.headers.get('cookie')).toBeNull();
   });
 
-  it('passes requests through when the browser sent no cookie', () => {
+  it('keeps SvelteKit from attaching cookies when the browser sent none', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
     );
-    expect(forwarder.forward({ request, cookie: null })).toBe(request);
+    const forwarded = forwarder.forward({ request, cookie: null });
+    expect(forwarded.headers.get('cookie')).toBeNull();
+    expect(forwarded.credentials).toBe('omit');
   });
 
   it('refuses an API base URL that is not a URL', () => {
