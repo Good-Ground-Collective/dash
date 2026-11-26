@@ -1,3 +1,6 @@
+import { AuthModule } from '#src/auth/module.ts';
+import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
+import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import { HealthModule } from '#src/health/module.ts';
 import { HeartbeatModule } from '#src/heartbeat/module.ts';
 import { DrizzleHeartbeatRepository } from '#src/heartbeat/repositories/heartbeats/heartbeat-repository.ts';
@@ -14,6 +17,17 @@ const workflows = new DbosWorkflowRuntime({
   databaseUrl: config.databaseUrl,
   logLevel: config.logLevel,
 });
+const auth = new AuthModule({
+  store: new DrizzleAuthStore({ database }),
+  servicePrincipalRepository: new DrizzleServicePrincipalRepository({
+    database,
+  }),
+  secret: config.authSecret,
+  baseUrl: config.authBaseUrl,
+  trustedOrigins: config.corsOrigins,
+  cookieDomain: config.authCookieDomain,
+  secureCookies: config.secureCookies,
+});
 const liveEvents = new InProcessLiveEvents();
 const heartbeat = new HeartbeatModule({
   liveEvents,
@@ -26,6 +40,7 @@ const platform = new PlatformModule({
   workflows,
   httpModules: [
     new HealthModule({ probes: [database, workflows] }),
+    auth,
     new LiveModule({ liveEvents }),
     heartbeat,
   ],

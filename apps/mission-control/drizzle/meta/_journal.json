@@ -8,6 +8,13 @@
       "when": 1795670749532,
       "tag": "0000_example_heartbeats",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795703293334,
+      "tag": "0001_auth_principals",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { ConfigError } from '#src/platform/errors.ts';
 
 const productionWebOrigin = 'https://dash.doublel.studio';
+const productionCookieDomain = new URL(productionWebOrigin).hostname;
+
+/** The secret `.env.example` ships for local use. It is public, so production refuses it. */
+export const developmentAuthSecret =
+  'dev-only-placeholder-secret-not-for-deploys';
 
 export const logLevelSchema = z.enum([
   'fatal',
@@ -40,7 +45,47 @@ export const appConfigSchema = z
     LOG_LEVEL: logLevelSchema.default('info'),
     DATABASE_URL: postgresUrlSchema,
     DEV_WEB_ORIGIN: webOriginSchema.default('http://localhost:5173'),
+    BETTER_AUTH_SECRET: z
+      .string()
+      .min(
+        32,
+        'Expected at least 32 characters, for example from `openssl rand -base64 32`',
+      ),
+    BETTER_AUTH_URL: webOriginSchema,
   })
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' ||
+      new URL(env.BETTER_AUTH_URL).protocol === 'https:',
+    {
+      message: 'BETTER_AUTH_URL must use https in production',
+      path: ['BETTER_AUTH_URL'],
+    },
+  )
+  .refine(
+    (env) => {
+      const host = new URL(env.BETTER_AUTH_URL).hostname;
+      return (
+        env.NODE_ENV !== 'production' ||
+        host === productionCookieDomain ||
+        host.endsWith(`.${productionCookieDomain}`)
+      );
+    },
+    {
+      message: `BETTER_AUTH_URL must be on ${productionCookieDomain} in production, or browsers drop the session cookie`,
+      path: ['BETTER_AUTH_URL'],
+    },
+  )
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' ||
+      env.BETTER_AUTH_SECRET !== developmentAuthSecret,
+    {
+      message:
+        'BETTER_AUTH_SECRET is the public development placeholder. Generate one, for example with `openssl rand -base64 32`',
+      path: ['BETTER_AUTH_SECRET'],
+    },
+  )
   .transform((env) => ({
     environment: env.NODE_ENV,
     host: env.HOST,
@@ -48,18 +93,25 @@ export const appConfigSchema = z
     logLevel: env.LOG_LEVEL,
     databaseUrl: env.DATABASE_URL,
     devWebOrigin: env.DEV_WEB_ORIGIN,
+    authSecret: env.BETTER_AUTH_SECRET,
+    authBaseUrl: env.BETTER_AUTH_URL,
   }));
 
 export type Environment = z.infer<typeof environmentSchema>;
 
 /** Typed settings parsed once from the environment at boot. */
 export class AppConfig {
+  readonly authBaseUrl: string;
+  /** Set in production so the session cookie reaches the web app's server on the parent domain. Host-only elsewhere. */
+  readonly authCookieDomain: string | undefined;
+  readonly authSecret: string;
   readonly corsOrigins: readonly string[];
   readonly databaseUrl: string;
   readonly environment: Environment;
   readonly host: string;
   readonly logLevel: LogLevel;
   readonly port: number;
+  readonly secureCookies: boolean;
 
   /** Parses `env`, throwing a `ConfigError` that lists every problem so boot fails fast. */
   constructor(env: NodeJS.ProcessEnv) {
@@ -74,6 +126,11 @@ export class AppConfig {
     this.port = config.port;
     this.logLevel = config.logLevel;
     this.databaseUrl = config.databaseUrl;
+    this.authSecret = config.authSecret;
+    this.authBaseUrl = config.authBaseUrl;
+    this.secureCookies = config.environment === 'production';
+    this.authCookieDomain =
+      config.environment === 'production' ? productionCookieDomain : undefined;
     this.corsOrigins =
       config.environment === 'development'
         ? [productionWebOrigin, config.devWebOrigin]
