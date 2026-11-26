@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: Good-Ground-Collective/flight-rules-review@f06325794847caf0b90e0c82466d527d76f2ef4c # main
+      - uses: Good-Ground-Collective/flight-rules-review@4bd923a6aa22c35e65f7778fe2fe97834a16bb59 # v1.0.0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           app-id: ${{ vars.FLIGHT_RULES_REVIEW_APP_ID }}
