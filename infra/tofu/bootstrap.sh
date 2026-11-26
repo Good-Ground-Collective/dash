@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Creates the OpenTofu state bucket and a key limited to it. Safe to re-run.
 # Needs LINODE_TOKEN. Writes the key to $DASH_INFRA_ENV and never prints it.
+# The bucket is Linode Object Storage; versioning is set through its
+# S3-compatible API. No AWS account is involved.
 set -euo pipefail
 
 REGION="us-southeast"
@@ -38,7 +40,7 @@ chmod 600 "$ENV_FILE"
 existing_key_id="$(api GET "/object-storage/keys?page_size=500" |
   jq -r --arg l "$KEY_LABEL" '[.data[] | select(.label == $l)][0].id // empty')"
 
-if grep -q '^AWS_SECRET_ACCESS_KEY=' "$ENV_FILE"; then
+if grep -q '^LINODE_OBJ_SECRET_KEY=' "$ENV_FILE"; then
   [ -n "$existing_key_id" ] || {
     echo "${ENV_FILE} has a state key but Linode has no key labelled ${KEY_LABEL}" >&2
     exit 1
@@ -54,8 +56,8 @@ else
     --arg l "$KEY_LABEL" --arg r "$REGION" --arg b "$BUCKET" \
     '{label: $l, bucket_access: [{region: $r, bucket_name: $b, permissions: "read_write"}]}')")"
   {
-    echo "AWS_ACCESS_KEY_ID=$(jq -r .access_key <<<"$key_json")"
-    echo "AWS_SECRET_ACCESS_KEY=$(jq -r .secret_key <<<"$key_json")"
+    echo "LINODE_OBJ_ACCESS_KEY=$(jq -r .access_key <<<"$key_json")"
+    echo "LINODE_OBJ_SECRET_KEY=$(jq -r .secret_key <<<"$key_json")"
   } >>"$ENV_FILE"
   unset key_json
   echo "key ${KEY_LABEL}: created (id $(api GET "/object-storage/keys?page_size=500" |
@@ -65,8 +67,8 @@ fi
 grep -q '^TF_VAR_tailscale_auth_key=' "$ENV_FILE" ||
   echo "TF_VAR_tailscale_auth_key=tskey-auth-REPLACE-ME" >>"$ENV_FILE"
 
-access_key="$(sed -n 's/^AWS_ACCESS_KEY_ID=//p' "$ENV_FILE")"
-secret_key="$(sed -n 's/^AWS_SECRET_ACCESS_KEY=//p' "$ENV_FILE")"
+access_key="$(sed -n 's/^LINODE_OBJ_ACCESS_KEY=//p' "$ENV_FILE")"
+secret_key="$(sed -n 's/^LINODE_OBJ_SECRET_KEY=//p' "$ENV_FILE")"
 body='<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>'
 s3_url="https://${BUCKET}.${S3_REGION}.linodeobjects.com/?versioning"
 s3_auth=(--aws-sigv4 "aws:amz:${S3_REGION}:s3" --user "${access_key}:${secret_key}")

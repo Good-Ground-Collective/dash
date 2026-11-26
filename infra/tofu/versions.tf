@@ -12,6 +12,7 @@ terraform {
     }
   }
 
+  # Linode Object Storage through its S3-compatible API. No AWS account is involved.
   backend "s3" {
     bucket = "dash-tfstate"
     key    = "prod/terraform.tfstate"
