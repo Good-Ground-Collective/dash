@@ -7,7 +7,7 @@ const forwarder = new OriginCookieForwarder({
   apiBaseUrl: 'https://api.example.test',
 });
 
-describe('OriginCookieForwarder', () => {
+describe('OriginCookieForwarder Mission Control requests', () => {
   it('adds the cookie to requests for Mission Control', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
@@ -36,7 +36,9 @@ describe('OriginCookieForwarder', () => {
     );
     expect(forwarded.credentials).toBe('omit');
   });
+});
 
+describe('OriginCookieForwarder Mission Control requests without a session', () => {
   it('sends no cookie when the browser has no session cookie', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
@@ -46,6 +48,15 @@ describe('OriginCookieForwarder', () => {
       appOrigin,
       cookie: 'dash-mode=dark',
     });
+    expect(forwarded.headers.get('cookie')).toBeNull();
+    expect(forwarded.credentials).toBe('omit');
+  });
+
+  it('keeps SvelteKit from attaching cookies when the browser sent none', () => {
+    const request = new Request(
+      'https://api.example.test/api/auth/get-session',
+    );
+    const forwarded = forwarder.forward({ request, appOrigin, cookie: null });
     expect(forwarded.headers.get('cookie')).toBeNull();
     expect(forwarded.credentials).toBe('omit');
   });
@@ -69,16 +80,9 @@ describe('OriginCookieForwarder other origins', () => {
       forwarder.forward({ request, appOrigin, cookie: 'dash-mode=dark' }),
     ).toBe(request);
   });
+});
 
-  it('keeps SvelteKit from attaching cookies when the browser sent none', () => {
-    const request = new Request(
-      'https://api.example.test/api/auth/get-session',
-    );
-    const forwarded = forwarder.forward({ request, appOrigin, cookie: null });
-    expect(forwarded.headers.get('cookie')).toBeNull();
-    expect(forwarded.credentials).toBe('omit');
-  });
-
+describe('OriginCookieForwarder configuration', () => {
   it('refuses an API base URL that is not a URL', () => {
     expect(
       () => new OriginCookieForwarder({ apiBaseUrl: 'not a url' }),
