@@ -10,7 +10,7 @@ It's the first screen you'll touch and it exercises auth end to end. It's a good
 1. **First boot:** enter the setup token, or arrive from the admin magic link.
 2. **Create your account:** display name and email, then register a passkey.
 3. **Add a second passkey** (encouraged, skippable), or save recovery codes.
-4. **Connect GitHub:** install the GitHub App or authorise OAuth (see [04](./04-github-integration.md)), then pick orgs and repos.
+4. **Connect GitHub:** install the GitHub App or authorise OAuth (see #4 (concluded)), then pick orgs and repos.
 5. **Land on home:** an empty state that still feels useful (your PRs and review requests appear as soon as the sync lands).
 6. **Later visits:** sign in with a passkey (conditional UI and autofill), and handle a lost passkey through the recovery route.
 
