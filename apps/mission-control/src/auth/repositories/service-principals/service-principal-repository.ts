@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import {
   type PrincipalKind,
   type ServicePrincipal,
+  servicePrincipalSchema,
 } from '#src/auth/contracts/principal.ts';
 import { ServicePrincipalNotStoredError } from '#src/auth/errors.ts';
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
@@ -60,7 +61,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
         throw new ServicePrincipalNotStoredError();
       }
 
-      return {
+      return servicePrincipalSchema.parse({
         id: principal.id,
         email: principal.email,
         name: principal.name,
@@ -69,7 +70,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
         agentName: profile.agentName,
         description: profile.description,
         createdAt: profile.createdAt.toISOString(),
-      };
+      });
     });
   }
 

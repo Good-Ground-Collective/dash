@@ -120,10 +120,10 @@ export class BetterAuthIdentity implements Identity {
     }
 
     const { user, session } = betterAuthSessionSchema.parse(found);
-    return {
+    return principalSessionSchema.parse({
       principalId: user.id,
       kind: user.kind,
       expiresAt: session.expiresAt,
-    };
+    });
   }
 }

@@ -30,9 +30,11 @@ export class AuthModule implements HttpModule {
       ...props,
       storage: props.store.storage,
     });
+
     this.servicePrincipals = new StoredServicePrincipals({
       repository: props.servicePrincipalRepository,
     });
+
     const routes = new AuthHandlerRoutes({ identity: this.identity });
     this.plugin = async (app) => {
       routes.register(app);

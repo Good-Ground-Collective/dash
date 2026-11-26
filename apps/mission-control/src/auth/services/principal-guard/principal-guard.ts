@@ -73,6 +73,7 @@ export class KindPrincipalGuard implements PrincipalGuard {
       where: [{ field: 'id', value: props.userId }],
       select: ['kind'],
     });
+
     if (principal?.kind !== principalKindSchema.enum.user) {
       throw new ServicePrincipalForbiddenError({ action: props.action });
     }
