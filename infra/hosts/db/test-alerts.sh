@@ -9,8 +9,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir "$work/stub"
 
-# Stands in for "runuser -u postgres -- <cmd>": prints $STUB_OUT for the
-# command and exits with $STUB_RC.
+# runuser stub: prints $STUB_OUT and exits with $STUB_RC.
 cat >"$work/stub/runuser" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "${STUB_OUT:-}"

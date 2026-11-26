@@ -22,8 +22,7 @@ RECHECK_SECONDS="${DASH_ARCHIVE_RECHECK_SECONDS:-90}"
 REPEAT_SECONDS=$((6 * 3600))
 HOST="$(hostname -s)"
 
-# psql and pgbackrest run as postgres, which cannot enter root's or a sudo
-# user's home directory.
+# postgres can't enter a sudo user's home, so psql/pgbackrest start in /.
 cd /
 
 now() { date +%s; }
