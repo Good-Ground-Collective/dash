@@ -78,13 +78,19 @@ install -d -m 755 /etc/dash
 pushover_tmp="$(mktemp /etc/dash/.pushover.XXXXXX)"
 chmod 600 "$pushover_tmp"
 printf 'PUSHOVER_APP_TOKEN=%s\nPUSHOVER_USER_KEY=%s\n' "$PUSHOVER_APP_TOKEN" "$PUSHOVER_USER_KEY" >"$pushover_tmp"
-pushover_changed=0
 if cmp -s "$pushover_tmp" "$PUSHOVER"; then
   rm -f "$pushover_tmp"
 else
+  # Installed only once Pushover accepts a test message sent with them.
+  if ! DASH_PUSHOVER_ENV="$pushover_tmp" bash "$SRC/bin/dash-notify" \
+    "Dash backups: alerting enabled on $(hostname -s)" \
+    "Test notification: provision.sh installed new Pushover credentials. Backup failures, stale backups and WAL archiving problems on this box now alert here."; then
+    rm -f "$pushover_tmp"
+    echo "Pushover rejected the new credentials; kept the old ones" >&2
+    exit 1
+  fi
   mv "$pushover_tmp" "$PUSHOVER"
-  pushover_changed=1
-  echo "updated $PUSHOVER"
+  echo "updated $PUSHOVER; sent a test notification"
 fi
 unset PUSHOVER_APP_TOKEN PUSHOVER_USER_KEY
 
@@ -165,9 +171,4 @@ fi
 
 systemctl enable -q --now dash-pgbackrest-full.timer dash-pgbackrest-diff.timer \
   dash-backup-age.timer dash-archive-check.timer
-if [ "$pushover_changed" = 1 ]; then
-  /usr/local/bin/dash-notify "Dash backups: alerting enabled on $(hostname -s)" \
-    "Test notification: provision.sh installed new Pushover credentials. Backup failures, stale backups and WAL archiving problems on this box now alert here."
-  echo "sent a test notification"
-fi
 echo "dash-db: ok"

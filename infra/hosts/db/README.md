@@ -28,7 +28,7 @@ On `dash-db`, it:
 - creates the `mission_control` role and the `mission_control` database it owns, revokes `PUBLIC` access to that database, and sets the role's password from `infra.env` on every run
 - creates the pgBackRest stanza `dash`, checks that WAL archiving works, and takes a first full backup if the repo has none
 - installs and enables the backup timers
-- installs the Pushover credentials, `dash-notify` and the alert checks, and enables their timers (see [Alerts](#alerts)). When the credentials change, it sends a test notification.
+- installs the Pushover credentials, `dash-notify` and the alert checks, and enables their timers (see [Alerts](#alerts)). When the credentials change, it sends a test notification with them first, and installs them only if Pushover accepts it.
 
 Mission Control's DBOS keeps its own schema in the same database, so nothing extra is needed for it.
 
@@ -88,18 +88,20 @@ sudo systemctl start dash-pgbackrest@diff.service   # back up now
 
 Alerts go to Seth's phone through [Pushover](https://pushover.net). `/usr/local/bin/dash-notify <title> <message> [priority]` sends one, and exits non-zero if Pushover rejects it. It runs as root, because only root can read `/etc/dash/pushover.env`; the credentials reach `curl` as a config file on stdin, never as arguments. `/usr/local/sbin/dash-backup-alerts` holds the checks below. All alerts are priority 1 (high); recoveries are priority 0.
 
-| Alert                  | When                                                                                                                                                                                                                                                           | Source                                           |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Backup FAILED          | Any `dash-pgbackrest@*.service` run fails, including its `pgbackrest check`. Carries the unit name and its last 10 journal lines, trimmed to Pushover's 1024 characters. Sent every time.                                                                      | `OnFailure=` → `dash-pgbackrest-failed@.service` |
-| Backup recovered       | The next backup finishes after a failure.                                                                                                                                                                                                                      | `ExecStartPost=` of `dash-pgbackrest@.service`   |
-| Backup stale           | Daily at 09:00 UTC, the newest backup of stanza `dash` is over 26 hours old, there is none, or `pgbackrest info` fails. Normally the newest is about 6 hours old at that point, so one missed night alerts.                                                    | `dash-backup-age.timer`                          |
-| WAL archiving failing  | `pg_stat_archiver.last_failed_time` is newer than `last_archived_time`.                                                                                                                                                                                        | `dash-archive-check.timer`, every 15 minutes     |
-| WAL archiving stalled  | Nothing archived for 30 minutes (twice `archive_timeout`) while at least one finished WAL segment is waiting: `pg_current_wal_lsn()` has moved past the segment after `last_archived_wal`. An idle database stays inside that segment, so it never trips this. | same                                             |
-| Cannot check archiving | `psql` against the local cluster fails, for example because Postgres is down.                                                                                                                                                                                  | same                                             |
+| Alert                  | When                                                                                                                                                                                                                                                                    | Source                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Backup FAILED          | Any `dash-pgbackrest@*.service` run fails, including its `pgbackrest check`. Carries the unit name and its last 10 journal lines, trimmed to Pushover's 1024 characters. Sent every time.                                                                               | `OnFailure=` → `dash-pgbackrest-failed@.service` |
+| Backup recovered       | The next backup finishes after a failure.                                                                                                                                                                                                                               | `ExecStartPost=` of `dash-pgbackrest@.service`   |
+| Backup stale           | Daily at 09:00 UTC, the newest backup of stanza `dash` is over 26 hours old, there is none, or `pgbackrest info` fails. Normally the newest is about 6 hours old at that point, so one missed night alerts.                                                             | `dash-backup-age.timer`                          |
+| WAL archiving failing  | `pg_stat_archiver.last_failed_time` is newer than `last_archived_time`.                                                                                                                                                                                                 | `dash-archive-check.timer`, every 15 minutes     |
+| WAL archiving stalled  | A finished WAL segment has waited over 30 minutes (twice `archive_timeout`) to be archived: its `.ready` file in `pg_wal/archive_status`, read through `pg_ls_archive_statusdir()`, is older than that. An idle database has no `.ready` files, so it never trips this. | same                                             |
+| Cannot check archiving | `psql` against the local cluster fails, for example because Postgres is down, or returns a row the check cannot parse.                                                                                                                                                  | same                                             |
 
-The archive check looks twice, 90 seconds apart, before it alerts, so a single failed `archive_command` that succeeds on the archiver's next retry stays quiet. Each alert writes `/var/lib/dash-alerts/<name>`. While that file exists, the same alert repeats at most once every 6 hours. When the check passes again it sends one recovery notice and removes the file.
+The archive check looks twice, 90 seconds apart, before it alerts, so a single failed `archive_command` that succeeds on the archiver's next retry stays quiet. Each alert writes `/var/lib/dash-alerts/<name>`. While that file exists, the same alert repeats at most once every 6 hours. When the check passes again it sends one recovery notice and removes the file. A check that cannot run does not count as passing, so it clears nothing.
 
 ### Testing alerts
+
+`test-alerts.sh` runs the checks against stubbed `psql` rows and `pgbackrest info` JSON in dry-run mode: failing, stalled, idle, the 6-hour repeat limit, combined recovery, unparseable output, backup age and message trimming. CI runs it. It needs GNU `date` and `jq`.
 
 `DASH_NOTIFY_DRY_RUN=1` prints instead of sending, and `DASH_ALERT_STATE_DIR` keeps a test away from the real state. Thresholds can be overridden with `DASH_BACKUP_MAX_AGE_HOURS` and `DASH_ARCHIVE_STALL_MINUTES`.
 
@@ -131,7 +133,7 @@ sudo systemctl reset-failed dash-pgbackrest@bogus.service
 sudo -u postgres pgbackrest --stanza=dash check
 ```
 
-On 2026-11-26 this sent "Dash backups: alerting enabled on dash-db" from `provision.sh`, then the `[TEST]` failure (with the unit's journal lines) and recovery. `pgbackrest check` passed afterwards. The archive check's failing, stalled and cannot-query branches were checked in dry-run mode against stubbed `pg_stat_archiver` rows, and the live idle database stayed quiet.
+On 2026-11-26 this sent "Dash backups: alerting enabled on dash-db" from `provision.sh`, then the `[TEST]` failure (with the unit's journal lines) and recovery. `pgbackrest check` passed afterwards. `test-alerts.sh` passed on `dash-db`, and the live idle database stayed quiet.
 
 ## Restore runbook
 

@@ -22,16 +22,22 @@ RECHECK_SECONDS="${DASH_ARCHIVE_RECHECK_SECONDS:-90}"
 REPEAT_SECONDS=$((6 * 3600))
 HOST="$(hostname -s)"
 
-now() { date +%s; }
+# psql and pgbackrest run as postgres, which cannot enter root's or a sudo
+# user's home directory.
+cd /
 
-# raise <key> <title> <message> <priority> [always]
-raise() {
+now() { date +%s; }
+utc() { date -ud "@$1" '+%F %T UTC'; }
+
+# "always" skips the 6-hour repeat limit.
+raise_alert() {
   local key="$1" title="$2" message="$3" priority="$4" always="${5:-}" last
   install -d -m 700 "$STATE_DIR"
   last="$(cat "$STATE_DIR/$key" 2>/dev/null || true)"
   [[ "$last" =~ ^[0-9]+$ ]] || last=0
+
   if [ -z "$always" ] && [ $(($(now) - last)) -lt "$REPEAT_SECONDS" ]; then
-    echo "${key}: still alerting, last sent $(date -ud "@${last}" '+%F %T UTC'); not repeating"
+    echo "${key}: still alerting, last sent $(utc "$last"); not repeating"
     return 0
   fi
   "$NOTIFY" "$title" "$message" "$priority"
@@ -39,17 +45,23 @@ raise() {
   echo "${key}: alert sent"
 }
 
-# clear_alert <key> <title> <message>
-clear_alert() {
-  local key="$1" title="$2" message="$3"
-  [ -e "$STATE_DIR/$key" ] || return 0
-  "$NOTIFY" "$title" "$message" 0
-  rm -f "$STATE_DIR/$key"
-  echo "${key}: recovery sent"
+# Sends one recovery notice for whichever of the keys are raised.
+clear_alerts() {
+  local title="$1" message="$2" key
+  local -a cleared=()
+  shift 2
+  for key in "$@"; do
+    [ -e "$STATE_DIR/$key" ] && cleared+=("$key")
+  done
+  [ "${#cleared[@]}" -gt 0 ] || return 0
+
+  "$NOTIFY" "$title" "${message} Cleared: ${cleared[*]}." 0
+  for key in "${cleared[@]}"; do rm -f "${STATE_DIR:?}/$key"; done
+  echo "recovery sent: ${cleared[*]}"
 }
 
-# Keeps the end of $2 so that $1 plus it fits Pushover's 1024 characters.
-fit() {
+# Prints $1 then as much of the end of $2 as fits Pushover's 1024 characters.
+keep_tail_within_limit() {
   local head="$1" body="$2" room
   room=$((1024 - ${#head}))
   [ "${#body}" -le "$room" ] || body="...${body: -$((room - 3))}"
@@ -60,107 +72,104 @@ backup_failed() {
   local unit="${1:?unit}" log
   logger -t dash-backup -p user.err "${HOST} backup FAILED: ${unit}. See journalctl -u ${unit}"
   log="$(journalctl -u "$unit" -n 10 --no-pager -o cat 2>&1 || true)"
-  raise backup-failed "Dash backup FAILED on ${HOST}" \
-    "$(fit "Host: ${HOST}"$'\n'"Unit: ${unit}"$'\n\n'"Last journal lines:"$'\n' "$log")" 1 always
+  raise_alert backup-failed "Dash backup FAILED on ${HOST}" \
+    "$(keep_tail_within_limit "Host: ${HOST}"$'\n'"Unit: ${unit}"$'\n\n'"Last journal lines:"$'\n' "$log")" 1 always
 }
 
 backup_ok() {
-  clear_alert backup-failed "Dash backups recovered on ${HOST}" \
-    "A ${1:-} backup of stanza ${STANZA} finished on ${HOST}."
+  clear_alerts "Dash backups recovered on ${HOST}" \
+    "A ${1:-} backup of stanza ${STANZA} finished on ${HOST}." backup-failed
 }
 
 check_age() {
-  local info newest age
-  if ! info="$(runuser -u postgres -- pgbackrest --stanza="$STANZA" info --output=json 2>&1)"; then
-    raise backup-stale "Dash backups: cannot read backup info on ${HOST}" \
-      "$(fit $'pgbackrest info failed:\n' "$info")" 1
+  local info newest age err
+  err="$(mktemp)"
+  if ! info="$(runuser -u postgres -- pgbackrest --stanza="$STANZA" info --output=json 2>"$err")" ||
+    ! newest="$(jq -er --arg s "$STANZA" \
+      '[.[] | select(.name == $s) | .backup[]?.timestamp.stop] | max // ""' <<<"$info" 2>>"$err")"; then
+    raise_alert backup-stale "Dash backups: cannot read backup info on ${HOST}" \
+      "$(keep_tail_within_limit $'pgbackrest info failed:\n' "$(cat "$err")${info}")" 1
+    rm -f "$err"
     return 0
   fi
-  newest="$(jq -r --arg s "$STANZA" \
-    '[.[] | select(.name == $s) | .backup[]?.timestamp.stop] | max // empty' <<<"$info")"
+  rm -f "$err"
+
   if [ -z "$newest" ]; then
-    raise backup-stale "Dash backups: no backup found on ${HOST}" \
-      "$(fit "pgBackRest has no backups for stanza ${STANZA}. Status: " \
+    raise_alert backup-stale "Dash backups: no backup found on ${HOST}" \
+      "$(keep_tail_within_limit "pgBackRest has no backups for stanza ${STANZA}. Status: " \
         "$(jq -r --arg s "$STANZA" '.[] | select(.name == $s) | .status.message' <<<"$info")")" 1
     return 0
   fi
+
   age=$(($(now) - newest))
   if [ "$age" -gt $((MAX_AGE_HOURS * 3600)) ]; then
-    raise backup-stale "Dash backups: newest is $((age / 3600))h old on ${HOST}" \
-      "The newest ${STANZA} backup finished $(date -ud "@${newest}" '+%F %T UTC'), over ${MAX_AGE_HOURS}h ago. On ${HOST}: systemctl list-timers 'dash-*' and journalctl -u 'dash-pgbackrest@*'." 1
-  else
-    echo "newest backup is $((age / 3600))h old: ok"
-    clear_alert backup-stale "Dash backups: fresh again on ${HOST}" \
-      "The newest ${STANZA} backup finished $(date -ud "@${newest}" '+%F %T UTC')."
+    raise_alert backup-stale "Dash backups: newest is $((age / 3600))h old on ${HOST}" \
+      "The newest ${STANZA} backup finished $(utc "$newest"), over ${MAX_AGE_HOURS}h ago. On ${HOST}: systemctl list-timers 'dash-*' and journalctl -u 'dash-pgbackrest@*'." 1
+    return 0
   fi
+  echo "newest backup is $((age / 3600))h old: ok"
+  clear_alerts "Dash backups: fresh again on ${HOST}" \
+    "The newest ${STANZA} backup finished $(utc "$newest")." backup-stale
 }
 
 # Sets problem (archive-check, archive-failing, archive-stalled or empty) and
-# detail from one look at pg_stat_archiver.
+# detail from pg_stat_archiver and the .ready files waiting in pg_wal. An idle
+# database has no .ready files, so it never looks stalled.
 archive_status() {
-  local row in_recovery archived_at failed_at archived_wal failed_wal lsn seg_size ts
-  local seg_no pending_bytes
+  local row err in_recovery archived_at failed_at archived_wal failed_wal ready oldest_ready
   problem="" detail=""
+  err="$(mktemp)"
   if ! row="$(runuser -u postgres -- psql -XAtq -F ' ' -v ON_ERROR_STOP=1 -c "
       SELECT pg_is_in_recovery(),
-        coalesce(extract(epoch FROM last_archived_time)::bigint, 0),
-        coalesce(extract(epoch FROM last_failed_time)::bigint, 0),
-        coalesce(last_archived_wal, '-'), coalesce(last_failed_wal, '-'),
-        CASE WHEN pg_is_in_recovery() THEN 0
-          ELSE pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint END,
-        (SELECT setting FROM pg_settings WHERE name = 'wal_segment_size'),
-        extract(epoch FROM now())::bigint
-      FROM pg_stat_archiver" 2>&1)"; then
+        coalesce(extract(epoch FROM a.last_archived_time)::bigint, 0),
+        coalesce(extract(epoch FROM a.last_failed_time)::bigint, 0),
+        coalesce(a.last_archived_wal, '-'), coalesce(a.last_failed_wal, '-'),
+        r.n, coalesce(extract(epoch FROM now() - r.oldest)::bigint, 0)
+      FROM pg_stat_archiver a,
+        (SELECT count(*) AS n, min(modification) AS oldest
+         FROM pg_ls_archive_statusdir() WHERE name LIKE '%.ready') r" 2>"$err")"; then
     problem=archive-check
-    detail="Could not query Postgres:"$'\n'"${row}"
+    detail="Could not query Postgres:"$'\n'"$(cat "$err")${row}"
+    rm -f "$err"
     return 0
   fi
-  read -r in_recovery archived_at failed_at archived_wal failed_wal lsn seg_size ts <<<"$row"
+  rm -f "$err"
+
+  read -r in_recovery archived_at failed_at archived_wal failed_wal ready oldest_ready <<<"$row" || true
+  if ! [[ "$in_recovery" =~ ^[tf]$ && "$archived_at" =~ ^[0-9]+$ && "$failed_at" =~ ^[0-9]+$ &&
+    "$ready" =~ ^[0-9]+$ && "$oldest_ready" =~ ^-?[0-9]+$ ]]; then
+    problem=archive-check
+    detail="Unexpected pg_stat_archiver row:"$'\n'"${row}"
+    return 0
+  fi
   [ "$in_recovery" = f ] || return 0
+
   if [ "$failed_at" -gt "$archived_at" ]; then
     problem=archive-failing
-    detail="archive_command last failed $(date -ud "@${failed_at}" '+%F %T UTC') on ${failed_wal}. Last success: ${archived_wal}. See journalctl -u postgresql@18-main and the pgBackRest log in /var/log/pgbackrest."
-    return 0
-  fi
-  # A WAL segment name is timeline, then the segment number in two halves.
-  # Anything else (a .history or .backup file) waits for the next segment.
-  [ "$archived_at" -gt 0 ] && [[ "$archived_wal" =~ ^[0-9A-F]{24}(\.partial)?$ ]] || return 0
-  seg_no=$((16#${archived_wal:8:8} * (16#100000000 / seg_size) + 16#${archived_wal:16:8}))
-  # Bytes of WAL past the end of the segment after the last archived one: if
-  # positive or zero, at least one finished segment is waiting. An idle
-  # database stays inside that next segment and never trips this.
-  pending_bytes=$((lsn - (seg_no + 2) * seg_size))
-  if [ "$pending_bytes" -ge 0 ] && [ $((ts - archived_at)) -gt $((STALL_MINUTES * 60)) ]; then
+    detail="archive_command last failed $(utc "$failed_at") on ${failed_wal}. Last success: ${archived_wal}. ${ready} WAL files waiting. See journalctl -u postgresql@18-main and the pgBackRest log in /var/log/pgbackrest."
+  elif [ "$ready" -gt 0 ] && [ "$oldest_ready" -gt $((STALL_MINUTES * 60)) ]; then
     problem=archive-stalled
-    detail="No WAL archived for $(((ts - archived_at) / 60)) minutes, but finished segments are waiting. Last archived: ${archived_wal} at $(date -ud "@${archived_at}" '+%F %T UTC')."
+    detail="${ready} WAL files are waiting to be archived; the oldest for $((oldest_ready / 60)) minutes. Last archived: ${archived_wal}."
   fi
 }
 
 check_archive() {
-  local problem detail key
-  local -a cleared
+  local problem detail
   archive_status
   if [ -n "$problem" ]; then
     # The archiver retries every minute; give a blip time to clear.
     sleep "$RECHECK_SECONDS"
     archive_status
   fi
+
   case "$problem" in
-    archive-check) raise archive-check "Dash: cannot check WAL archiving on ${HOST}" "$(fit "" "$detail")" 1 ;;
-    archive-failing) raise archive-failing "Dash: WAL archiving FAILING on ${HOST}" "$detail" 1 ;;
-    archive-stalled) raise archive-stalled "Dash: WAL archiving stalled on ${HOST}" "$detail" 1 ;;
+    archive-check) raise_alert archive-check "Dash: cannot check WAL archiving on ${HOST}" "$(keep_tail_within_limit "" "$detail")" 1 ;;
+    archive-failing) raise_alert archive-failing "Dash: WAL archiving FAILING on ${HOST}" "$detail" 1 ;;
+    archive-stalled) raise_alert archive-stalled "Dash: WAL archiving stalled on ${HOST}" "$detail" 1 ;;
     *)
       echo "WAL archiving: ok"
-      # Recoveries only once everything checks out, in one notice.
-      cleared=()
-      for key in archive-check archive-failing archive-stalled; do
-        [ -e "$STATE_DIR/$key" ] && cleared+=("$key")
-      done
-      if [ "${#cleared[@]}" -gt 0 ]; then
-        "$NOTIFY" "Dash: WAL archiving OK again on ${HOST}" "Cleared: ${cleared[*]}." 0
-        for key in "${cleared[@]}"; do rm -f "${STATE_DIR:?}/$key"; done
-        echo "recovery sent: ${cleared[*]}"
-      fi
+      clear_alerts "Dash: WAL archiving OK again on ${HOST}" "Archiving on ${HOST} checks out." \
+        archive-check archive-failing archive-stalled
       ;;
   esac
 }

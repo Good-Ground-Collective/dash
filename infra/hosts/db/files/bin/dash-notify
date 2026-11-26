@@ -12,13 +12,11 @@ set -euo pipefail
 CREDS="${DASH_PUSHOVER_ENV:-/etc/dash/pushover.env}"
 API=https://api.pushover.net/1/messages.json
 
-usage() {
+priority="${3:-0}"
+if [ $# -lt 2 ] || [ $# -gt 3 ] || [ -z "$1" ] || [ -z "$2" ] || ! [[ "$priority" =~ ^(-2|-1|0|1)$ ]]; then
   echo "usage: dash-notify <title> <message> [priority -2..1]" >&2
   exit 2
-}
-[ $# -ge 2 ] && [ $# -le 3 ] && [ -n "$1" ] && [ -n "$2" ] || usage
-priority="${3:-0}"
-[[ "$priority" =~ ^(-2|-1|0|1)$ ]] || usage
+fi
 # Pushover's limits: 250 characters of title, 1024 of message.
 title="${DASH_NOTIFY_TITLE_PREFIX:-}$1"
 title="${title:0:250}"
