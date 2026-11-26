@@ -20,7 +20,7 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 | ✓ | 02 Design direction: concluded in #2 → Characters theme first (#17, #18); Loud, disciplined (#19), Newspaper (#20) and the briefing (#21) later | |
 | ✓ | 04 GitHub integration: concluded in #4 → #25–#29 (owned App + guest PATs, read-only feed) | |
 | ✓ | 05 Stack: concluded in #5 → #32–#34 (pnpm/Turbo, SvelteKit 3 + Fastify on two origins, Drizzle, DBOS, SSE for realtime, preflight) | |
+| ✓ | 06 Hosting + 10 IaC: concluded in #6 and #10 → #42 (Linode boxes rebuilt with OpenTofu, self-hosted Postgres with pgBackRest, Kamal deploys, release pipeline) | |
 | 3½ | [11 Objectives](./11-objectives.md) | The home screen leads with objectives, and nothing defines them yet. |
 | 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |
-| 6 | [06 Hosting and deploy](./06-hosting-and-deploy.md) + [10 Infrastructure as code](./10-infrastructure-as-code.md) | One session. Needed before the first deploy. Can run alongside the slice-1 build. |
 | later | [07 Communication standards](./07-communication-standards.md) → [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
