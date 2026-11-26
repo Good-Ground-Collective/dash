@@ -1,0 +1,43 @@
+service: dash-web
+image: good-ground-collective/dash-web
+
+servers:
+  web:
+    hosts:
+      - 100.107.66.72
+
+proxy:
+  host: dash.doublel.studio
+  ssl: true
+  app_port: 3000
+  healthcheck:
+    path: /healthz
+
+registry:
+  server: ghcr.io
+  username:
+    - KAMAL_REGISTRY_USERNAME
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  context: .
+  dockerfile: apps/web/Dockerfile
+  secrets:
+    - NODE_AUTH_TOKEN
+
+env:
+  clear:
+    ORIGIN: https://dash.doublel.studio
+    API_BASE_URL: https://api.dash.doublel.studio
+
+ssh:
+  user: dash
+  config: false
+
+logging:
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: 5

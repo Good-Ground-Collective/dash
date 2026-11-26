@@ -14,6 +14,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -73,3 +83,27 @@ jobs:
       - name: End-to-end test all packages
         if: github.event_name == 'push'
         run: pnpm turbo run test:e2e
+
+  tofu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/tofu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.12.6
+          tofu_wrapper: false
+
+      - run: shellcheck bootstrap.sh tofu.sh
+
+      - run: tofu fmt -check -recursive
+
+      - run: tofu init -backend=false -input=false -lockfile=readonly
+
+      - run: tofu validate

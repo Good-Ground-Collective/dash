@@ -124,6 +124,26 @@ Benches and agents authenticate with API keys from Better Auth's api-key plugin.
 
 Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequest` hook, which accepts `Authorization: Bearer dash_…` or `x-api-key`, and read the caller with `agentAuthentication.caller(request)`. The first such route is `POST /api/agents/:agentName/heartbeats` (`heartbeat:write`, optional body `{ "sentAt": "<ISO time>" }`; an empty body is fine, with or without `Content-Type: application/json`), which stores a row in `agent_heartbeat` and answers 201.
 
+## Deploys
+
+Production is one Linode box, `dash-app`, running both apps under [Kamal 2](https://kamal-deploy.org) behind kamal-proxy, which gets Let's Encrypt certificates: web at `https://dash.doublel.studio` and Mission Control at `https://api.dash.doublel.studio`. Each app has its own config in `deploy/`. Kamal reaches the box over the tailnet as `dash`.
+
+Images are public on GHCR as `ghcr.io/good-ground-collective/dash-web` and `ghcr.io/good-ground-collective/dash-mission-control`, tagged with the commit SHA. They are built for linux/amd64 with Node 24 slim, run as the `node` user, and get the GitHub Packages token only as a BuildKit secret in a build stage that never ships. `bin/image` builds an app's image, then runs `bin/image-secret-scan`, which fails if the image history, config or filesystem holds a token, a private key, a `.npmrc` or `.env` file, or the value of any production secret. Only then does `--push` publish it. `bin/test-image-secret-scan` checks the scan itself against a canary image with planted credentials.
+
+`bin/kamal` runs Kamal from its pinned official image, so you need Docker but not Ruby. Secrets come from the environment through `.kamal/secrets`, which names variables and holds no values. Locally, the wrapper fills them from `gh` and from the `DASH_*` lines of `~/.config/dash/infra.env`. Kamal logs the server in to GHCR on every deploy, and the wrapper logs it out afterwards. Set `KAMAL_REGISTRY_PASSWORD` to a token with only `read:packages` so a broad `gh` token never lands on the box, even briefly. `bin/image --push` uses `GHCR_PUSH_TOKEN` instead, which needs `write:packages` and defaults to the `gh` token. CI will read the `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` repository secrets. From the repository root:
+
+```sh
+bin/image web --push
+bin/kamal deploy -c deploy/web.yml --skip-push --version "$(git rev-parse HEAD)"
+
+bin/image mission-control --push
+bin/kamal deploy -c deploy/mission-control.yml --skip-push --version "$(git rev-parse HEAD)"
+```
+
+The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
+
+Mission Control migrates its database as the container boots, before it listens. kamal-proxy moves traffic to a new container only once its `/healthz` reports the database and workflows ok, so a failed migration leaves the old container serving. Migrations must therefore stay compatible with the version still running. Server-Sent Events on `/events` pass through kamal-proxy unbuffered: it stops buffering `text/event-stream` responses, and its 30-second response timeout covers only the wait for headers.
+
 ## CI
 
 `.github/workflows/ci.yml` installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything. The repository needs Actions read access to the preflight package, granted in the package's settings.

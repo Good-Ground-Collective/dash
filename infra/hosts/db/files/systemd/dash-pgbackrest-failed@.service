@@ -1,0 +1,6 @@
+[Unit]
+Description=Report a failed dash-db backup unit (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemd-cat -t dash-backup -p err /bin/echo "dash-db backup FAILED: %i. See journalctl -u %i"
