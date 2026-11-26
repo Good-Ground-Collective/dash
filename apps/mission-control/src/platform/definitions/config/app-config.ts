@@ -20,6 +20,13 @@ export const environmentSchema = z.enum(['development', 'test', 'production']);
 
 export const postgresUrlSchema = z.url({ protocol: /^postgres(ql)?$/u });
 
+export const webOriginSchema = z
+  .url({ protocol: /^https?$/u })
+  .refine((value) => URL.canParse(value) && new URL(value).origin === value, {
+    message:
+      'Expected a bare origin such as https://example.com, with no path or trailing slash',
+  });
+
 export const appConfigSchema = z
   .object({
     NODE_ENV: environmentSchema,
@@ -27,7 +34,7 @@ export const appConfigSchema = z
     PORT: z.coerce.number().int().min(0).max(65_535).default(3000),
     LOG_LEVEL: logLevelSchema.default('info'),
     DATABASE_URL: postgresUrlSchema,
-    DEV_WEB_ORIGIN: z.url().default('http://localhost:5173'),
+    DEV_WEB_ORIGIN: webOriginSchema.default('http://localhost:5173'),
   })
   .transform((env) => ({
     environment: env.NODE_ENV,

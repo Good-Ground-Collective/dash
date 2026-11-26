@@ -5,20 +5,20 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 
 import type {
   HttpModule,
   ZodFastifyInstance,
 } from '#src/platform/contracts/http-module.ts';
-import { z } from 'zod';
-
 import {
   environmentSchema,
   logLevelSchema,
+  webOriginSchema,
 } from '#src/platform/definitions/config/app-config.ts';
 
 export const httpServerConfigSchema = z.object({
-  corsOrigins: z.array(z.url()).readonly(),
+  corsOrigins: z.array(webOriginSchema).readonly(),
   environment: environmentSchema,
   logLevel: logLevelSchema,
 });

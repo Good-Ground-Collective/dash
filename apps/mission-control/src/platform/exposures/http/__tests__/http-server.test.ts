@@ -43,17 +43,20 @@ describe('HttpServer', () => {
     expect(refused.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('rejects a CORS origin that is not a URL', () => {
-    expect(
-      () =>
-        new HttpServer({
-          config: {
-            corsOrigins: ['not a url'],
-            environment: 'test',
-            logLevel: 'silent',
-          },
-          modules: [],
-        }),
-    ).toThrow(ZodError);
-  });
+  it.each(['not a url', 'http://localhost:5173/'])(
+    'rejects %j as a CORS origin',
+    (origin) => {
+      expect(
+        () =>
+          new HttpServer({
+            config: {
+              corsOrigins: [origin],
+              environment: 'test',
+              logLevel: 'silent',
+            },
+            modules: [],
+          }),
+      ).toThrow(ZodError);
+    },
+  );
 });

@@ -22,6 +22,17 @@ describe('AppConfig', () => {
     ).toThrow(ConfigError);
   });
 
+  it('rejects a local web origin with a trailing slash', () => {
+    expect(
+      () =>
+        new AppConfig({
+          NODE_ENV: 'development',
+          DATABASE_URL: databaseUrl,
+          DEV_WEB_ORIGIN: 'http://localhost:5173/',
+        }),
+    ).toThrow(ConfigError);
+  });
+
   it('allows only the production web origin outside development', () => {
     const config = new AppConfig({
       NODE_ENV: 'production',
