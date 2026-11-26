@@ -31,7 +31,12 @@ export const appConfigSchema = z
   .object({
     NODE_ENV: environmentSchema,
     HOST: z.string().min(1).default('127.0.0.1'),
-    PORT: z.coerce.number().int().min(0).max(65_535).default(3000),
+    PORT: z
+      .string()
+      .regex(/^\d+$/u, 'Expected a port number')
+      .transform(Number)
+      .pipe(z.number().int().min(0).max(65_535))
+      .default(3000),
     LOG_LEVEL: logLevelSchema.default('info'),
     DATABASE_URL: postgresUrlSchema,
     DEV_WEB_ORIGIN: webOriginSchema.default('http://localhost:5173'),

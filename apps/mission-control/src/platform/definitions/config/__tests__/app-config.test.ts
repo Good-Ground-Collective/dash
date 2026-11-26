@@ -33,6 +33,17 @@ describe('AppConfig', () => {
     ).toThrow(ConfigError);
   });
 
+  it('rejects a blank port instead of binding a random one', () => {
+    expect(
+      () =>
+        new AppConfig({
+          NODE_ENV: 'production',
+          DATABASE_URL: databaseUrl,
+          PORT: '',
+        }),
+    ).toThrow(ConfigError);
+  });
+
   it('allows only the production web origin outside development', () => {
     const config = new AppConfig({
       NODE_ENV: 'production',
