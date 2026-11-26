@@ -1,0 +1,31 @@
+name: flight-rules review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flight-rules-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Reject fork pull requests
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::dash does not accept pull requests from forks"
+          exit 1
+
+      - uses: Good-Ground-Collective/flight-rules-review@4bd923a6aa22c35e65f7778fe2fe97834a16bb59 # v1.0.0
+        with:
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          app-id: ${{ vars.FLIGHT_RULES_REVIEW_APP_ID }}
+          app-private-key: ${{ secrets.FLIGHT_RULES_REVIEW_PRIVATE_KEY }}
+          decision-owners: SethAngell
