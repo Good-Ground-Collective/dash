@@ -13,6 +13,7 @@
 5. **Secrets on benches:** storing provider keys or Claude OAuth tokens centrally is a big security step. Where do they live, how are they encrypted, and who can read them back?
 6. **Service manager:** launchd and systemd install via `bench-daemon install`.
 7. **Offline:** buffer and backfill, or drop metrics but keep heartbeats?
+8. **Agents on a bench:** a bench key can report heartbeats under any agent name today, including agents with their own service accounts (accepted when #45 merged). How do we register which agents belong to a bench, so Dash can reject names outside that list?
 
 ## Done when
 The pairing model, metric set, retention and secret-handling stance are agreed.
