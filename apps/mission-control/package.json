@@ -20,6 +20,7 @@
   "dependencies": {
     "@dbos-inc/dbos-sdk": "catalog:",
     "@fastify/cors": "catalog:",
+    "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "fastify": "catalog:",
     "fastify-type-provider-zod": "catalog:",
