@@ -35,7 +35,7 @@ fi
 cipher_pass="$(env_get DASH_PGBACKREST_CIPHER_PASS)"
 if [ -z "$cipher_pass" ]; then
   has_secrets="$(remote "$DB_HOST" "sudo sh -c 'test -e /etc/pgbackrest/conf.d/dash-secrets.conf && echo yes || echo no'")" ||
-    die "could not check ${DB_HOST} for a backup config (SSH or sudo failed); nothing was changed"
+    die "could not check ${DB_HOST} for a backup config (SSH or sudo failed); no key was minted and dash-db was not touched"
   if [ "$has_secrets" = yes ]; then
     die "dash-db already has a backup config but ${ENV_FILE} has no DASH_PGBACKREST_CIPHER_PASS. Copy repo1-cipher-pass back from /etc/pgbackrest/conf.d/dash-secrets.conf before re-running."
   fi
@@ -51,7 +51,7 @@ s3_key=""
 s3_secret=""
 if [ -n "$key_id" ]; then
   box_key="$(remote "$DB_HOST" "sudo sh -c 'f=/etc/pgbackrest/conf.d/dash-secrets.conf; test ! -e \$f || sed -n s/^repo1-s3-key=//p \$f'")" ||
-    die "could not read the backup key on ${DB_HOST} (SSH or sudo failed); nothing was changed"
+    die "could not read the backup key on ${DB_HOST} (SSH or sudo failed); no key was minted and dash-db was not touched"
   [ "$box_key" = "$(jq -r .access_key <<<"$key_json")" ] ||
     die "key ${KEY_LABEL} (id ${key_id}) exists but ${DB_HOST} does not hold it. Revoke it in Linode and re-run; a secret cannot be read back."
   echo "key ${KEY_LABEL}: exists (id ${key_id}), already on ${DB_HOST}"

@@ -31,6 +31,7 @@ rm -f /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/pgdg.sources \
 rm -rf /etc/pgbackrest /etc/pgbackrest.conf /etc/postgresql /etc/postgresql-common \
   /var/lib/postgresql /var/log/postgresql /var/log/pgbackrest /var/spool/pgbackrest \
   /tmp/pgbackrest /run/postgresql
+
 if id postgres >/dev/null 2>&1; then
   deluser --quiet postgres
 fi
