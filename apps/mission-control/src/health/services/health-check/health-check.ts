@@ -34,12 +34,14 @@ export class ProbeHealthCheck implements HealthCheck {
     const results = await Promise.allSettled(
       this.probes.map((probe) => this.withTimeout(probe)),
     );
+
     const checks = Object.fromEntries(
       this.probes.map((probe, index) => [
         probe.name,
         results[index]?.status === 'fulfilled' ? 'ok' : 'failing',
       ]),
     ) satisfies HealthReport['checks'];
+
     const healthy = Object.values(checks).every((status) => status === 'ok');
     return { status: healthy ? 'ok' : 'unavailable', checks };
   }

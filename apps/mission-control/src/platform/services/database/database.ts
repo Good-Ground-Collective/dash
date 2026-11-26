@@ -24,6 +24,7 @@ export class PostgresDatabase implements Database {
     this.pool = new pg.Pool({
       connectionString: url,
       connectionTimeoutMillis: 5000,
+      query_timeout: 5000,
     });
     this.orm = drizzle({ client: this.pool });
   }
