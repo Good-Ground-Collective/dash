@@ -13,12 +13,16 @@ concurrency:
 
 jobs:
   review:
-    if: >-
-      !github.event.pull_request.draft
-      && github.event.pull_request.head.repo.full_name == github.repository
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Reject fork pull requests
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::dash does not accept pull requests from forks"
+          exit 1
+
       - uses: Good-Ground-Collective/flight-rules-review@4bd923a6aa22c35e65f7778fe2fe97834a16bb59 # v1.0.0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
