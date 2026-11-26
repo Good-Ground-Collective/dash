@@ -17,6 +17,7 @@
     "@fontsource-variable/geist": "catalog:",
     "@fontsource-variable/geist-mono": "catalog:",
     "@internationalized/date": "catalog:",
+    "@simplewebauthn/browser": "catalog:",
     "bits-ui": "catalog:",
     "zod": "catalog:"
   },

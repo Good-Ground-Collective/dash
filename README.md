@@ -62,6 +62,13 @@ The theme comes from the `dash-theme` and `dash-mode` cookies (`characters`; `li
 
 `pnpm turbo run test:e2e --filter @dash/web` builds the app and runs the Playwright smoke test. Run `pnpm --filter @dash/web exec playwright install chromium` once first.
 
+The passkey e2e (`passkeys.e2e.test.ts`) drives setup, passkey settings, sign-out and autofill sign-in with Chromium's virtual authenticator. By default it runs against a small Mission Control stub, because CI has no Postgres. To run it against the real thing, start Mission Control on a fresh database with `DEV_WEB_ORIGIN=http://localhost:4320`, copy the setup token it logs, then run:
+
+```sh
+DASH_E2E_API_BASE_URL=http://localhost:3000 DASH_E2E_SETUP_TOKEN=<token> \
+  pnpm --filter @dash/web exec playwright test --project passkeys
+```
+
 ## Lint gates
 
 ESLint uses preflight's `recommended` config, which includes the blocking `go-no-go` set, and its `layout` config with the module → role → concept layout under `src/`. Packages and the repo root pick the shared config up from `@dash/config/eslint`.
@@ -94,6 +101,10 @@ Each module under `src/` is a folder with a `module.ts`, and its routes register
 `src/auth` runs [Better Auth](https://www.better-auth.com) under `/api/auth`, stored in Postgres through Drizzle. Better Auth's `user` table holds every principal, and its `kind` column says what it is: `user` for a person, `service` for a bench or agent. A service principal has a `service_profile` row naming its owner, gets a synthetic `svc-<id>@service.invalid` email and can't hold a web session or register a passkey.
 
 Sessions last 30 days and slide forward once a day old. The session cookie is HttpOnly and SameSite=Lax. In production it is also Secure and set on `dash.doublel.studio`, so the web app's server can read it. Locally it is host-only and works over plain http. Origins in the CORS allowlist are Better Auth's trusted origins.
+
+People sign in only with passkeys. The relying party is the web app: RP ID `dash.doublel.studio` and origin `https://dash.doublel.studio` in production, `localhost` and `DEV_WEB_ORIGIN` locally. Adding, renaming or removing a passkey needs a passkey sign-in from the last 15 minutes, and nobody can remove their last passkey.
+
+The first person signs up with a setup token. While nobody has signed up, every boot logs a new one-time token (a `warn` line with `setupToken`) and stores only its hash. Open `/setup` in the web app, enter the token with your name and email, and enrol a passkey: that creates the account and signs you in. Setup closes for good once anyone has signed up, and a restart then logs nothing.
 
 `BETTER_AUTH_SECRET` (at least 32 characters, for example from `openssl rand -base64 32`) signs the cookies, and `BETTER_AUTH_URL` is Mission Control's public origin. `.env.example` has a placeholder secret for local use only, and production refuses it. In production `BETTER_AUTH_URL` must be https and on `dash.doublel.studio` or a subdomain, or browsers would drop the session cookie.
 

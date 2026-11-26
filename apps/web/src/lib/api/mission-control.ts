@@ -13,6 +13,20 @@ export const sessionResponseSchema = z
   .object({ user: viewerSchema })
   .nullable();
 
+export const passkeySchema = z.object({
+  id: z.string(),
+  name: z.string().nullish(),
+  createdAt: z.coerce.date(),
+  deviceType: z.string(),
+  backedUp: z.boolean(),
+});
+
+export const setupStatusSchema = z.object({
+  open: z
+    .boolean()
+    .describe('True while nobody has signed up and a setup token is waiting.'),
+});
+
 export const httpMissionControlPropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
   fetch: z.custom<typeof fetch>((value) => value instanceof Function),
@@ -20,6 +34,8 @@ export const httpMissionControlPropsSchema = z.object({
 });
 
 export type Viewer = z.infer<typeof viewerSchema>;
+export type Passkey = z.infer<typeof passkeySchema>;
+export type SetupStatus = z.infer<typeof setupStatusSchema>;
 export type HttpMissionControlProps = z.input<
   typeof httpMissionControlPropsSchema
 >;
@@ -30,8 +46,16 @@ export interface MissionControl {
   getViewer(): Promise<Viewer | null>;
 }
 
+/** Reads the passkey pages render from. */
+export interface PasskeyReads {
+  /** Whether the first account can still be created. */
+  getSetupStatus(): Promise<SetupStatus>;
+  /** The signed-in person's passkeys, oldest first. */
+  listPasskeys(): Promise<Passkey[]>;
+}
+
 /** Mission Control over HTTP. Calls include credentials; on the server only the session cookie is forwarded. */
-export class HttpMissionControl implements MissionControl {
+export class HttpMissionControl implements MissionControl, PasskeyReads {
   private readonly baseUrl: URL;
   private readonly fetcher: typeof fetch;
   private readonly timeoutMs: number;
@@ -50,6 +74,23 @@ export class HttpMissionControl implements MissionControl {
       schema: sessionResponseSchema,
     });
     return session?.user ?? null;
+  }
+
+  async getSetupStatus(): Promise<SetupStatus> {
+    return this.getJson({
+      path: 'api/auth/setup/status',
+      schema: setupStatusSchema,
+    });
+  }
+
+  async listPasskeys(): Promise<Passkey[]> {
+    const passkeys = await this.getJson({
+      path: 'api/auth/passkey/list-user-passkeys',
+      schema: z.array(passkeySchema),
+    });
+    return passkeys.toSorted(
+      (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+    );
   }
 
   private async getJson<T>(props: {

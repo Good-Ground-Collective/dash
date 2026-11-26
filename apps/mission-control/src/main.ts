@@ -24,6 +24,7 @@ const auth = new AuthModule({
   }),
   secret: config.authSecret,
   baseUrl: config.authBaseUrl,
+  webOrigin: config.webOrigin,
   trustedOrigins: config.corsOrigins,
   cookieDomain: config.authCookieDomain,
   secureCookies: config.secureCookies,

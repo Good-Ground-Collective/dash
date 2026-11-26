@@ -68,6 +68,18 @@ describe('AppConfig', () => {
 });
 
 describe('AppConfig auth settings', () => {
+  it('runs passkey ceremonies on the production web origin in production', () => {
+    expect(new AppConfig(productionEnv).webOrigin).toBe(
+      'https://dash.doublel.studio',
+    );
+  });
+
+  it('runs passkey ceremonies on the local web origin in development', () => {
+    expect(new AppConfig(developmentEnv).webOrigin).toBe(
+      'http://localhost:5173',
+    );
+  });
+
   it('shares secure auth cookies with dash.doublel.studio in production', () => {
     const config = new AppConfig(productionEnv);
 

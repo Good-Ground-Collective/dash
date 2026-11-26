@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@dbos-inc/dbos-sdk": "catalog:",
     "@fastify/cors": "catalog:",
     "better-auth": "catalog:",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
+    "@simplewebauthn/server": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "drizzle-kit": "catalog:",
