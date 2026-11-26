@@ -62,6 +62,8 @@ The theme comes from the `dash-theme` and `dash-mode` cookies (`characters`; `li
 
 `pnpm turbo run test:e2e --filter @dash/web` builds the app and runs the Playwright smoke test. Run `pnpm --filter @dash/web exec playwright install chromium` once first.
 
+The service accounts e2e (`service-accounts.e2e.test.ts`) runs against its own Mission Control stub and signs in through the stub's `/__stub/sign-in`.
+
 The passkey e2e (`passkeys.e2e.test.ts`) drives setup, passkey settings, sign-out and autofill sign-in with Chromium's virtual authenticator. By default it runs against a small Mission Control stub, because CI has no Postgres. To run it against the real thing, start Mission Control on a fresh database with `DEV_WEB_ORIGIN=http://localhost:4320`, copy the setup token it logs, then run:
 
 ```sh
@@ -109,6 +111,18 @@ The first person signs up with a setup token. While nobody has signed up, every 
 `BETTER_AUTH_SECRET` (at least 32 characters, for example from `openssl rand -base64 32`) signs the cookies, and `BETTER_AUTH_URL` is Mission Control's public origin. `.env.example` has a placeholder secret for local use only, and production refuses it. In production `BETTER_AUTH_URL` must be https and on `dash.doublel.studio` or a subdomain, or browsers would drop the session cookie.
 
 Mission Control's tests don't need Postgres, and CI runs none: auth tests use Better Auth's memory adapter, and repositories are tested through in-memory fakes. Behaviour that lives in Postgres (transactions, foreign keys, check constraints) is checked by hand against the Compose database when a migration changes it.
+
+#### Service accounts and API keys
+
+Benches and agents authenticate with API keys from Better Auth's api-key plugin. Each key belongs to a service principal (`references: "user"`). People manage them at `/settings/service-accounts`, backed by `/api/auth/service-accounts/{list,create,revoke}` and `/api/auth/service-accounts/keys/{create,revoke}`. Creating or revoking needs a passkey sign-in from the last 15 minutes, like passkey changes. The plugin's own `/api/auth/api-key/*` endpoints are closed.
+
+- A **bench** account (`bench_id`, one per machine) may report for any agent on that bench. Agents aren't registered to benches yet, so in practice a bench key may report any agent name, even one that also has an agent account; the heartbeat's `bench_id` tells them apart. Its keys never expire.
+- An **agent** account (`agent_name`) may report only as that agent. Its keys expire after 90 days.
+- Keys start `dash_live_` in production and `dash_dev_` elsewhere. Only a hash is stored, the key is shown once, and its first characters are kept to recognise it. `last_used_at` updates on every use.
+- Scopes live in `src/auth/definitions/api-key-scopes`: `heartbeat:write` and `telemetry:write` so far. They are chosen when an account is created, and every key it is issued, including replacements, gets exactly those.
+- Revoking deletes the key, or the account with all its keys, so the next request with it fails.
+
+Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequest` hook, which accepts `Authorization: Bearer dash_…` or `x-api-key`, and read the caller with `agentAuthentication.caller(request)`. The first such route is `POST /api/agents/:agentName/heartbeats` (`heartbeat:write`, optional body `{ "sentAt": "<ISO time>" }`; an empty body is fine, with or without `Content-Type: application/json`), which stores a row in `agent_heartbeat` and answers 201.
 
 ## Deploys
 

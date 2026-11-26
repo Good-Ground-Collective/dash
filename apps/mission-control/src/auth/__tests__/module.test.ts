@@ -2,30 +2,13 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { makeSignature } from 'better-auth/crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type {
-  PrincipalKind,
-  ServicePrincipal,
-} from '#src/auth/contracts/principal.ts';
+import { InMemoryServicePrincipalRepository } from '#src/auth/__tests__/support/in-memory-service-principals.ts';
 import { AuthModule } from '#src/auth/module.ts';
-import type {
-  ServicePrincipalRecord,
-  ServicePrincipalRepository,
-} from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
 const secret = 'test-secret-that-is-at-least-32-characters';
 const webOrigin = 'http://localhost:5173';
-
-class StubServicePrincipalRepository implements ServicePrincipalRepository {
-  async create(record: ServicePrincipalRecord): Promise<ServicePrincipal> {
-    return { ...record, createdAt: new Date().toISOString() };
-  }
-
-  async findKind(): Promise<PrincipalKind | null> {
-    return null;
-  }
-}
 
 const running: ZodFastifyInstance[] = [];
 
@@ -39,9 +22,11 @@ class ServedAuth {
         verification: [],
         passkey: [],
         setupToken: [],
+        apikey: [],
       }),
     },
-    servicePrincipalRepository: new StubServicePrincipalRepository(),
+    servicePrincipalRepository: new InMemoryServicePrincipalRepository(),
+    apiKeyPrefix: 'dash_dev_',
     secret,
     baseUrl: 'http://localhost:3000',
     webOrigin,

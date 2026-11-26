@@ -1,8 +1,14 @@
-import { type Auth, betterAuth, type BetterAuthOptions } from 'better-auth';
+import {
+  type Auth,
+  betterAuth,
+  type BetterAuthOptions,
+  type BetterAuthPlugin,
+} from 'better-auth';
 import { z } from 'zod';
 
 import { principalKindSchema } from '#src/auth/contracts/principal.ts';
 import type { AuthStorage } from '#src/auth/repositories/auth-store/auth-store.ts';
+import { freshSessionSeconds } from '#src/auth/services/fresh-session/fresh-session.ts';
 import { WebAuthnPasskeys } from '#src/auth/services/passkeys/passkeys.ts';
 import {
   KindPrincipalGuard,
@@ -14,7 +20,6 @@ import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts'
 const daySeconds = 60 * 60 * 24;
 const sessionLifetimeSeconds = 30 * daySeconds;
 const sessionRefreshAfterSeconds = daySeconds;
-const freshSessionSeconds = 15 * 60;
 
 export const identitySettingsSchema = z.object({
   secret: z
@@ -91,7 +96,13 @@ export class BetterAuthIdentity implements Identity {
   readonly guard: PrincipalGuard = new KindPrincipalGuard();
   readonly setup: Setup = new TokenSetup();
 
-  constructor(props: { storage: AuthStorage } & IdentitySettings) {
+  constructor(
+    props: {
+      storage: AuthStorage;
+      /** Further plugins, such as API keys and the service-account endpoints. */
+      plugins?: readonly BetterAuthPlugin[];
+    } & IdentitySettings,
+  ) {
     const settings = identitySettingsSchema.parse(props);
     this.baseUrl = settings.baseUrl;
     const passkeys = new WebAuthnPasskeys({
@@ -107,7 +118,12 @@ export class BetterAuthIdentity implements Identity {
       secret: settings.secret,
       database: props.storage,
       trustedOrigins: [...settings.trustedOrigins],
-      plugins: [this.guard.plugin, this.setup.plugin, ...passkeys.plugins],
+      plugins: [
+        this.guard.plugin,
+        this.setup.plugin,
+        ...passkeys.plugins,
+        ...(props.plugins ?? []),
+      ],
       session: {
         expiresIn: sessionLifetimeSeconds,
         updateAge: sessionRefreshAfterSeconds,

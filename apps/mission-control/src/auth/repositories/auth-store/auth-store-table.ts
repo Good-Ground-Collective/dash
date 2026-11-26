@@ -148,3 +148,44 @@ export const setupTokenTable = pgTable(
     check('setup_token_slot_check', sql`${table.slot} = 'first-person'`),
   ],
 );
+
+/** A service principal's API key, as the api-key plugin stores it: a hash of the key, never the key itself. */
+export const apikeyTable = pgTable(
+  'apikey',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    configId: text('config_id').notNull().default('default'),
+    name: text('name'),
+    start: text('start'),
+    referenceId: uuid('reference_id')
+      .notNull()
+      .references(() => userTable.id, { onDelete: 'cascade' }),
+    prefix: text('prefix'),
+    key: text('key').notNull(),
+    refillInterval: integer('refill_interval'),
+    refillAmount: integer('refill_amount'),
+    lastRefillAt: timestamp('last_refill_at', { withTimezone: true }),
+    enabled: boolean('enabled').notNull().default(true),
+    rateLimitEnabled: boolean('rate_limit_enabled').notNull().default(true),
+    rateLimitTimeWindow: integer('rate_limit_time_window'),
+    rateLimitMax: integer('rate_limit_max'),
+    requestCount: integer('request_count').notNull().default(0),
+    remaining: integer('remaining'),
+    lastRequest: timestamp('last_used_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    permissions: text('permissions'),
+    metadata: text('metadata'),
+  },
+  (table) => [
+    uniqueIndex('apikey_key_idx').on(table.key),
+    index('apikey_reference_id_idx').on(table.referenceId),
+    index('apikey_config_id_idx').on(table.configId),
+  ],
+);

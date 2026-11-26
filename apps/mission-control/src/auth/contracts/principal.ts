@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  apiKeyScopeSchema,
+  storedApiKeyScopesSchema,
+} from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+
 export const principalKindSchema = z
   .enum(['user', 'service'])
   .describe(
@@ -11,18 +16,35 @@ export type PrincipalKind = z.infer<typeof principalKindSchema>;
 /** Reserved by RFC 2606, so synthetic service principal emails can never be delivered. */
 export const serviceEmailDomain = 'service.invalid';
 
-export const newServicePrincipalSchema = z.object({
-  name: z.string().trim().min(1),
-  ownerUserId: z.uuid().describe('The human principal accountable for it.'),
-  benchId: z.string().trim().min(1).optional(),
-  agentName: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe('Set for an agent account. Unset for a bench account.'),
-  description: z.string().trim().min(1),
-});
+export const newServicePrincipalSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    ownerUserId: z.uuid().describe('The human principal accountable for it.'),
+    benchId: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe('Set for a bench account. Unset for an agent account.'),
+    agentName: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe('Set for an agent account. Unset for a bench account.'),
+    description: z.string().trim().min(1),
+    scopes: z
+      .array(apiKeyScopeSchema)
+      .default([])
+      .describe('The most its API keys may do. Every key gets these.'),
+  })
+  .refine(
+    (principal) =>
+      (principal.benchId === undefined) !== (principal.agentName === undefined),
+    {
+      message: 'Set exactly one of benchId (a bench) and agentName (an agent)',
+    },
+  );
 
 export type NewServicePrincipal = z.input<typeof newServicePrincipalSchema>;
 
@@ -36,6 +58,7 @@ export const servicePrincipalSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  scopes: storedApiKeyScopesSchema,
   createdAt: z.iso.datetime({ offset: true }),
 });
 

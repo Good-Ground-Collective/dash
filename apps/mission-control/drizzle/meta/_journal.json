@@ -22,6 +22,13 @@
       "when": 1795710484219,
       "tag": "0002_passkeys_setup_token",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795721079501,
+      "tag": "0003_service_accounts_api_keys",
+      "breakpoints": true
     }
   ]
 }

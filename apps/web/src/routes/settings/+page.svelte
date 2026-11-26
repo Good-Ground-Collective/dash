@@ -193,6 +193,14 @@
     </form>
   </section>
 
+  <section class="panel account" aria-labelledby="service-accounts-title">
+    <div>
+      <h2 id="service-accounts-title">Service accounts</h2>
+      <p class="muted">API keys your benches and agents report with.</p>
+    </div>
+    <a class="auth-button quiet" href="/settings/service-accounts">Manage</a>
+  </section>
+
   <section class="panel account" aria-labelledby="account-title">
     <div>
       <h2 id="account-title">Account</h2>
@@ -303,12 +311,6 @@
     background: var(--bg);
   }
 
-  :global(.auth-button.small) {
-    min-height: 2.25rem;
-    padding: 0 var(--space-3);
-    font-size: var(--font-size-sm);
-  }
-
   .add {
     display: flex;
     flex-wrap: wrap;
@@ -318,6 +320,10 @@
 
   .add .auth-field {
     flex: 1 1 16rem;
+  }
+
+  .account a {
+    text-decoration: none;
   }
 
   .account {

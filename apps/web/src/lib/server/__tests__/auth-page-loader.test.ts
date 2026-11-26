@@ -135,3 +135,52 @@ describe('MissionControlAuthPageLoader settings', () => {
     });
   });
 });
+
+describe('MissionControlAuthPageLoader service accounts', () => {
+  it('sends a signed-out visitor to sign in', async () => {
+    const visit = new PageVisit({ viewer: null });
+
+    expect(
+      await RedirectCatcher.location(loader.serviceAccounts(visit.event)),
+    ).toBe('/sign-in');
+  });
+
+  it('lists the viewer’s service accounts', async () => {
+    const visit = new PageVisit({
+      viewer: ada,
+      answers: {
+        '/api/auth/service-accounts/list': () =>
+          Response.json({
+            serviceAccounts: [
+              {
+                id: 'a1',
+                kind: 'agent',
+                name: 'CI reviewer',
+                benchId: null,
+                agentName: 'ci-reviewer',
+                description: 'Runs in Actions',
+                scopes: ['heartbeat:write'],
+                createdAt: '2026-11-20T00:00:00.000Z',
+                keys: [],
+              },
+            ],
+          }),
+      },
+    });
+
+    const data = await loader.serviceAccounts(visit.event);
+
+    expect(data.serviceAccounts?.map((account) => account.name)).toEqual([
+      'CI reviewer',
+    ]);
+  });
+
+  it('still renders when the list fails', async () => {
+    const visit = new PageVisit({ viewer: ada });
+
+    await expect(loader.serviceAccounts(visit.event)).resolves.toEqual({
+      viewer: ada,
+      serviceAccounts: null,
+    });
+  });
+});
