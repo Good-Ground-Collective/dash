@@ -1,0 +1,48 @@
+service: dash-mission-control
+image: good-ground-collective/dash-mission-control
+
+servers:
+  web:
+    hosts:
+      - 100.107.66.72
+
+proxy:
+  host: api.dash.doublel.studio
+  ssl: true
+  app_port: 3000
+  healthcheck:
+    path: /healthz
+
+deploy_timeout: 60
+
+registry:
+  server: ghcr.io
+  username:
+    - KAMAL_REGISTRY_USERNAME
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  context: .
+  dockerfile: apps/mission-control/Dockerfile
+  secrets:
+    - NODE_AUTH_TOKEN
+
+env:
+  clear:
+    BETTER_AUTH_URL: https://api.dash.doublel.studio
+    LOG_LEVEL: info
+  secret:
+    - BETTER_AUTH_SECRET
+    - DATABASE_URL
+
+ssh:
+  user: dash
+  config: false
+
+logging:
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: 5
