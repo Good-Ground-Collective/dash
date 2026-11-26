@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VisitorContext } from '#lib/server/visitor-context.ts';
+import { CookieVisitorContext } from '#lib/server/visitor-context.ts';
 
 class RecordingRender {
   html = '';
@@ -21,7 +21,7 @@ class RecordingRender {
   };
 }
 
-const visitorContext = new VisitorContext({
+const visitorContext = new CookieVisitorContext({
   apiBaseUrl: 'https://api.example.test',
 });
 
@@ -95,7 +95,9 @@ describe('VisitorContext client hints', () => {
   });
 
   it('refuses an API base URL that is not a URL', () => {
-    expect(() => new VisitorContext({ apiBaseUrl: 'not a url' })).toThrow();
+    expect(
+      () => new CookieVisitorContext({ apiBaseUrl: 'not a url' }),
+    ).toThrow();
   });
 });
 

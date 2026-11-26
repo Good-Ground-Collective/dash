@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ShellLoader } from '#lib/server/shell-loader.ts';
+import { MissionControlShellLoader } from '#lib/server/shell-loader.ts';
 
 class CountingFetch {
   calls = 0;
@@ -15,7 +15,9 @@ class CountingFetch {
   };
 }
 
-const shellLoader = new ShellLoader({ apiBaseUrl: 'https://api.example.test' });
+const shellLoader = new MissionControlShellLoader({
+  apiBaseUrl: 'https://api.example.test',
+});
 const themePreference = { theme: 'characters', mode: 'light' } as const;
 
 describe('ShellLoader', () => {
@@ -60,6 +62,8 @@ describe('ShellLoader', () => {
   });
 
   it('refuses an API base URL that is not a URL', () => {
-    expect(() => new ShellLoader({ apiBaseUrl: 'not a url' })).toThrow();
+    expect(
+      () => new MissionControlShellLoader({ apiBaseUrl: 'not a url' }),
+    ).toThrow();
   });
 });

@@ -122,6 +122,22 @@ describe('HttpMissionControl failures', () => {
       'aborted after timeout',
     );
   });
+});
+
+describe('HttpMissionControl configuration', () => {
+  it('refuses a base URL that is not http or https', () => {
+    const recorder = new RecordingFetch({
+      respond: async () => Response.json(null),
+    });
+
+    expect(
+      () =>
+        new HttpMissionControl({
+          baseUrl: 'ftp://mc.example',
+          fetch: recorder.fetch,
+        }),
+    ).toThrow();
+  });
 
   it('refuses a base URL that is not a URL', () => {
     const recorder = new RecordingFetch({

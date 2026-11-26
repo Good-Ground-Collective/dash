@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
-export const missionControlBaseUrlSchema = z.url();
+export const missionControlBaseUrlSchema = z.url({ protocol: /^https?$/u });
 
 export const viewerSchema = z.object({
   id: z.string(),

@@ -27,7 +27,22 @@ export interface Visit {
 }
 
 /** Works out how each visitor sees Dash, and lets server renders act as them toward Mission Control. */
-export class VisitorContext {
+export interface VisitorContext {
+  readonly handle: Handle;
+  readonly handleFetch: HandleFetch;
+  visit(visit: Visit): Promise<Response>;
+  fetchAsVisitor(props: VisitorFetch): Promise<Response>;
+}
+
+/** A server-side request made on the visitor's behalf. */
+export interface VisitorFetch {
+  request: Request;
+  browserCookie: string | null;
+  fetch: typeof fetch;
+}
+
+/** Reads the theme and session from request cookies, and forwards them to Mission Control's origin. */
+export class CookieVisitorContext implements VisitorContext {
   private readonly cookieForwarder: CookieForwarder;
 
   constructor(props: VisitorContextProps) {
@@ -77,12 +92,7 @@ export class VisitorContext {
     return response;
   }
 
-  /** Makes a server-side request, carrying the visitor's cookies when it goes to Mission Control. */
-  async fetchAsVisitor(props: {
-    request: Request;
-    browserCookie: string | null;
-    fetch: typeof fetch;
-  }): Promise<Response> {
+  async fetchAsVisitor(props: VisitorFetch): Promise<Response> {
     return props.fetch(
       this.cookieForwarder.forward({
         request: props.request,
