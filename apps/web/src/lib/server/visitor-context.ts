@@ -30,8 +30,6 @@ export interface Visit {
 export interface VisitorContext {
   readonly handle: Handle;
   readonly handleFetch: HandleFetch;
-  visit(visit: Visit): Promise<Response>;
-  fetchAsVisitor(props: VisitorFetch): Promise<Response>;
 }
 
 /** A server-side request made on the visitor's behalf. */
@@ -71,7 +69,6 @@ export class CookieVisitorContext implements VisitorContext {
       cookies: visit.cookies,
       headers: visit.headers,
     });
-    visit.locals.themePreference = preference;
     visit.locals.hasSessionCookie = sessionCookie.isPresent({
       get: (name) => visit.cookies.get(name),
     });

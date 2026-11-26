@@ -9,7 +9,9 @@ test.describe('app shell', () => {
       'characters',
     );
     await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
+
     await expect(page.getByRole('link', { name: 'Dash' })).toBeVisible();
+
     const nav = page.getByRole('navigation', { name: 'Primary' });
     await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
     for (const label of ['Objectives', 'Agents', 'GitHub', 'Benches']) {
@@ -21,6 +23,7 @@ test.describe('app shell', () => {
       'aria-current',
       'page',
     );
+
     await expect(
       page.getByRole('heading', { name: 'Home', level: 1 }),
     ).toBeVisible();

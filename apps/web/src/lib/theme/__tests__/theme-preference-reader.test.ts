@@ -36,6 +36,14 @@ describe('ThemePreferenceReader', () => {
     });
   });
 
+  it('reads the client hint in its quoted structured-field form', () => {
+    const request = new FakeRequest({ cookies: {}, hint: '"dark"' });
+    expect(themePreferenceReader.read(request)).toEqual({
+      theme: 'characters',
+      mode: 'dark',
+    });
+  });
+
   it('defaults to Characters in light mode for unknown or missing values', () => {
     const request = new FakeRequest({
       cookies: { 'dash-theme': 'neon', 'dash-mode': 'sepia' },

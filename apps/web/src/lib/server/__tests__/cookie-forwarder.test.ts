@@ -10,13 +10,43 @@ describe('OriginCookieForwarder', () => {
     const request = new Request(
       'https://api.example.test/api/auth/get-session',
     );
-    const forwarded = forwarder.forward({ request, cookie: 'session=abc' });
-    expect(forwarded.headers.get('cookie')).toBe('session=abc');
+    const forwarded = forwarder.forward({
+      request,
+      cookie: 'better-auth.session_token=abc',
+    });
+    expect(forwarded.headers.get('cookie')).toBe(
+      'better-auth.session_token=abc',
+    );
+  });
+
+  it('forwards only the session cookie', () => {
+    const request = new Request(
+      'https://api.example.test/api/auth/get-session',
+    );
+    const forwarded = forwarder.forward({
+      request,
+      cookie: 'dash-mode=dark; better-auth.session_token=abc; other=x',
+    });
+    expect(forwarded.headers.get('cookie')).toBe(
+      'better-auth.session_token=abc',
+    );
+  });
+
+  it('sends no cookie when the browser has no session cookie', () => {
+    const request = new Request(
+      'https://api.example.test/api/auth/get-session',
+    );
+    expect(forwarder.forward({ request, cookie: 'dash-mode=dark' })).toBe(
+      request,
+    );
   });
 
   it('never sends the cookie to another origin', () => {
     const request = new Request('https://elsewhere.example.test/data');
-    const forwarded = forwarder.forward({ request, cookie: 'session=abc' });
+    const forwarded = forwarder.forward({
+      request,
+      cookie: 'better-auth.session_token=abc',
+    });
     expect(forwarded.headers.get('cookie')).toBeNull();
   });
 

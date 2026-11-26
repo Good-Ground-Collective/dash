@@ -18,7 +18,6 @@ class CountingFetch {
 const shellLoader = new MissionControlShellLoader({
   apiBaseUrl: 'https://api.example.test',
 });
-const themePreference = { theme: 'characters', mode: 'light' } as const;
 
 describe('ShellLoader', () => {
   it('skips Mission Control when the visitor has no session cookie', async () => {
@@ -27,7 +26,7 @@ describe('ShellLoader', () => {
     await expect(
       shellLoader.load({
         fetch: counter.fetch,
-        locals: { hasSessionCookie: false, themePreference },
+        locals: { hasSessionCookie: false },
       }),
     ).resolves.toEqual({ viewer: null });
     expect(counter.calls).toBe(0);
@@ -42,7 +41,7 @@ describe('ShellLoader', () => {
     await expect(
       shellLoader.load({
         fetch: counter.fetch,
-        locals: { hasSessionCookie: true, themePreference },
+        locals: { hasSessionCookie: true },
       }),
     ).resolves.toEqual({ viewer });
   });
@@ -55,7 +54,7 @@ describe('ShellLoader', () => {
     await expect(
       shellLoader.load({
         fetch: counter.fetch,
-        locals: { hasSessionCookie: true, themePreference },
+        locals: { hasSessionCookie: true },
       }),
     ).resolves.toEqual({ viewer: null });
     expect(counter.calls).toBe(1);

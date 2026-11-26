@@ -33,7 +33,6 @@ describe('VisitorContext', () => {
     ]);
     const locals: App.Locals = {
       hasSessionCookie: false,
-      themePreference: { theme: 'characters', mode: 'light' },
     };
     const renderer = new RecordingRender({ contentType: 'text/html' });
 
@@ -49,7 +48,6 @@ describe('VisitorContext', () => {
     );
     expect(locals).toEqual({
       hasSessionCookie: true,
-      themePreference: { theme: 'characters', mode: 'dark' },
     });
   });
 });
@@ -61,7 +59,6 @@ describe('VisitorContext client hints', () => {
       headers: new Headers({ 'sec-ch-prefers-color-scheme': 'dark' }),
       locals: {
         hasSessionCookie: false,
-        themePreference: { theme: 'characters', mode: 'light' },
       },
       render: new RecordingRender({ contentType: 'text/html; charset=utf-8' })
         .render,
@@ -84,7 +81,6 @@ describe('VisitorContext client hints', () => {
       headers: new Headers(),
       locals: {
         hasSessionCookie: false,
-        themePreference: { theme: 'characters', mode: 'light' },
       },
       render: new RecordingRender({ contentType: 'application/json' }).render,
     });
@@ -115,13 +111,13 @@ describe('VisitorContext server-side fetches', () => {
     ]) {
       await visitorContext.fetchAsVisitor({
         request: new Request(url),
-        browserCookie: 'session=abc',
+        browserCookie: 'better-auth.session_token=abc',
         fetch,
       });
     }
 
     expect(sent.map((request) => request.headers.get('cookie'))).toEqual([
-      'session=abc',
+      'better-auth.session_token=abc',
       null,
     ]);
   });

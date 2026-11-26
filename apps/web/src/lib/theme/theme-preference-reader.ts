@@ -34,7 +34,7 @@ export class CookieThemePreferenceReader implements ThemePreferenceReader {
       .parse(request.cookies.get(CookieThemePreferenceReader.THEME_COOKIE));
     const hintedMode = colorModeSchema
       .catch('light')
-      .parse(request.headers.get(this.clientHint));
+      .parse(request.headers.get(this.clientHint)?.replaceAll('"', ''));
     const mode = colorModeSchema
       .catch(hintedMode)
       .parse(request.cookies.get(CookieThemePreferenceReader.MODE_COOKIE));

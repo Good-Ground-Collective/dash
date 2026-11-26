@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const port = 4173;
+const port = 4319;
 
 export default defineConfig({
   testDir: 'src',
@@ -14,7 +14,7 @@ export default defineConfig({
   webServer: {
     command: 'node build',
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: !process.env['CI'],
+    reuseExistingServer: false,
     env: {
       HOST: '127.0.0.1',
       PORT: String(port),

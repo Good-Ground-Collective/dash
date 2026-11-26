@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
+import { sessionCookie } from '#lib/server/session-cookie.ts';
 
 export const originCookieForwarderPropsSchema = z.object({
   apiBaseUrl: missionControlBaseUrlSchema,
@@ -14,7 +15,7 @@ export interface CookieForwarder {
   forward(props: { request: Request; cookie: string | null }): Request;
 }
 
-/** Forwards cookies only to requests bound for Mission Control's origin. */
+/** Forwards only the session cookie, and only to requests bound for Mission Control's origin. */
 export class OriginCookieForwarder implements CookieForwarder {
   private readonly apiOrigin: string;
 
@@ -32,8 +33,14 @@ export class OriginCookieForwarder implements CookieForwarder {
       return props.request;
     }
 
+    const session = props.cookie
+      .split(';')
+      .map((pair) => pair.trim())
+      .filter((pair) => sessionCookie.names.includes(pair.split('=')[0] ?? ''));
+    if (session.length === 0) return props.request;
+
     const headers = new Headers(props.request.headers);
-    headers.set('cookie', props.cookie);
+    headers.set('cookie', session.join('; '));
     return new Request(props.request, { headers });
   }
 }

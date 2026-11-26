@@ -16,7 +16,7 @@ export interface ShellData {
   viewer: Viewer | null;
 }
 
-/** Loads what the app shell needs. */
+/** Runs for every route through the root layout, so it must stay cheap for anonymous visitors. */
 export interface ShellLoader {
   readonly load: (event: ShellLoadEvent) => Promise<ShellData>;
 }
