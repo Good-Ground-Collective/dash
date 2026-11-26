@@ -358,7 +358,7 @@
 
   .badge,
   .scope {
-    padding: 2px var(--space-2);
+    padding: calc(var(--space-1) / 2) var(--space-2);
     border-radius: var(--radius-pill);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-medium);

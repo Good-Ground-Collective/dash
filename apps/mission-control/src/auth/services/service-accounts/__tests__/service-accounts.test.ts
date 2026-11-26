@@ -5,12 +5,16 @@ import { describe, expect, it } from 'vitest';
 import { BrokenApiKeys } from '#src/auth/__tests__/support/broken-api-keys.ts';
 import { InMemoryServicePrincipalRepository } from '#src/auth/__tests__/support/in-memory-service-principals.ts';
 import { ServiceAccountHarness } from '#src/auth/__tests__/support/service-account-harness.ts';
+import { UnremovableServicePrincipals } from '#src/auth/__tests__/support/unremovable-service-principals.ts';
 import {
   issuedApiKeySchema,
   type NewServiceAccount,
   serviceAccountListSchema,
 } from '#src/auth/contracts/service-account.ts';
-import { ApiKeyNotIssuedError } from '#src/auth/errors.ts';
+import {
+  ApiKeyNotIssuedError,
+  ServiceAccountNotCreatedError,
+} from '#src/auth/errors.ts';
 import { OwnedServiceAccounts } from '#src/auth/services/service-accounts/service-accounts.ts';
 import { StoredServicePrincipals } from '#src/auth/services/service-principals/service-principals.ts';
 
@@ -304,5 +308,31 @@ describe('OwnedServiceAccounts creating when the key fails', () => {
 
     await expect(created).rejects.toBeInstanceOf(ApiKeyNotIssuedError);
     await expect(repository.listOwnedBy(owner)).resolves.toEqual([]);
+  });
+});
+
+describe('OwnedServiceAccounts creating when the key and the clean-up fail', () => {
+  it('still reports why the key failed', async () => {
+    const repository = new UnremovableServicePrincipals();
+    const accounts = new OwnedServiceAccounts({
+      servicePrincipals: new StoredServicePrincipals({ repository }),
+      apiKeys: new BrokenApiKeys(),
+    });
+    const owner = { ownerUserId: '0b6a3c3e-4f7e-4c1c-9a57-2a7f3d1f0c11' };
+    repository.addPrincipal({ id: owner.ownerUserId, kind: 'user' });
+
+    const failure: unknown = await accounts
+      .create({
+        context: await new ServiceAccountHarness().auth.identity.auth.$context,
+        ...owner,
+        input: studioBench,
+      })
+      .catch((cause: unknown) => cause);
+
+    expect(failure).toBeInstanceOf(ServiceAccountNotCreatedError);
+    expect(failure).toMatchObject({
+      cause: expect.any(ApiKeyNotIssuedError),
+      cleanup: expect.objectContaining({ message: 'database unavailable' }),
+    });
   });
 });

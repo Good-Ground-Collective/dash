@@ -141,6 +141,19 @@ export class ApiKeyNotIssuedError extends Error {
   }
 }
 
+/** Issuing an account's first key failed, and so did removing the account again. `cause` is the issuance failure; `cleanup` is why the keyless account is still there. */
+export class ServiceAccountNotCreatedError extends Error {
+  override name = 'ServiceAccountNotCreatedError';
+  readonly cleanup: unknown;
+
+  constructor(props: { cause: unknown; cleanup: unknown }) {
+    super('The first key was not issued and the account could not be removed', {
+      cause: props.cause,
+    });
+    this.cleanup = props.cleanup;
+  }
+}
+
 /** Fastify answers with `statusCode` and `code`. */
 export class ApiKeyMissingError extends Error {
   override name = 'ApiKeyMissingError';

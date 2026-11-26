@@ -19,6 +19,7 @@ import {
   ApiKeyNotFoundError,
   ApiKeyRejectedError,
   ApiKeyScopeError,
+  ServiceAccountNotCreatedError,
   ServiceAccountNotFoundError,
 } from '#src/auth/errors.ts';
 import type { ApiKeys } from '#src/auth/services/api-keys/api-keys.ts';
@@ -154,7 +155,11 @@ export class OwnedServiceAccounts implements ServiceAccounts {
         apiKey,
       };
     } catch (cause) {
-      await this.servicePrincipals.remove({ id: principal.id });
+      try {
+        await this.servicePrincipals.remove({ id: principal.id });
+      } catch (cleanup) {
+        throw new ServiceAccountNotCreatedError({ cause, cleanup });
+      }
       throw cause;
     }
   }

@@ -40,7 +40,10 @@
         <div {...props} class="scrim"></div>
       {/snippet}
     </Dialog.Overlay>
-    <Dialog.Content interactOutsideBehavior="ignore">
+    <Dialog.Content
+      interactOutsideBehavior="ignore"
+      escapeKeydownBehavior="ignore"
+    >
       {#snippet child({ props })}
         <div {...props} class="dialog">
           <Dialog.Title>

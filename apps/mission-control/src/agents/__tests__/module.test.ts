@@ -260,6 +260,24 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
   });
 });
 
+describe('POST /api/agents/:agentName/heartbeats expiry', () => {
+  it('refuses an agent key once it has expired', async () => {
+    const served = await ServedAgents.start();
+    const { secret, keyId } = await served.keyFor(agent);
+    const stored = served.harness.tables.apikey.find((row) => row.id === keyId);
+    if (stored !== undefined) stored.expiresAt = new Date(Date.now() - 1000);
+
+    const response = await served.report({
+      agentName: 'ci-reviewer',
+      headers: { authorization: `Bearer ${secret}` },
+    });
+
+    expect(stored).toBeDefined();
+    expect(response).toEqual({ statusCode: 401, code: 'API_KEY_REJECTED' });
+    expect(served.heartbeats.records).toEqual([]);
+  });
+});
+
 describe('POST /api/agents/:agentName/heartbeats identity', () => {
   it('lets an agent key report only as its own agent', async () => {
     const served = await ServedAgents.start();

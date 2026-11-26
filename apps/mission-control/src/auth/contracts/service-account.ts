@@ -8,7 +8,11 @@ export const agentIdentifierSchema = z
   .trim()
   .min(1)
   .max(100)
-  .regex(/^[\w.-]+$/u, 'Use letters, digits, dots, dashes and underscores');
+  .regex(/^[\w.-]+$/u, 'Use letters, digits, dots, dashes and underscores')
+  .refine(
+    (value) => !/^\.+$/u.test(value),
+    'Dots alone would be read as a path segment: add a letter, digit, dash or underscore',
+  );
 
 export const serviceAccountKindSchema = z
   .enum(['bench', 'agent'])

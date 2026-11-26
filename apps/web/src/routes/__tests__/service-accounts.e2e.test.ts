@@ -52,6 +52,8 @@ test('creating a bench account shows its key once, with a copy button', async ()
   const key = page.getByLabel('API key');
   await expect(key).toHaveValue(/^dash_dev_/u);
   const secret = await key.inputValue();
+  await page.keyboard.press('Escape');
+  await expect(key).toBeVisible();
   await page.getByRole('button', { name: 'Copy' }).click();
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(

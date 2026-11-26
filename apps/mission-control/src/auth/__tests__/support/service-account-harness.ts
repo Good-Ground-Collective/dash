@@ -19,6 +19,7 @@ export const harnessWebOrigin = 'http://localhost:5173';
 export interface HarnessRow {
   id: string;
   createdAt?: Date;
+  expiresAt?: Date | null;
   key?: string;
 }
 

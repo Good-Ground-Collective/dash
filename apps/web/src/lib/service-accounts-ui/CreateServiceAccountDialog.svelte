@@ -150,7 +150,7 @@
                 class="mono"
                 bind:value={identifier}
                 maxlength="100"
-                pattern={'[\\w.\\-]+'}
+                pattern={'(?!\\.+$)[\\w.\\-]+'}
                 placeholder={kind === 'bench' ? 'studio-mac' : 'ci-reviewer'}
                 required
               />
@@ -362,7 +362,7 @@
     place-items: center;
     width: 1.25rem;
     height: 1.25rem;
-    margin-top: 1px;
+    margin-top: var(--border-hairline);
     padding: 0;
     background: var(--bg);
     border: var(--border-hairline) solid var(--line);
