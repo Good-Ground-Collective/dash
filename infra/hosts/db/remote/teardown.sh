@@ -9,10 +9,13 @@ if [ "$(hostname)" = dash-db ] || [ ! -e /etc/dash-restore-scratch ]; then
   exit 1
 fi
 
+rm -f /etc/pgbackrest/conf.d/dash-secrets.conf
+
 export DEBIAN_FRONTEND=noninteractive
 if command -v pg_dropcluster >/dev/null && [ -d /etc/postgresql/18/main ]; then
   pg_dropcluster 18 main --stop
 fi
+
 mapfile -t pkgs < <(dpkg-query -W -f '${Package}\n' 'postgresql*' 'pgbackrest' 'libpq5' 2>/dev/null || true)
 installed=()
 for p in "${pkgs[@]}"; do
@@ -22,6 +25,7 @@ if [ "${#installed[@]}" -gt 0 ]; then
   apt-get purge -y -q "${installed[@]}"
 fi
 apt-get autoremove --purge -y -q
+
 rm -f /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/pgdg.sources \
   /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
 rm -rf /etc/pgbackrest /etc/pgbackrest.conf /etc/postgresql /etc/postgresql-common \
@@ -30,6 +34,7 @@ rm -rf /etc/pgbackrest /etc/pgbackrest.conf /etc/postgresql /etc/postgresql-comm
 if id postgres >/dev/null 2>&1; then
   deluser --quiet postgres
 fi
+
 apt-get update -q >/dev/null
 rm -f /etc/dash-restore-scratch
 echo "teardown: done"

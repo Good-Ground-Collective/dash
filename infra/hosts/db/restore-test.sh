@@ -43,10 +43,20 @@ cleanup() {
     fi
   fi
   if [ -n "$key_id" ]; then
-    linode_api DELETE "/object-storage/keys/${key_id}" >/dev/null && echo "revoked key ${key_label}"
+    if linode_api DELETE "/object-storage/keys/${key_id}" >/dev/null; then
+      echo "revoked key ${key_label}"
+    else
+      echo "error: could not revoke key ${key_label} (id ${key_id}); revoke it in Linode" >&2
+      rc=1
+    fi
   fi
   if [ "$table_created" = 1 ]; then
-    echo "DROP TABLE IF EXISTS dash_restore_check" | db_sql >/dev/null && echo "dropped dash_restore_check on ${DB_HOST}"
+    if echo "DROP TABLE IF EXISTS dash_restore_check" | db_sql >/dev/null; then
+      echo "dropped dash_restore_check on ${DB_HOST}"
+    else
+      echo "error: could not drop dash_restore_check in ${DB_HOST}'s postgres database" >&2
+      rc=1
+    fi
   fi
   exit "$rc"
 }

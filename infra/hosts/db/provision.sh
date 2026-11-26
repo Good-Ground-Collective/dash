@@ -34,7 +34,9 @@ else
 fi
 cipher_pass="$(env_get DASH_PGBACKREST_CIPHER_PASS)"
 if [ -z "$cipher_pass" ]; then
-  if remote "$DB_HOST" 'sudo test -e /etc/pgbackrest/conf.d/dash-secrets.conf'; then
+  has_secrets="$(remote "$DB_HOST" "sudo sh -c 'test -e /etc/pgbackrest/conf.d/dash-secrets.conf && echo yes || echo no'")" ||
+    die "could not check ${DB_HOST} for a backup config (SSH or sudo failed); nothing was changed"
+  if [ "$has_secrets" = yes ]; then
     die "dash-db already has a backup config but ${ENV_FILE} has no DASH_PGBACKREST_CIPHER_PASS. Copy repo1-cipher-pass back from /etc/pgbackrest/conf.d/dash-secrets.conf before re-running."
   fi
   cipher_pass="$(random_secret)"
