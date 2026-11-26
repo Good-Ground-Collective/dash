@@ -93,7 +93,7 @@ describe('BetterAuthIdentity cookies and lifetime', () => {
     expect(sessionToken.attributes.domain).toBeUndefined();
   });
 
-  it('issues 30-day sessions and slides them forward once a day old', async () => {
+  it('issues 30-day sessions that slide forward, with a renewed cookie, once a day old', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     const fixture = new IdentityFixture({ settings: localSettings });
@@ -102,11 +102,23 @@ describe('BetterAuthIdentity cookies and lifetime', () => {
     expect(expiresAt.toISOString()).toBe('2026-01-31T00:00:00.000Z');
 
     vi.setSystemTime(new Date('2026-01-03T00:00:00Z'));
-    const session = await fixture.identity.session({
+    const untouched = await fixture.identity.session({
+      headers: new Headers({ cookie }),
+    });
+    const refreshed = await fixture.identity.handle(
+      new Request('http://localhost:3000/api/auth/get-session', {
+        headers: { cookie },
+      }),
+    );
+    const slid = await fixture.identity.session({
       headers: new Headers({ cookie }),
     });
 
-    expect(session?.expiresAt.toISOString()).toBe('2026-02-02T00:00:00.000Z');
+    expect(untouched?.expiresAt.toISOString()).toBe('2026-01-31T00:00:00.000Z');
+    expect(refreshed.headers.getSetCookie()).toContainEqual(
+      expect.stringContaining('better-auth.session_token='),
+    );
+    expect(slid?.expiresAt.toISOString()).toBe('2026-02-02T00:00:00.000Z');
   });
 });
 

@@ -65,7 +65,7 @@ export interface Identity {
   readonly guard: PrincipalGuard;
   /** Answers one request to a path under `basePath`. */
   handle(request: Request): Promise<Response>;
-  /** The principal behind the request's session cookie, or `null` without a valid session. */
+  /** The principal behind the request's session cookie, or `null` without a valid session. Read-only: sessions slide through `/api/auth/get-session`, which can set the renewed cookie. */
   session(props: { headers: Headers }): Promise<PrincipalSession | null>;
 }
 
@@ -114,7 +114,10 @@ export class BetterAuthIdentity implements Identity {
   }
 
   async session(props: { headers: Headers }): Promise<PrincipalSession | null> {
-    const found = await this.auth.api.getSession({ headers: props.headers });
+    const found = await this.auth.api.getSession({
+      headers: props.headers,
+      query: { disableRefresh: true },
+    });
     if (found === null) {
       return null;
     }
