@@ -9,7 +9,7 @@ The package is published to GitHub Packages. Map the scope and supply a token wi
 ```sh
 echo '@good-ground-collective:registry=https://npm.pkg.github.com' >> .npmrc
 echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
-pnpm add @good-ground-collective/agentic-communication-standards
+pnpm add @good-ground-collective/agentic-communication-standards zod
 ```
 
 ## The envelope
@@ -81,6 +81,10 @@ Wire schemas avoid transforms and refinements that JSON Schema can't express, so
 ### The package version
 
 The package's own major version moves only when a message's major version moves. New messages and minor message bumps are minor package releases.
+
+Releases are cut from `main` by CI, tagged `standards-vX.Y.Z`, separately from the repository's `vX.Y.Z`. Only commits that touch `packages/standards/` count, so write them as `feat(standards): …`, `fix(standards): …`, or with a `!` for a major. The root README's Release pipeline section has the details.
+
+`zod` is a peer dependency. The exported schemas are Zod objects, and consumers extend and compose them with their own Zod, so they must share one copy. Install `zod@^4` alongside the package.
 
 ## Telemetry attributes
 
