@@ -66,7 +66,7 @@ export class MissionControlStub {
   private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
-  private readonly github = new GithubStub(() => this.webOrigin);
+  private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
   private readonly recovery = new RecoveryStub({
     email: () => this.person?.email ?? null,
     webOrigin: () => this.webOrigin,

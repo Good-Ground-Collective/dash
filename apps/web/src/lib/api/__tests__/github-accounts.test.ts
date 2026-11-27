@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { HttpGithubAccounts } from '#lib/api/github-accounts.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
@@ -93,21 +94,31 @@ describe('HttpGithubAccounts', () => {
 });
 
 describe('HttpGithubAccounts refusals', () => {
-  it('rejects a link that isn’t http or https', async () => {
-    const accounts = new HttpGithubAccounts({
-      baseUrl,
-      fetch: new RecordingFetch({
-        response: () =>
-          Response.json({
-            status: 'authorize',
-            authorizeUrl: 'javascript:alert(1)',
-          }),
-      }).fetch,
-    });
+  it('rejects a link that isn’t http or https as a schema error on that link', async () => {
+    const answering = (authorizeUrl: string): HttpGithubAccounts =>
+      new HttpGithubAccounts({
+        baseUrl,
+        fetch: new RecordingFetch({
+          response: () => Response.json({ status: 'authorize', authorizeUrl }),
+        }).fetch,
+      });
 
+    const failure = await answering('javascript:alert(1)')
+      .list({ returnTo: '/setup/github' })
+      .catch((cause: unknown) => cause);
+
+    expect(failure).toBeInstanceOf(z.ZodError);
+    expect(failure instanceof z.ZodError && failure.issues[0]?.path).toEqual([
+      'authorizeUrl',
+    ]);
     await expect(
-      accounts.list({ returnTo: '/setup/github' }),
-    ).rejects.toThrow();
+      answering('https://github.com/login/oauth/authorize').list({
+        returnTo: '/setup/github',
+      }),
+    ).resolves.toEqual({
+      status: 'authorize',
+      authorizeUrl: 'https://github.com/login/oauth/authorize',
+    });
   });
 
   it('carries Mission Control’s refusal', async () => {

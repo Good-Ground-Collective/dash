@@ -17,12 +17,8 @@
   let card = $state<AuthCard>();
   let result = $state<ConnectResult | null>(null);
 
-  /**
-   * Focuses the title so the step is announced, then shows what the trip to GitHub did. The
-   * banner fills its live region after mount so it's read out, and leaves the URL so a reload
-   * doesn't show it again.
-   */
-  onMount(() => {
+  /** Focuses the title so the step is announced, then shows what the trip to GitHub did. The banner fills its live region after mount so it's read out, and leaves the URL so a reload doesn't show it again. */
+  const showResultFromAddressBar = (): void => {
     card?.focusTitle();
     const url = new URL(page.url.href);
     const found = ConnectResults.fromUrl(url);
@@ -31,7 +27,9 @@
     void tick().then(() => {
       result = found;
     });
-  });
+  };
+
+  onMount(showResultFromAddressBar);
 </script>
 
 <svelte:head>

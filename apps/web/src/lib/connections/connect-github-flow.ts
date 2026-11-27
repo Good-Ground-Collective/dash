@@ -1,5 +1,9 @@
+import { z } from 'zod';
 import type { GithubAccountReads } from '#lib/api/github-accounts.ts';
-import type { ConnectableAccount } from '#lib/api/github-account-contracts.ts';
+import {
+  type ConnectableAccount,
+  returnToSchema,
+} from '#lib/api/github-account-contracts.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
 /**
@@ -17,14 +21,25 @@ export type ConnectGithubState =
   | { state: 'signed-out' }
   | { state: 'failed'; error: string };
 
+export const connectGithubFlowPropsSchema = z.object({
+  accounts: z.custom<GithubAccountReads>(),
+  returnTo: returnToSchema,
+});
+
+export type ConnectGithubFlowProps = z.input<
+  typeof connectGithubFlowPropsSchema
+>;
+
 /** Loads the accounts a person can connect, for the setup step and Settings › Connections alike. */
 export class ConnectGithubFlow {
   private readonly accounts: GithubAccountReads;
   private readonly returnTo: string;
 
-  constructor(props: { accounts: GithubAccountReads; returnTo: string }) {
-    this.accounts = props.accounts;
-    this.returnTo = props.returnTo;
+  /** Throws when `returnTo` isn't a path in the web app, so a bad mount fails at once rather than as a load error. */
+  constructor(props: ConnectGithubFlowProps) {
+    const valid = connectGithubFlowPropsSchema.parse(props);
+    this.accounts = valid.accounts;
+    this.returnTo = valid.returnTo;
   }
 
   async load(): Promise<ConnectGithubState> {

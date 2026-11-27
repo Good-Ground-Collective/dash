@@ -75,9 +75,12 @@ export class ConnectResults {
     return outcomes.get(outcome) ?? null;
   }
 
-  /** The same URL without the result keys, or `null` when there were none to remove. */
+  /** The same URL without a GitHub result's keys, or `null` when it carries none. Another provider's result is left for its own page. */
   static withoutResult(url: URL): URL | null {
-    if (!resultKeys.some((key) => url.searchParams.has(key))) return null;
+    const params = url.searchParams;
+    if (!params.has('connect') || params.get('provider') !== 'github') {
+      return null;
+    }
     const clean = new URL(url);
     for (const key of resultKeys) clean.searchParams.delete(key);
     return clean;

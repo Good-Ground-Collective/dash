@@ -43,9 +43,11 @@
     if (busy) return;
     busy = true;
     if (!props.quiet) current = ConnectGithubFlow.start();
+
     const next = await flow.load();
     if (!(props.quiet && next.state === 'failed')) current = next;
     busy = false;
+
     summary = ConnectGithubFlow.summary(current);
     if (props.refocus && current.state !== 'failed') {
       await tick();

@@ -78,5 +78,13 @@ describe('ConnectResults.withoutResult', () => {
 
   it('answers null when there is nothing to remove', () => {
     expect(ConnectResults.withoutResult(Landing.at('?tab=1'))).toBeNull();
+    expect(
+      ConnectResults.withoutResult(
+        Landing.at('?connect=linked&provider=gitlab&reason=x'),
+      ),
+    ).toBeNull();
+    expect(
+      ConnectResults.withoutResult(Landing.at('?reason=audit')),
+    ).toBeNull();
   });
 });

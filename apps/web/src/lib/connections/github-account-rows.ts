@@ -8,7 +8,7 @@ export type InstallBadge =
   | { kind: 'suspended'; label: 'Suspended' }
   | { kind: 'installable'; label: null };
 
-/** What one account row shows. */
+/** Plain data, so the Svelte row draws it without branching on install state. */
 export interface GithubAccountRowView {
   login: string;
   avatarUrl: string | null;
@@ -32,6 +32,7 @@ export class GithubAccountRows {
       rounded: account.kind === 'user',
       role: GithubAccountRows.role(entry),
     };
+
     if (install.state === 'installable') {
       return {
         ...base,
@@ -44,11 +45,13 @@ export class GithubAccountRows {
         },
       };
     }
+
     const manage = {
       label: 'Manage' as const,
       href: install.settingsUrl,
       primary: false,
     };
+
     if (install.suspended) {
       return {
         ...base,
@@ -57,6 +60,7 @@ export class GithubAccountRows {
         action: manage,
       };
     }
+
     if (install.incomplete) {
       return {
         ...base,
@@ -65,6 +69,7 @@ export class GithubAccountRows {
         action: manage,
       };
     }
+
     return {
       ...base,
       badge: { kind: 'installed', label: 'Installed' },

@@ -53,6 +53,19 @@ describe('ConnectGithubFlow', () => {
     expect(ConnectGithubFlow.start()).toEqual({ state: 'loading' });
   });
 
+  it('refuses a return path outside the web app when built', () => {
+    const accounts = new HttpGithubAccounts({
+      baseUrl: 'https://api.example.test',
+      fetch: async () => Response.json({}),
+    });
+
+    for (const returnTo of ['https://evil.example/', '/settings?tab=1']) {
+      expect(() => new ConnectGithubFlow({ accounts, returnTo })).toThrow(
+        /path in the web app/u,
+      );
+    }
+  });
+
   it('offers to authorize before GitHub is linked', async () => {
     const harness = new Harness(() =>
       Response.json({

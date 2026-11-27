@@ -6,7 +6,6 @@ const returnToSchema = z.string().regex(/^\/(?:[\w-]+(?:\/[\w-]+)*)?$/u);
 
 type Scenario = z.infer<typeof scenarioSchema>;
 
-/** A JSON answer. */
 interface StubJson {
   status: number;
   body: object;
@@ -42,9 +41,11 @@ export class GithubStub {
   private scenario: Scenario = 'authorize';
   private accounts: StubAccount[] = GithubStub.sampleAccounts();
 
-  /** `webOrigin` is the web app the round trips send the person back to. */
-  constructor(webOrigin: () => string) {
-    this.webOrigin = webOrigin;
+  constructor(props: {
+    /** The web app the round trips send the person back to. */
+    webOrigin: () => string;
+  }) {
+    this.webOrigin = props.webOrigin;
   }
 
   reset(): void {
