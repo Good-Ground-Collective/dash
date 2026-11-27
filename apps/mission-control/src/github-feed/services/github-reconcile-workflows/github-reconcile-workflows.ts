@@ -1,7 +1,6 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
-import { webhookStepRetries } from '#src/connections/contracts/webhook-events.ts';
 import {
   ReconcileNotRegisteredError,
   ReconcileOutsideWorkflowError,
@@ -22,6 +21,18 @@ const githubReconcileWorkflowsPropsSchema = z.object({
   reconcile: z.custom<GithubReconcile>(),
   syncRequests: z.custom<Pick<GithubSyncRequests, 'requestedSince'>>(),
 });
+
+/**
+ * Retries for a connection read, wherever it starts: scheduled, after connecting, or from a
+ * webhook. Provider errors are caught inside the read, so a retry follows a database failure,
+ * and each retry repeats the whole GitHub read, so the attempts stay few.
+ */
+const readStepRetries = {
+  retriesAllowed: true,
+  maxAttempts: 3,
+  intervalSeconds: 1,
+  backoffRate: 2,
+};
 
 /** Reads a connection again on request, from inside or outside a workflow. */
 export interface ConnectionReads {
@@ -103,7 +114,7 @@ export class GithubReconcileWorkflows
         const startedAt = await DBOS.now();
         const outcome = await DBOS.runStep(
           () => this.reconcile.syncConnection({ connectionId }),
-          { ...webhookStepRetries, name: 'githubSyncConnection' },
+          { ...readStepRetries, name: 'githubSyncConnection' },
         );
         GithubReconcileWorkflows.log({ connectionId, outcome });
 
