@@ -22,6 +22,11 @@
         <span class="kind">guest</span>
       {/if}
       <span class="synced">{status.synced}</span>
+      {#if status.truncated}
+        <span class="truncated">
+          Showing the most recent items for {status.login}
+        </span>
+      {/if}
     </li>
   {/each}
 </ul>
@@ -72,6 +77,10 @@
     padding: 0 var(--space-1);
     border-radius: var(--radius-pill);
     background: var(--faint);
+  }
+
+  .truncated {
+    flex-basis: 100%;
   }
 
   .stale .synced {

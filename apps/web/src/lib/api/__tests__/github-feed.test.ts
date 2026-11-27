@@ -24,6 +24,7 @@ const wire = {
       kind: 'owned',
       lastSyncedAt: '2026-11-27T11:55:00.000Z',
       lastError: null,
+      truncated: false,
     },
   ],
   reviewRequests: [],

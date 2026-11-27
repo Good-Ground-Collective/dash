@@ -148,12 +148,22 @@ describe('GithubFeedView.statusOf', () => {
       synced: 'Synced 5 minutes ago',
       stale: false,
       error: null,
+      truncated: false,
     });
     expect(GithubFeedView.statusOf(night)).toMatchObject({
       synced: 'Synced 3 hours ago',
       stale: true,
       error: 'GitHub rate-limited the read.',
     });
+  });
+
+  it('marks a connection whose last read hit a cap as truncated', () => {
+    expect(
+      GithubFeedView.statusOf(SampleFeed.connection({ truncated: true })),
+    ).toMatchObject({ truncated: true });
+    expect(
+      GithubFeedView.statusOf(SampleFeed.connection({ truncated: null })),
+    ).toMatchObject({ truncated: false });
   });
 
   it('says the first sync is in progress before any read', () => {

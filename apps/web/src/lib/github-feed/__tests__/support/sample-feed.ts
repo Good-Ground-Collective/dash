@@ -17,6 +17,7 @@ export class SampleFeed {
       kind: 'owned',
       lastSyncedAt: new Date('2026-11-27T11:55:00Z'),
       lastError: null,
+      truncated: false,
       ...overrides,
     };
   }

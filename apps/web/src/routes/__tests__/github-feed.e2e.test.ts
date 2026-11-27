@@ -128,6 +128,23 @@ test('the GitHub page lists every row with freshness and the last error', async 
   await expect(warning).toContainText('rate-limited');
 });
 
+test('a connection whose last read hit a cap says only recent items show', async () => {
+  await Feed.scenario('truncated');
+  await page.goto('/github');
+
+  const freshness = page.getByRole('list', { name: 'Connection freshness' });
+  await expect(freshness).toContainText(
+    'Showing the most recent items for acme-labs',
+  );
+  await expect(freshness).not.toContainText(
+    'Showing the most recent items for night-shift',
+  );
+
+  await Feed.scenario('populated');
+  await page.goto('/github');
+  await expect(freshness).not.toContainText('Showing the most recent items');
+});
+
 test('the account filter narrows the groups and survives a reload', async () => {
   await page.goto('/github');
   const filter = page.getByRole('navigation', { name: 'Filter by account' });
@@ -170,6 +187,27 @@ test('the feed fits a phone without scrolling sideways', async () => {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await Feed.overflow()).toBeLessThanOrEqual(0);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+});
+
+test('the last rows scroll clear of the Needs you pill', async () => {
+  const pill = page.getByRole('button', { name: /^Needs you/u });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const path of ['/', '/github']) {
+      await page.goto(path);
+      const last = page.getByRole('main').getByRole('listitem').last();
+      const pillTop = (await pill.boundingBox())?.y ?? 0;
+      await expect
+        .poll(() =>
+          last.evaluate((row) => {
+            window.scrollTo(0, document.documentElement.scrollHeight);
+            return row.getBoundingClientRect().bottom;
+          }),
+        )
+        .toBeLessThan(pillTop);
+    }
   }
   await page.setViewportSize({ width: 1280, height: 800 });
 });

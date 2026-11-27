@@ -37,6 +37,8 @@ export interface ConnectionStatus {
   synced: string;
   stale: boolean;
   error: string | null;
+  /** The last good read hit a cap, so only the most recent items are shown. */
+  truncated: boolean;
 }
 
 export interface AccountFilterOption {
@@ -178,6 +180,7 @@ export class GithubFeedView {
         when !== null &&
         RelativeTime.olderThan({ when, minutes: staleAfterMinutes }),
       error: connection.lastError,
+      truncated: connection.truncated === true,
     };
   }
 }
