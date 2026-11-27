@@ -105,6 +105,10 @@ describe('stylelint config: Svelte components', () => {
       "<p style:color={dark ? 'white' : 'var(--ink)'}>x</p>",
     ],
     [
+      'a raw colour in a ternary branch after a comparison',
+      "<p style:color={hue === 'teal' ? '#0aa' : 'var(--ink)'}>x</p>",
+    ],
+    [
       'a named colour in a border shorthand',
       '<p style:border-top="1px solid white">x</p>',
     ],
@@ -135,9 +139,10 @@ describe('stylelint config: Svelte components', () => {
     ],
     ['an SVG url fill', '<path fill="url(#grad)" />'],
     ['an SVG url fill with a hex-like id', '<path fill="url(#fade)" />'],
+    ['a string used as a lookup key', "<p style:color={palette['teal']}>x</p>"],
     [
-      'a string used as a lookup key',
-      "<p style:color={palette['accent']}>x</p>",
+      'colour names compared in a ternary',
+      "<p style:color={hue === 'teal' ? 'var(--a)' : 'red' !== tone ? 'var(--b)' : 'var(--c)'}>x</p>",
     ],
     [
       'an SVG stroke of currentColor',

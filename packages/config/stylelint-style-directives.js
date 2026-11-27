@@ -57,12 +57,19 @@ const binding =
 
 /**
  * The string literals a braced expression can evaluate to, so `{dark ? 'white' : x}` is
- * checked too. A literal right after `[`, `(` or `,` is a key or argument, not a value, and is
- * skipped. A template's `${…}` parts become a placeholder.
+ * checked too. A literal right after `[`, `(` or `,` is a key or argument, and one on either
+ * side of `==`, `===`, `!=` or `!==` is compared, not used, so both are skipped. A template's
+ * `${…}` parts become a placeholder.
  */
 const stringLiterals = (expression) =>
   [...expression.matchAll(/(['"`])((?:(?!\1).)*)\1/gsu)]
-    .filter((match) => !/[[(,]\s*$/u.test(expression.slice(0, match.index)))
+    .filter(({ 0: literal, index }) => {
+      const before = expression.slice(0, index);
+      const after = expression.slice(index + literal.length);
+      return (
+        !/(?:[[(,]|[=!]==?)\s*$/u.test(before) && !/^\s*[=!]=/u.test(after)
+      );
+    })
     .map(([, , text]) => text.replaceAll(/\$\{[^{}]*\}/gu, 'x'));
 
 /** The 1-based line and column of `index` in `source`. */
