@@ -5,6 +5,7 @@
     title,
     lede,
     step,
+    wide = false,
     children,
     footer,
   }: {
@@ -12,6 +13,8 @@
     lede?: string;
     /** Where this screen sits in a multi-screen flow, such as "Step 1 of 4", shown above the title. */
     step?: string;
+    /** For a screen with a list, such as Connect GitHub. */
+    wide?: boolean;
     children: Snippet;
     footer?: Snippet;
   } = $props();
@@ -25,7 +28,7 @@
 </script>
 
 <section class="auth" aria-labelledby="auth-title">
-  <div class="card">
+  <div class="card" class:wide>
     <span class="mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="22" height="22">
         <circle
@@ -83,6 +86,10 @@
     border: var(--border-hairline) solid var(--line);
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-panel);
+  }
+
+  .card.wide {
+    width: min(35rem, 100%);
   }
 
   .mark {

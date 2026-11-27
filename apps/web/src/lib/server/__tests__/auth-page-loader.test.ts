@@ -144,6 +144,21 @@ describe('MissionControlAuthPageLoader recovery codes', () => {
   });
 });
 
+describe('MissionControlAuthPageLoader connect GitHub', () => {
+  it('lets a signed-in visitor in without calling Mission Control and sends others to sign in', async () => {
+    const signedIn = new PageVisit({ viewer: ada });
+    const signedOut = new PageVisit({ viewer: null });
+
+    expect(
+      await RedirectCatcher.location(loader.connectGithub(signedIn.event)),
+    ).toBeNull();
+    expect(
+      await RedirectCatcher.location(loader.connectGithub(signedOut.event)),
+    ).toBe('/sign-in');
+    expect(signedIn.requested).toEqual([]);
+  });
+});
+
 describe('MissionControlAuthPageLoader settings', () => {
   it('sends a signed-out visitor to sign in', async () => {
     const visit = new PageVisit({ viewer: null });

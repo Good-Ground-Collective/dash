@@ -23,14 +23,14 @@
   let busy = $state(false);
   let card = $state<AuthCard>();
 
-  /** Runs one request. When a new set appears, focus goes to the title so the step is announced again with the codes below it. Once confirmed, the page stays busy until home loads. */
+  /** Runs one request. When a new set appears, focus goes to the title so the step is announced again with the codes below it. Once confirmed, the page stays busy until the next step loads. */
   const advance = async (next: () => Promise<RecoveryCodeStep>) => {
     const before = current.step === 'saving' ? current.set.setId : null;
     busy = true;
     current = await next();
 
     if (current.step === 'confirmed') {
-      await goto('/', { invalidateAll: true });
+      await goto('/setup/github', { invalidateAll: true });
       return;
     }
 
@@ -73,7 +73,7 @@
       />
     {/key}
   {:else if current.step === 'confirmed'}
-    <p class="muted" role="status">Saved. Opening Dash…</p>
+    <p class="muted" role="status">Saved. Opening the next step…</p>
   {:else if current.step === 'reauth'}
     <div class="auth-notice" role="alert">
       Confirm it’s you. Making recovery codes needs a sign-in from the last 15

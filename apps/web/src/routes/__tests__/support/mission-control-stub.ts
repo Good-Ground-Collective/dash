@@ -6,6 +6,7 @@ import {
 } from 'node:http';
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
+import { GithubStub } from './github-stub.ts';
 import { RecoveryCodesStub } from './recovery-codes-stub.ts';
 import { RecoveryStub } from './recovery-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
@@ -54,7 +55,7 @@ interface StubReply {
  * passkey sign-in.
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
- * `/recovery-codes` answers as `RecoveryCodesStub` describes.
+ * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -65,6 +66,7 @@ export class MissionControlStub {
   private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
+  private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
   private readonly recovery = new RecoveryStub({
     email: () => this.person?.email ?? null,
     webOrigin: () => this.webOrigin,
@@ -89,17 +91,18 @@ export class MissionControlStub {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<void> {
-    response.setHeader('access-control-allow-origin', this.webOrigin);
-    response.setHeader('access-control-allow-credentials', 'true');
-    response.setHeader('access-control-allow-headers', 'accept, content-type');
-    response.setHeader('access-control-allow-methods', 'GET, POST');
-    response.setHeader('access-control-expose-headers', 'retry-after');
+    StubRequest.allowCors({ response, webOrigin: this.webOrigin });
     if (request.method === 'OPTIONS') {
       response.writeHead(204).end();
       return;
     }
 
     const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname.startsWith('/integrations/github/')) {
+      const signedIn = this.sessionOf(request) !== null;
+      this.github.serve({ request, response, url, signedIn });
+      return;
+    }
     const body =
       request.method === 'POST' ? await StubRequest.body(request) : '';
     const reply = this.route({
@@ -194,6 +197,7 @@ export class MissionControlStub {
     this.serviceAccounts.reset();
     this.recovery.reset();
     this.recoveryCodes.reset();
+    this.github.reset();
     return { status: 200, body: { status: true } };
   }
 

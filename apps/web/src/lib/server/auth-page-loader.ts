@@ -55,6 +55,8 @@ export interface AuthPageLoader {
   readonly recover: (event: AuthPageLoadEvent) => Promise<void>;
   /** `/setup/recovery-codes`, for a signed-in person whose codes aren't confirmed yet. */
   readonly recoveryCodes: (event: AuthPageLoadEvent) => Promise<void>;
+  /** `/setup/github`, for a signed-in person. The accounts load in the browser, since listing them calls GitHub. */
+  readonly connectGithub: (event: AuthPageLoadEvent) => Promise<void>;
   readonly settings: (event: AuthPageLoadEvent) => Promise<SettingsPageData>;
   readonly serviceAccounts: (
     event: AuthPageLoadEvent,
@@ -88,6 +90,10 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
     const shell = shellDataSchema.parse(await event.parent());
     if (shell.viewer === null) redirect(303, '/sign-in');
     if (shell.recoveryCodes?.confirmed === true) redirect(303, '/');
+  };
+
+  readonly connectGithub = async (event: AuthPageLoadEvent): Promise<void> => {
+    if ((await this.viewer(event)) === null) redirect(303, '/sign-in');
   };
 
   readonly settings = async (
