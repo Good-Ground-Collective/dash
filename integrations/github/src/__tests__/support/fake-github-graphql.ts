@@ -9,6 +9,7 @@ import {
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubActivityFeed } from '#src/services/github-activity-feed/github-activity-feed.ts';
+import { GithubTaskTracker } from '#src/services/github-task-tracker/github-task-tracker.ts';
 
 export type GraphqlVariables = Record<string, string | number | boolean | null>;
 
@@ -91,6 +92,14 @@ export class FakeGithubGraphql {
       appId: appConfig.appId,
       privateKey: appConfig.privateKey,
       ...credentials,
+      request: this.request(),
+    });
+  }
+
+  tracker(): GithubTaskTracker {
+    return new GithubTaskTracker({
+      appId: appConfig.appId,
+      privateKey: appConfig.privateKey,
       request: this.request(),
     });
   }

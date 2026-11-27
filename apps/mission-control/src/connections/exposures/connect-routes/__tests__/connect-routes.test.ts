@@ -238,7 +238,7 @@ class RecordingListener implements ConnectListener {
 describe('ConnectionsModule connect listener', () => {
   it('is told once the person links their account and again once they install', async () => {
     const listener = new RecordingListener();
-    const harness = new ConnectionsHarness({ listener });
+    const harness = new ConnectionsHarness({ listeners: [listener] });
     running.push(harness);
     await harness.link({ userId: adaId });
 
@@ -255,12 +255,14 @@ describe('ConnectionsModule connect listener', () => {
     ]);
   });
 
-  it('still finishes the install when the listener fails', async () => {
+  it('still finishes the install and tells the other listeners when one fails', async () => {
     const listener = new RecordingListener();
-    const harness = new ConnectionsHarness({ listener });
+    const other = new RecordingListener();
+    const harness = new ConnectionsHarness({ listeners: [listener, other] });
     running.push(harness);
     await harness.link({ userId: adaId });
     listener.failure = new Error('queue unavailable');
+    other.told.length = 0;
 
     const response = await (
       await harness.start()
@@ -273,5 +275,6 @@ describe('ConnectionsModule connect listener', () => {
       connect: 'installed',
     });
     expect(harness.connections.owned.size).toBe(1);
+    expect(other.told).toEqual([{ provider: 'github', userId: adaId }]);
   });
 });

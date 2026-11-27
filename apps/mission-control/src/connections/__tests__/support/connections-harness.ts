@@ -64,7 +64,7 @@ export class ConnectionsHarness {
     props: {
       offerFlow?: boolean;
       logLevel?: 'info' | 'silent';
-      listener?: ConnectListener;
+      listeners?: readonly ConnectListener[];
     } = {},
   ) {
     this.logLevel = props.logLevel ?? 'silent';
@@ -91,7 +91,7 @@ export class ConnectionsHarness {
       secret,
       baseUrl,
       webOrigin,
-      listener: props.listener,
+      listeners: props.listeners,
     });
   }
 

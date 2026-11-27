@@ -26,19 +26,20 @@ describe('GithubIntegration', () => {
     expect(() => new GithubIntegration({ id: '' })).toThrow(ZodError);
   });
 
-  it('offers task tracking, source control and custom fields', () => {
-    expect(integration.capability(taskTrackerCapability)).toBeDefined();
+  it('offers source control and custom fields', () => {
     expect(integration.capability(sourceControlCapability)).toBeDefined();
     expect(integration.capability(customFieldsCapability)).toBeDefined();
   });
 
-  it('offers the connect flow and activity feed only when the App is configured', () => {
+  it('offers the connect flow, activity feed and task tracking only when the App is configured', () => {
     const withApp = new GithubIntegration({ id: 'github', app: appConfig });
 
     expect(integration.capability(connectFlowCapability)).toBeUndefined();
     expect(integration.capability(activityFeedCapability)).toBeUndefined();
+    expect(integration.capability(taskTrackerCapability)).toBeUndefined();
     expect(withApp.capability(connectFlowCapability)).toBeDefined();
     expect(withApp.capability(activityFeedCapability)).toBeDefined();
+    expect(withApp.capability(taskTrackerCapability)).toBeDefined();
   });
 
   it('offers nothing else', () => {
@@ -46,10 +47,7 @@ describe('GithubIntegration', () => {
     expect(integration.capability(unknown)).toBeUndefined();
   });
 
-  it('reads nothing while it is a stub', async () => {
-    await expect(
-      integration.capability(taskTrackerCapability)?.listInitiatives(),
-    ).resolves.toEqual([]);
+  it('reads nothing while source control is a stub', async () => {
     await expect(
       integration
         .capability(sourceControlCapability)

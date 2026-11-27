@@ -39,7 +39,7 @@ export class ConnectRoutes {
   private readonly state: ConnectState;
   private readonly paths: ConnectPaths;
   private readonly webOrigin: string;
-  private readonly listener: ConnectListener | undefined;
+  private readonly listeners: readonly ConnectListener[];
 
   constructor(props: {
     connections: OwnedConnections;
@@ -48,7 +48,7 @@ export class ConnectRoutes {
     state: ConnectState;
     paths: ConnectPaths;
     webOrigin: string;
-    listener?: ConnectListener | undefined;
+    listeners: readonly ConnectListener[];
   }) {
     this.connections = props.connections;
     this.flow = props.flow;
@@ -56,7 +56,7 @@ export class ConnectRoutes {
     this.state = props.state;
     this.paths = props.paths;
     this.webOrigin = props.webOrigin;
-    this.listener = props.listener;
+    this.listeners = props.listeners;
   }
 
   register(app: ZodFastifyInstance): void {
@@ -222,27 +222,29 @@ export class ConnectRoutes {
     return this.finish({ reply, returnTo, outcome: 'installed' });
   }
 
-  /** A listener's failure is logged and never fails the connect: the next scheduled read catches up. */
+  /** Each listener's failure is logged and never fails the connect or another listener: the next scheduled read catches up. */
   private async announce(props: {
     request: FastifyRequest;
     userId: string;
   }): Promise<void> {
-    try {
-      await this.listener?.connected({
-        provider: this.connections.provider,
-        userId: props.userId,
-      });
-    } catch (error) {
-      props.request.log.error(
-        {
+    for (const listener of this.listeners) {
+      try {
+        await listener.connected({
           provider: this.connections.provider,
-          error:
-            error instanceof Error
-              ? `${error.name}: ${error.message}`
-              : 'unknown',
-        },
-        'Starting a read after connecting failed',
-      );
+          userId: props.userId,
+        });
+      } catch (error) {
+        props.request.log.error(
+          {
+            provider: this.connections.provider,
+            error:
+              error instanceof Error
+                ? `${error.name}: ${error.message}`
+                : 'unknown',
+          },
+          'Starting a read after connecting failed',
+        );
+      }
     }
   }
 

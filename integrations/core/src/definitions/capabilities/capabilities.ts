@@ -5,6 +5,7 @@ import type { SourceControl } from '#src/contracts/source-control.ts';
 import type { TaskTracker } from '#src/contracts/task-tracker.ts';
 import { Capability } from '#src/definitions/capabilities/capability.ts';
 
+/** Initiatives, epics and tickets through an installation of the provider's app, for `owned` connections. */
 export const taskTrackerCapability = new Capability<TaskTracker>({
   name: 'task-tracker',
 });

@@ -33,7 +33,8 @@ interface ConnectionsModuleProps {
   secret: string;
   baseUrl: string;
   webOrigin: string;
-  listener?: ConnectListener | undefined;
+  /** Told when someone finishes connecting, each on its own: one failing never stops the rest. */
+  listeners?: readonly ConnectListener[] | undefined;
 }
 
 type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
@@ -105,7 +106,7 @@ export class ConnectionsModule implements HttpModule {
         state,
         paths,
         webOrigin: module.webOrigin,
-        listener: module.listener,
+        listeners: module.listeners ?? [],
       }),
       new AccountsRoutes({
         accounts: new ConnectableAccounts({

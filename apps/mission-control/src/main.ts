@@ -16,6 +16,10 @@ import { DrizzleHeartbeatRepository } from '#src/heartbeat/repositories/heartbea
 import { LiveModule } from '#src/live/module.ts';
 import { IntegrationsModule } from '#src/integrations/module.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
+import { ObjectivesModule } from '#src/objectives/module.ts';
+import { DrizzleObjectiveOverlayRepository } from '#src/objectives/repositories/objective-overlays/objective-overlay-repository.ts';
+import { DrizzleObjectiveRecordReader } from '#src/objectives/repositories/objective-records/objective-record-reader.ts';
+import { DrizzleObjectiveRecordWriter } from '#src/objectives/repositories/objective-records/objective-record-writer.ts';
 import { OnboardingModule } from '#src/onboarding/module.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
@@ -51,6 +55,13 @@ const githubFeed = new GithubFeedModule({
   reader: new DrizzleGithubRecordReader({ database }),
   writer: new DrizzleGithubRecordWriter({ database }),
 });
+const objectives = new ObjectivesModule({
+  registry: integrations.registry,
+  identity: auth.identity,
+  reader: new DrizzleObjectiveRecordReader({ database }),
+  writer: new DrizzleObjectiveRecordWriter({ database }),
+  overlays: new DrizzleObjectiveOverlayRepository({ database }),
+});
 const connections = new ConnectionsModule({
   registry: integrations.registry,
   identity: auth.identity,
@@ -60,7 +71,7 @@ const connections = new ConnectionsModule({
   secret: config.authSecret,
   baseUrl: config.authBaseUrl,
   webOrigin: config.webOrigin,
-  listener: githubFeed,
+  listeners: [githubFeed, objectives],
 });
 const liveEvents = new InProcessLiveEvents();
 const heartbeat = new HeartbeatModule({
@@ -81,6 +92,7 @@ const platform = new PlatformModule({
     }),
     connections,
     githubFeed,
+    objectives,
     new OnboardingModule({
       identity: auth.identity,
       connections: connectionRepository,
@@ -88,7 +100,7 @@ const platform = new PlatformModule({
     new LiveModule({ liveEvents }),
     heartbeat,
   ],
-  workflowModules: [heartbeat, githubFeed],
+  workflowModules: [heartbeat, githubFeed, objectives],
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

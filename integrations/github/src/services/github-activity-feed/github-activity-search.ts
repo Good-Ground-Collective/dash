@@ -1,23 +1,17 @@
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
 import {
-  type GithubGraphqlData,
   type GithubGraphqlVariables,
   type GithubIssueNode,
   type GithubPullRequestNode,
   type GithubSearchData,
   githubSearchDataSchema,
 } from '#src/contracts/github-activity-response.ts';
+import type { GraphqlCall } from '#src/services/github-graphql/github-graphql.ts';
 
 const searchPageSize = 50;
 const maxSearchPages = 3;
 
 const searchKeys = ['review', 'authored', 'assigned'] as const;
-
-export type GraphqlCall = (call: {
-  query: string;
-  variables: GithubGraphqlVariables;
-  tolerate?: ReadonlySet<string>;
-}) => Promise<GithubGraphqlData>;
 
 export interface SearchedActivity {
   review: GithubPullRequestNode[];
