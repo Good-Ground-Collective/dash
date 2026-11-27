@@ -7,6 +7,10 @@ const serviceAccountsPort = 4321;
 const serviceAccountsStubPort = 59997;
 const serviceAccountsWebUrl = `http://localhost:${serviceAccountsPort}`;
 const serviceAccountsStubUrl = `http://localhost:${serviceAccountsStubPort}`;
+const accountMenuPort = 4322;
+const accountMenuStubPort = 59996;
+const accountMenuWebUrl = `http://localhost:${accountMenuPort}`;
+const accountMenuStubUrl = `http://localhost:${accountMenuStubPort}`;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -23,6 +27,7 @@ export default defineConfig({
       testIgnore: [
         '**/passkeys.e2e.test.ts',
         '**/service-accounts.e2e.test.ts',
+        '**/account-menu.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -44,6 +49,12 @@ export default defineConfig({
       testMatch: '**/service-accounts.e2e.test.ts',
       metadata: { missionControlUrl: serviceAccountsStubUrl },
       use: { ...devices['Desktop Chrome'], baseURL: serviceAccountsWebUrl },
+    },
+    {
+      name: 'account-menu',
+      testMatch: '**/account-menu.e2e.test.ts',
+      metadata: { missionControlUrl: accountMenuStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: accountMenuWebUrl },
     },
   ],
   webServer: [
@@ -80,6 +91,23 @@ export default defineConfig({
     {
       command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${serviceAccountsStubPort} ${serviceAccountsWebUrl}`,
       url: `${serviceAccountsStubUrl}/api/auth/setup/status`,
+      reuseExistingServer: false,
+    },
+    {
+      command: 'node build',
+      url: accountMenuWebUrl,
+      reuseExistingServer: false,
+      env: {
+        HOST: 'localhost',
+        PORT: String(accountMenuPort),
+        API_BASE_URL: accountMenuStubUrl,
+        APP_VERSION: 'v1.1.1',
+        APP_COMMIT: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+      },
+    },
+    {
+      command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${accountMenuStubPort} ${accountMenuWebUrl}`,
+      url: `${accountMenuStubUrl}/api/auth/setup/status`,
       reuseExistingServer: false,
     },
     ...(liveMissionControl === undefined

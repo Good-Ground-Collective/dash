@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EnvironmentBuildStamp } from '#lib/build/build-stamp.ts';
 import { MissionControlShellLoader } from '#lib/server/shell-loader.ts';
 
 class CountingFetch {
@@ -15,8 +16,14 @@ class CountingFetch {
   };
 }
 
+const build = EnvironmentBuildStamp.from({
+  version: 'v1.1.1',
+  commit: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+});
+
 const shellLoader = new MissionControlShellLoader({
   apiBaseUrl: 'https://api.example.test',
+  build,
 });
 
 describe('ShellLoader', () => {
@@ -28,7 +35,7 @@ describe('ShellLoader', () => {
         fetch: counter.fetch,
         locals: { hasSessionCookie: false },
       }),
-    ).resolves.toEqual({ viewer: null });
+    ).resolves.toEqual({ viewer: null, build });
     expect(counter.calls).toBe(0);
   });
 
@@ -43,7 +50,7 @@ describe('ShellLoader', () => {
         fetch: counter.fetch,
         locals: { hasSessionCookie: true },
       }),
-    ).resolves.toEqual({ viewer });
+    ).resolves.toEqual({ viewer, build });
   });
 
   it('falls back to no viewer when Mission Control fails', async () => {
@@ -56,13 +63,13 @@ describe('ShellLoader', () => {
         fetch: counter.fetch,
         locals: { hasSessionCookie: true },
       }),
-    ).resolves.toEqual({ viewer: null });
+    ).resolves.toEqual({ viewer: null, build });
     expect(counter.calls).toBe(1);
   });
 
   it('refuses an API base URL that is not a URL', () => {
     expect(
-      () => new MissionControlShellLoader({ apiBaseUrl: 'not a url' }),
+      () => new MissionControlShellLoader({ apiBaseUrl: 'not a url', build }),
     ).toThrow();
   });
 });

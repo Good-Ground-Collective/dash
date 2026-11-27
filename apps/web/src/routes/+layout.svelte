@@ -27,6 +27,6 @@
   });
 </script>
 
-<AppShell viewer={data.viewer}>
+<AppShell viewer={data.viewer} build={data.build}>
   {@render children()}
 </AppShell>
