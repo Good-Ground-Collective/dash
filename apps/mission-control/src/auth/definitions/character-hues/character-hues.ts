@@ -18,7 +18,7 @@ export type CharacterHue = z.infer<typeof characterHueSchema>;
 export const storedCharacterHueSchema = characterHueSchema.catch('neutral');
 
 export interface CharacterHueRegistry {
-  /** Every hue, in the order a picker offers them. */
+  /** Every hue a bench or agent may be stored with. */
   readonly all: readonly CharacterHue[];
   /** A coloured hue for a bench id or agent name, the same every time, for accounts created without one. */
   forIdentifier(identifier: string): CharacterHue;
