@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Decides whether CI may deploy a release: reads tag names on stdin, one per
 # line, and prints the newest vX.Y.Z among them. Exits 0 when <version> is that
-# newest release (or newer), 3 when a newer release supersedes it, and 1 when
+# newest release (or newer), 3 when a newer release supersedes it, 1 when
 # stdin holds no release tag, and 2 on a usage error.
 # Usage: bin/deploy-gate <vX.Y.Z> < tags
 set -euo pipefail
