@@ -139,10 +139,14 @@ class SetupCaller {
 }
 
 describe('TokenSetup rate limit', () => {
-  it('runs Better Auth with its rate limiter pinned on, whatever NODE_ENV is', async () => {
+  it("pins Better Auth's rate limiter on, leaving setup to its own throttle", async () => {
     const context = await new PasskeyIdentity().identity.auth.$context;
 
     expect(context.rateLimit.enabled).toBe(true);
+    expect(context.rateLimit.customRules).toMatchObject({
+      '/setup/check': false,
+      '/setup/begin': false,
+    });
   });
 
   it('shares one budget between check and begin, whatever address the caller claims', async () => {

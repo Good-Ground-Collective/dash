@@ -93,11 +93,20 @@ export interface Identity {
   session(props: { headers: Headers }): Promise<PrincipalSession | null>;
 }
 
+/** Endpoints limited by their own process-wide throttle rather than Better Auth's per-address one. */
+const globallyThrottledPaths = [
+  '/setup/check',
+  '/setup/begin',
+  '/recovery/redeem',
+];
+
 /**
  * Better Auth configured for Dash: principals in `user`, passkeys as the only sign-in, 30-day
  * sliding sessions in an HttpOnly, SameSite=Lax cookie, fresh for 15 minutes after sign-in. The origin check is pinned on because Better Auth skips it when
  * NODE_ENV is `test`, which would let tests pass that production would fail. The rate limiter is
  * pinned on for the same reason: Better Auth otherwise enables it only when NODE_ENV is `production`.
+ * It keys on the client address, which isn't trusted behind the proxy, so it skips the setup and
+ * recovery endpoints: each has its own process-wide throttle instead.
  */
 export class BetterAuthIdentity implements Identity {
   readonly auth: Auth;
@@ -157,7 +166,12 @@ export class BetterAuthIdentity implements Identity {
             ? { enabled: false }
             : { enabled: true, domain: settings.cookieDomain },
       },
-      rateLimit: { enabled: true },
+      rateLimit: {
+        enabled: true,
+        customRules: Object.fromEntries(
+          globallyThrottledPaths.map((path) => [path, false]),
+        ),
+      },
       telemetry: { enabled: false },
     });
   }
