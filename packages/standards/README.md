@@ -67,6 +67,52 @@ Wire schemas avoid transforms and refinements that JSON Schema can't express, so
 
 The package's own major version moves only when a message's major version moves. New messages and minor message bumps are minor package releases.
 
+## Telemetry attributes
+
+Telemetry attribute names follow the [OpenTelemetry GenAI semantic conventions](https://github.com/open-telemetry/semantic-conventions/blob/v1.45.0/docs/registry/attributes/gen-ai.md), so the same attributes can go out over OTLP later without renaming anything. `genAiAttributes` holds the names, `telemetryAttributesSchema` is a flat, all-optional attribute set that messages embed, and `genAiSemconvVersion` is the pinned release, `1.45.0`.
+
+```ts
+import {
+  genAiAttributes,
+  telemetryAttributesSchema,
+} from '@good-ground-collective/agentic-communication-standards';
+
+const attributes = telemetryAttributesSchema.parse({
+  [genAiAttributes.requestModel]: 'claude-opus-4-1',
+  [genAiAttributes.usageInputTokens]: 1200,
+});
+```
+
+### The `dash.*` rule
+
+Anything the semantic conventions don't cover goes under `dash.*`, in `dashAttributes`. Never put a field of our own under `gen_ai.*`: a later semconv release could claim the name with a different meaning.
+
+### The pinned release
+
+The GenAI conventions are still in development, and names change between releases. `src/telemetry/semconv-v1.45.0.json` lists every `gen_ai.*` attribute in the pinned release, and a test fails if a constant names one that isn't on the list. Deprecated names, such as `gen_ai.system` and `gen_ai.usage.prompt_tokens`, are left off it. Moving to a new release is a deliberate change with its own pull request: replace the list, bump `genAiSemconvVersion`, and rename any constants the release renamed.
+
+In 1.45.0 the core registry marks the GenAI attributes as moved to the [semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai) repository, where they are still in development. Its first release, 0.1.0, renames `gen_ai.usage.cache_creation.input_tokens` to `gen_ai.usage.cache_write.input_tokens`.
+
+### Mapping
+
+| Attribute                                  | Stability   | What it means for Dash                                        |
+| ------------------------------------------ | ----------- | ------------------------------------------------------------- |
+| `gen_ai.provider.name`                     | Development | The model provider, such as `anthropic` or `openai`           |
+| `gen_ai.request.model`                     | Development | The model an agent asked for                                  |
+| `gen_ai.response.model`                    | Development | The model that answered, which can differ from the request    |
+| `gen_ai.operation.name`                    | Development | What the agent was doing, such as `chat` or `execute_tool`    |
+| `gen_ai.conversation.id`                   | Development | The harness session, such as a Claude Code session ID         |
+| `gen_ai.agent.id`                          | Development | The agent's unique ID                                         |
+| `gen_ai.agent.name`                        | Development | The agent's human-readable name                               |
+| `gen_ai.tool.name`                         | Development | The tool an agent called                                      |
+| `gen_ai.usage.input_tokens`                | Development | Input tokens, including cached ones                           |
+| `gen_ai.usage.output_tokens`               | Development | Output tokens                                                 |
+| `gen_ai.usage.cache_read.input_tokens`     | Development | Input tokens served from the provider's prompt cache          |
+| `gen_ai.usage.cache_creation.input_tokens` | Development | Input tokens written to the provider's prompt cache           |
+| `dash.usage.cost_usd`                      | Dash        | What the usage cost, in US dollars; semconv has no cost field |
+
+What gets reported, and when, belongs to the heartbeat and telemetry discussions.
+
 ## License
 
 MIT

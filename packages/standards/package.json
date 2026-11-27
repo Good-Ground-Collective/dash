@@ -20,7 +20,8 @@
       "@good-ground-collective/standards-source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
-    }
+    },
+    "#src/*.json": "./src/*.json"
   },
   "files": [
     "dist"
