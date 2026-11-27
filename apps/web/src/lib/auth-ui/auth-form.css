@@ -1,3 +1,11 @@
+:where(.auth) a:not(.auth-button) {
+  color: var(--ink);
+}
+
+:where(.auth) a:not(.auth-button):hover {
+  color: var(--ink-muted);
+}
+
 .auth-form {
   display: grid;
   gap: var(--space-4);
