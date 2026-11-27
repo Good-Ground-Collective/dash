@@ -20,7 +20,7 @@ import {
 import type { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
 import type { ConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
-import { SignedInPerson } from '#src/connections/services/signed-in-person/signed-in-person.ts';
+import { SignedInPerson } from '#src/auth/services/signed-in-person/signed-in-person.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
 /**

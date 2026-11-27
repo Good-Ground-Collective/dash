@@ -53,11 +53,15 @@ export class GithubStub {
     this.accounts = GithubStub.sampleAccounts();
   }
 
-  /** Whether Dash would hold a GitHub connection: authorized, with the app installed somewhere. */
+  /** Whether Dash would hold a GitHub connection: authorized, with an installation that isn't suspended. */
   connected(): boolean {
     return (
       this.scenario === 'linked' &&
-      this.accounts.some((account) => account.install.state === 'installed')
+      this.accounts.some(
+        (account) =>
+          account.install.state === 'installed' &&
+          account.install.suspended !== true,
+      )
     );
   }
 

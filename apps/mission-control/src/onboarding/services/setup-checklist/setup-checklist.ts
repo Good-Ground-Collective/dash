@@ -1,17 +1,15 @@
 import type { SetupChecklistReport } from '#src/onboarding/contracts/setup-checklist.ts';
 
-/** The provider the checklist asks you to connect. */
 const githubProvider = 'github';
 
 /** A second passkey gets you in when the first device is lost. */
 const passkeysWanted = 2;
 
-/** How many passkeys a person has. */
 export interface PasskeyCounter {
   passkeyCount(props: { userId: string }): Promise<number>;
 }
 
-/** Whether Dash reads a provider through any connection. */
+/** Whether Dash can read a provider through any connection that isn't suspended. */
 export interface ConnectionPresence {
   exists(props: { provider: string }): Promise<boolean>;
 }

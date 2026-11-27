@@ -91,7 +91,7 @@ export interface Identity {
   handle(request: Request): Promise<Response>;
   /** The principal behind the request's session cookie, or `null` without a valid session. Read-only: sessions slide through `/api/auth/get-session`, which can set the renewed cookie. */
   session(props: { headers: Headers }): Promise<PrincipalSession | null>;
-  /** How many passkeys the principal has registered. */
+  /** Counts every registered credential, whichever device it lives on. */
   passkeyCount(props: { userId: string }): Promise<number>;
 }
 

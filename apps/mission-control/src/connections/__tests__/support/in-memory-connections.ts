@@ -45,7 +45,8 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
 
   async exists(props: { provider: string }): Promise<boolean> {
     return [...this.owned.values()].some(
-      (connection) => connection.provider === props.provider,
+      (connection) =>
+        connection.provider === props.provider && !connection.suspended,
     );
   }
 

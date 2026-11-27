@@ -61,11 +61,14 @@ class FreshAccount {
     return Object.fromEntries(report.items.map((item) => [item.id, item.done]));
   }
 
-  async connectGitHub(): Promise<void> {
+  async connectGitHub(props: { suspended?: boolean } = {}): Promise<void> {
     await this.connections.saveOwned({
       provider: 'github',
       connectedBy: this.fixture.tables.user[0]?.id ?? '',
-      installation: acmeInstallation,
+      installation: {
+        ...acmeInstallation,
+        suspended: props.suspended ?? false,
+      },
     });
   }
 }
@@ -78,6 +81,17 @@ describe('OnboardingModule', () => {
     expect(await account.done(browser)).toEqual({
       connectGitHub: false,
       secondPasskey: false,
+    });
+  });
+
+  it('leaves GitHub open while its only installation is suspended', async () => {
+    const account = new FreshAccount();
+    const browser = await account.fixture.firstPerson();
+
+    await account.connectGitHub({ suspended: true });
+
+    expect(await account.done(browser)).toMatchObject({
+      connectGitHub: false,
     });
   });
 

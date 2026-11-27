@@ -157,8 +157,12 @@ describe('BetterAuthIdentity sessions', () => {
       headers: new Headers({ cookie }),
     });
 
+    if (session === null) {
+      throw new Error('Expected the signed-in session');
+    }
+
     await expect(
-      fixture.identity.passkeyCount({ userId: session?.principalId ?? '' }),
+      fixture.identity.passkeyCount({ userId: session.principalId }),
     ).resolves.toBe(0);
   });
 

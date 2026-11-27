@@ -1,5 +1,5 @@
 import type { Identity } from '#src/auth/services/identity/identity.ts';
-import { SignedInPerson } from '#src/connections/services/signed-in-person/signed-in-person.ts';
+import { SignedInPerson } from '#src/auth/services/signed-in-person/signed-in-person.ts';
 import { setupChecklistSchema } from '#src/onboarding/contracts/setup-checklist.ts';
 import { SignInRequiredError } from '#src/onboarding/errors.ts';
 import type { SetupChecklist } from '#src/onboarding/services/setup-checklist/setup-checklist.ts';

@@ -17,7 +17,7 @@ import type {
   ConnectState,
   ConnectStateRequest,
 } from '#src/connections/services/connect-state/connect-state.ts';
-import { SignedInPerson } from '#src/connections/services/signed-in-person/signed-in-person.ts';
+import { SignedInPerson } from '#src/auth/services/signed-in-person/signed-in-person.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
 type AccountsResponse = z.input<typeof accountsResponseSchema>;
