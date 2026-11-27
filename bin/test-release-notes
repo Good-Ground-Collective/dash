@@ -1,41 +1,56 @@
 #!/usr/bin/env node
-// Renders release notes through semantic-release's own notes generator with
-// the repo's preset, so a preset/writer version mismatch fails CI before it
-// reaches the release job on main. Usage: bin/test-release-notes
+// Fails when the commit analyzer or notes generator can't load the repo's preset.
 import { createRequire } from 'node:module';
 
 const fromRoot = createRequire(`${process.cwd()}/package.json`);
 const fromSemanticRelease = createRequire(fromRoot.resolve('semantic-release'));
-const generatorPath = fromSemanticRelease.resolve(
-  '@semantic-release/release-notes-generator',
+const { analyzeCommits } = await import(
+  fromSemanticRelease.resolve('@semantic-release/commit-analyzer')
 );
-const { generateNotes } = await import(generatorPath);
-const { release } = fromRoot('./package.json');
-const [, config] = release.plugins.find(
-  (plugin) =>
-    Array.isArray(plugin) &&
-    plugin[0] === '@semantic-release/release-notes-generator',
+const { generateNotes } = await import(
+  fromSemanticRelease.resolve('@semantic-release/release-notes-generator')
 );
 
-const notes = await generateNotes(config, {
+const { release } = fromRoot('./package.json');
+const pluginConfig = (name) =>
+  release.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === name,
+  )[1];
+
+const commit = {
+  hash: '0000000',
+  message: 'feat(ci): sample feature',
+  subject: 'feat(ci): sample feature',
+  body: '',
+  committerDate: new Date().toISOString(),
+};
+const context = {
   cwd: process.cwd(),
   options: { repositoryUrl: 'https://github.com/Good-Ground-Collective/dash' },
   lastRelease: {},
   nextRelease: { version: '1.0.0', gitTag: 'v1.0.0' },
-  commits: [
-    {
-      hash: '0000000',
-      message: 'feat(ci): sample feature',
-      subject: 'feat(ci): sample feature',
-      body: '',
-      committerDate: new Date().toISOString(),
-    },
-  ],
-  logger: console,
-});
+  commits: [commit],
+  logger: { log() {}, error: console.error, success() {}, warn: console.warn },
+};
 
+const releaseType = await analyzeCommits(
+  pluginConfig('@semantic-release/commit-analyzer'),
+  context,
+);
+if (releaseType !== 'minor') {
+  console.error(
+    `commit analyzer returned ${releaseType} for a feat commit, want minor`,
+  );
+  process.exit(1);
+}
+
+const notes = await generateNotes(
+  pluginConfig('@semantic-release/release-notes-generator'),
+  context,
+);
 if (!notes.includes('sample feature')) {
   console.error('release notes did not render the sample commit');
   process.exit(1);
 }
-console.log('ok: release notes render');
+
+console.log('ok: commit analyzer and release notes load the preset');
