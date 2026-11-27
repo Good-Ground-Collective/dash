@@ -20,6 +20,13 @@ export class PasskeyBrowser {
     this.authenticator = new SoftwareAuthenticator({ origin: props.origin });
   }
 
+  /** The cookies this browser holds, as a `cookie` header for requests to other Mission Control routes. */
+  cookieHeader(): string {
+    return [...this.cookies]
+      .map(([name, value]) => `${name}=${value}`)
+      .join('; ');
+  }
+
   async get(path: string): Promise<Response> {
     return this.send(path, { method: 'GET' });
   }
@@ -130,10 +137,7 @@ export class PasskeyBrowser {
     const headers = new Headers(init.headers);
     headers.set('origin', this.origin);
     if (this.cookies.size > 0) {
-      headers.set(
-        'cookie',
-        [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; '),
-      );
+      headers.set('cookie', this.cookieHeader());
     }
 
     const response = await this.identity.handle(

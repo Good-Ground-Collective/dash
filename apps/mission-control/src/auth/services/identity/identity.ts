@@ -91,6 +91,8 @@ export interface Identity {
   handle(request: Request): Promise<Response>;
   /** The principal behind the request's session cookie, or `null` without a valid session. Read-only: sessions slide through `/api/auth/get-session`, which can set the renewed cookie. */
   session(props: { headers: Headers }): Promise<PrincipalSession | null>;
+  /** Counts every registered credential, whichever device it lives on. */
+  passkeyCount(props: { userId: string }): Promise<number>;
 }
 
 /** Endpoints limited by their own process-wide throttle rather than Better Auth's per-address one. */
@@ -198,6 +200,14 @@ export class BetterAuthIdentity implements Identity {
       principalId: user.id,
       kind: user.kind,
       expiresAt: session.expiresAt,
+    });
+  }
+
+  async passkeyCount(props: { userId: string }): Promise<number> {
+    const context = await this.auth.$context;
+    return context.adapter.count({
+      model: 'passkey',
+      where: [{ field: 'userId', value: props.userId }],
     });
   }
 }

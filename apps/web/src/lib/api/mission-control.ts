@@ -50,6 +50,19 @@ export const recoveryCodeStatusSchema = z.object({
   remaining: z.number().int().nonnegative(),
 });
 
+export const setupChecklistSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z
+          .string()
+          .describe('Such as `connectGitHub`. Home skips ids it doesn’t know.'),
+        done: z.boolean(),
+      }),
+    )
+    .describe('In the order home lists them.'),
+});
+
 export const httpMissionControlPropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
   fetch: z.custom<typeof fetch>((value) => value instanceof Function),
@@ -60,6 +73,7 @@ export type Viewer = z.infer<typeof viewerSchema>;
 export type Passkey = z.infer<typeof passkeySchema>;
 export type SetupStatus = z.infer<typeof setupStatusSchema>;
 export type RecoveryCodeStatus = z.infer<typeof recoveryCodeStatusSchema>;
+export type SetupChecklistReport = z.infer<typeof setupChecklistSchema>;
 export type HttpMissionControlProps = z.input<
   typeof httpMissionControlPropsSchema
 >;
@@ -83,6 +97,11 @@ export interface RecoveryCodeReads {
   getRecoveryCodeStatus(): Promise<RecoveryCodeStatus>;
 }
 
+/** What's left of the signed-in person's setup, for home. */
+export interface OnboardingReads {
+  getSetupChecklist(): Promise<SetupChecklistReport>;
+}
+
 /** Reads the service account page renders from. */
 export interface ServiceAccountReads {
   /** The signed-in person's service accounts with their keys, oldest first. */
@@ -95,6 +114,7 @@ export class HttpMissionControl
     MissionControl,
     PasskeyReads,
     RecoveryCodeReads,
+    OnboardingReads,
     ServiceAccountReads
 {
   private readonly endpoint: MissionControlEndpoint;
@@ -137,6 +157,13 @@ export class HttpMissionControl
     return this.getJson({
       path: 'api/auth/recovery-codes/status',
       schema: recoveryCodeStatusSchema,
+    });
+  }
+
+  async getSetupChecklist(): Promise<SetupChecklistReport> {
+    return this.getJson({
+      path: 'onboarding/checklist',
+      schema: setupChecklistSchema,
     });
   }
 

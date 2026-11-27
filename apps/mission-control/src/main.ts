@@ -13,6 +13,7 @@ import { DrizzleHeartbeatRepository } from '#src/heartbeat/repositories/heartbea
 import { LiveModule } from '#src/live/module.ts';
 import { IntegrationsModule } from '#src/integrations/module.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
+import { OnboardingModule } from '#src/onboarding/module.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
 import { PostgresDatabase } from '#src/platform/services/database/database.ts';
@@ -38,10 +39,11 @@ const auth = new AuthModule({
   apiKeyPrefix: config.apiKeyPrefix,
 });
 const integrations = new IntegrationsModule({ githubApp: config.githubApp });
+const connectionRepository = new DrizzleConnectionRepository({ database });
 const connections = new ConnectionsModule({
   registry: integrations.registry,
   identity: auth.identity,
-  connections: new DrizzleConnectionRepository({ database }),
+  connections: connectionRepository,
   linkedAccounts: new DrizzleLinkedAccountRepository({ database }),
   deliveries: new DrizzleWebhookDeliveryRepository({ database }),
   secret: config.authSecret,
@@ -66,6 +68,10 @@ const platform = new PlatformModule({
       heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
     }),
     connections,
+    new OnboardingModule({
+      identity: auth.identity,
+      connections: connectionRepository,
+    }),
     new LiveModule({ liveEvents }),
     heartbeat,
   ],

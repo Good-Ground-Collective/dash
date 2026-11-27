@@ -20,6 +20,8 @@ export interface ConnectionRepository {
     installation: Installation;
   }): Promise<OwnedConnection>;
   listOwned(props: { provider: string }): Promise<OwnedConnection[]>;
+  /** Whether Dash can read the provider through any connection, owned or guest. A suspended installation doesn't count. */
+  exists(props: { provider: string }): Promise<boolean>;
   /** Whether Dash has a connection for this installation of the provider's app. */
   hasInstallation(props: {
     provider: string;
@@ -130,6 +132,20 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
         ),
       }),
     );
+  }
+
+  async exists(props: { provider: string }): Promise<boolean> {
+    const rows = await this.database.orm
+      .select({ id: connectionTable.id })
+      .from(connectionTable)
+      .where(
+        and(
+          eq(connectionTable.provider, props.provider),
+          eq(connectionTable.suspended, false),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async hasInstallation(props: {

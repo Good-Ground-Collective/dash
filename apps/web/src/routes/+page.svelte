@@ -1,15 +1,29 @@
+<script lang="ts">
+  import { SetupChecklist } from '#lib/onboarding/setup-checklist.ts';
+  import SetupChecklistCard from '#lib/onboarding-ui/SetupChecklistCard.svelte';
+  import type { PageProps } from './$types';
+
+  let { data }: PageProps = $props();
+
+  let checklist = $derived(SetupChecklist.from(data.checklist));
+</script>
+
 <svelte:head>
   <title>Home · Dash</title>
 </svelte:head>
 
 <section class="home" aria-labelledby="home-title">
   <h1 id="home-title">Home</h1>
-  <div class="panel">
-    <p class="empty-title">Nothing here yet</p>
-    <p class="empty-body">
-      Objectives, agents and benches will gather here as they come online.
-    </p>
-  </div>
+  {#if checklist}
+    <SetupChecklistCard {checklist} />
+  {:else}
+    <div class="panel">
+      <p class="empty-title">Nothing here yet</p>
+      <p class="empty-body">
+        Objectives, agents and benches will gather here as they come online.
+      </p>
+    </div>
+  {/if}
 </section>
 
 <style>
