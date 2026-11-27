@@ -141,6 +141,35 @@ test('a list that fails to load can be tried again', async () => {
   await expect(ConnectStep.accounts()).toBeFocused();
 });
 
+test('coming back to the tab refreshes the list quietly', async () => {
+  const refresh = async (status: number): Promise<void> => {
+    const answered = page.waitForResponse(
+      (response) =>
+        response.url().includes('/integrations/github/accounts') &&
+        response.status() === status,
+    );
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await answered;
+  };
+  await ConnectStep.scenario('failing');
+  await refresh(502);
+  await expect(ConnectStep.accounts().getByRole('listitem')).toHaveCount(5);
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(page.getByText(/couldn’t load/u)).toHaveCount(0);
+
+  await ConnectStep.scenario('linked');
+  await page.request.get(
+    `${missionControl}/integrations/github/__stub/install?login=night-shift`,
+    { maxRedirects: 0 },
+  );
+  await refresh(200);
+  await expect(ConnectStep.row('night-shift')).toContainText(
+    'All repositories (12)',
+  );
+});
+
 test('the step fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   const overflow = await page.evaluate(

@@ -31,14 +31,14 @@ class Harness {
   readonly returnTos: string[] = [];
   readonly flow: ConnectGithubFlow;
 
-  constructor(answer: () => Response | Promise<Response>) {
+  constructor(props: { answer: () => Response | Promise<Response> }) {
     const accounts = new HttpGithubAccounts({
       baseUrl: 'https://api.example.test',
       fetch: async (input) => {
         this.returnTos.push(
           new URL(String(input)).searchParams.get('returnTo') ?? '',
         );
-        return answer();
+        return props.answer();
       },
     });
     this.flow = new ConnectGithubFlow({
@@ -67,12 +67,13 @@ describe('ConnectGithubFlow', () => {
   });
 
   it('offers to authorize before GitHub is linked', async () => {
-    const harness = new Harness(() =>
-      Response.json({
-        status: 'authorize',
-        authorizeUrl: 'https://github.com/login/oauth/authorize?state=s',
-      }),
-    );
+    const harness = new Harness({
+      answer: () =>
+        Response.json({
+          status: 'authorize',
+          authorizeUrl: 'https://github.com/login/oauth/authorize?state=s',
+        }),
+    });
 
     const state = await harness.flow.load();
 
@@ -87,22 +88,23 @@ describe('ConnectGithubFlow', () => {
   });
 
   it('lists the linked accounts and counts the installed ones', async () => {
-    const harness = new Harness(() =>
-      Response.json({
-        status: 'linked',
-        addAccountUrl: 'https://github.com/apps/dash/installations/new',
-        accounts: [
-          { account: Sample.account('ada', 'user'), install: installed },
-          {
-            account: Sample.account('acme', 'organization'),
-            install: {
-              state: 'installable',
-              installUrl: 'https://github.com/apps/dash/installations/new',
+    const harness = new Harness({
+      answer: () =>
+        Response.json({
+          status: 'linked',
+          addAccountUrl: 'https://github.com/apps/dash/installations/new',
+          accounts: [
+            { account: Sample.account('ada', 'user'), install: installed },
+            {
+              account: Sample.account('acme', 'organization'),
+              install: {
+                state: 'installable',
+                installUrl: 'https://github.com/apps/dash/installations/new',
+              },
             },
-          },
-        ],
-      }),
-    );
+          ],
+        }),
+    });
 
     const state = await harness.flow.load();
 
@@ -116,13 +118,16 @@ describe('ConnectGithubFlow', () => {
 
 describe('ConnectGithubFlow failures', () => {
   it('reports a signed-out person separately from a failure', async () => {
-    const signedOut = new Harness(() =>
-      Response.json({ code: 'SIGN_IN_REQUIRED' }, { status: 401 }),
-    );
-    const down = new Harness(() => new Response('down', { status: 503 }));
-    const unreachable = new Harness(async () =>
-      Promise.reject(new TypeError('fetch failed')),
-    );
+    const signedOut = new Harness({
+      answer: () =>
+        Response.json({ code: 'SIGN_IN_REQUIRED' }, { status: 401 }),
+    });
+    const down = new Harness({
+      answer: () => new Response('down', { status: 503 }),
+    });
+    const unreachable = new Harness({
+      answer: async () => Promise.reject(new TypeError('fetch failed')),
+    });
 
     expect(await signedOut.flow.load()).toEqual({ state: 'signed-out' });
     for (const harness of [down, unreachable]) {
