@@ -122,16 +122,101 @@ test.beforeAll(async ({ browser, baseURL, request }, testInfo) => {
   device = await PasskeyDevice.open({ browser, baseURL: baseURL ?? '' });
 });
 
-test('setup creates the first account with a passkey', async () => {
+test.afterEach(async () => {
+  await device.page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
+test('setup step 1 catches a wrong token before asking for the account', async () => {
+  const { page } = device;
+  await page.goto('/setup');
+  await expect(page.getByText('Step 1 of 4')).toBeVisible();
+
+  await page.getByLabel('Setup token').fill('not-the-token');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByRole('alert')).toHaveText(/isn’t the current one/u);
+  await expect(
+    page.getByRole('heading', { name: 'Set up Dash' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Setup token')).toBeFocused();
+  await expect(page.getByLabel('Setup token')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await expect(page.getByLabel('Setup token')).toHaveAccessibleDescription(
+    /isn’t the current one/u,
+  );
+  await expect(page.getByLabel('Display name')).toHaveCount(0);
+});
+
+test('a setup someone else finished in the meantime offers sign-in', async () => {
+  const { page } = device;
+  await page.goto('/setup');
+  await page.route(`${missionControlUrl}/api/auth/setup/check`, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { code: 'SETUP_CLOSED', message: 'closed' },
+    }),
+  );
+
+  await page.getByLabel('Setup token').fill(setupToken);
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Setup is done' }),
+  ).toBeFocused();
+  await expect(
+    page
+      .getByRole('region', { name: 'Setup is done' })
+      .getByRole('link', { name: 'Sign in' }),
+  ).toHaveAttribute('href', '/sign-in');
+});
+
+test('a token begin rejects sends you back to step 1', async () => {
+  const { page } = device;
+  await page.goto('/setup');
+  await page.getByLabel('Setup token').fill(setupToken);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('Step 2 of 4')).toBeVisible();
+  await page.route(`${missionControlUrl}/api/auth/setup/begin`, (route) =>
+    route.fulfill({
+      status: 401,
+      json: { code: 'SETUP_TOKEN_REJECTED', message: 'rejected' },
+    }),
+  );
+
+  await page.getByLabel('Display name').fill('Ada Lovelace');
+  await page.getByLabel('Email').fill('ada@example.com');
+  await page.getByRole('button', { name: 'Register passkey' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Set up Dash' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveText(/isn’t the current one/u);
+  await expect(page.getByLabel('Setup token')).toBeFocused();
+});
+
+test('setup goes token, then account, then passkey, without the token in the URL', async () => {
   const { page } = device;
   await page.goto('/setup');
 
   await page.getByLabel('Setup token').fill(setupToken);
-  await page.getByLabel('Your name').fill('Ada Lovelace');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByText('Step 2 of 4')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Create your account' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Create your account' }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Create your account' }),
+  ).toHaveAccessibleDescription('Step 2 of 4');
+  await expect(page).toHaveURL('/setup');
+  await page.getByLabel('Display name').fill('Ada Lovelace');
   await page.getByLabel('Email').fill('ada@example.com');
-  await page
-    .getByRole('button', { name: 'Create account with a passkey' })
-    .click();
+  await page.getByRole('button', { name: 'Register passkey' }).click();
 
   await expect(
     page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),

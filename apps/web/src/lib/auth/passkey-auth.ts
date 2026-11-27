@@ -11,6 +11,8 @@ import {
 
 export const setupEnrolmentSchema = z.object({ enrolment: z.string() });
 
+export const setupCheckedSchema = z.object({ valid: z.literal(true) });
+
 const acknowledgedSchema = z.looseObject({});
 
 export const missionControlFailureSchema = z.object({
@@ -28,6 +30,8 @@ export type HttpPasskeyAuthProps = z.input<typeof httpPasskeyAuthPropsSchema>;
 
 /** Passkey ceremonies and passkey changes against Mission Control, from the browser. Reads go through `HttpMissionControl`. */
 export interface PasskeyAuth {
+  /** Confirms the setup token is the current one, without spending it. Rejects like `setUp` does. */
+  checkSetupToken(props: { token: string }): Promise<void>;
   /** Trades the setup token for an enrolment, enrols a passkey and signs the new person in. */
   setUp(props: { token: string; name: string; email: string }): Promise<void>;
   /** Signs in with a passkey. With `autofill`, waits for the browser's passkey autofill instead of prompting. */
@@ -49,6 +53,14 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     this.endpoint = new MissionControlEndpoint({ baseUrl: valid.baseUrl });
     this.fetcher = valid.fetch;
     this.ceremonies = valid.ceremonies;
+  }
+
+  async checkSetupToken(props: { token: string }): Promise<void> {
+    await this.post({
+      path: 'setup/check',
+      body: JSON.stringify({ token: props.token }),
+      schema: setupCheckedSchema,
+    });
   }
 
   async setUp(props: {

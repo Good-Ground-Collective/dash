@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { PasskeyIdentity } from '#src/auth/__tests__/support/passkey-identity.ts';
+import {
+  PasskeyIdentity,
+  passkeyWebOrigin,
+} from '#src/auth/__tests__/support/passkey-identity.ts';
 import { setupEnrolmentSchema } from '#src/auth/contracts/setup.ts';
 
 describe('TokenSetup tokens', () => {
@@ -53,6 +56,129 @@ describe('TokenSetup tokens', () => {
     const response = await fixture.browser().beginSetup({ token: 'guess' });
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe('TokenSetup token check', () => {
+  it('accepts the current token without spending it', async () => {
+    const fixture = new PasskeyIdentity();
+    const token = await fixture.issueToken();
+    const browser = fixture.browser();
+
+    const checked = await browser.checkSetup({ token });
+    const setUp = await browser.setUp({ token });
+
+    expect(checked.status).toBe(200);
+    expect(await checked.json()).toEqual({ valid: true });
+    expect(setUp.status).toBe(200);
+    expect(fixture.tables.user).toHaveLength(1);
+  });
+
+  it('rejects a wrong token the way begin does', async () => {
+    const fixture = new PasskeyIdentity();
+    await fixture.issueToken();
+
+    const response = await fixture.browser().checkSetup({ token: 'guess' });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      code: 'SETUP_TOKEN_REJECTED',
+    });
+    expect(fixture.tables.setupToken).toHaveLength(1);
+  });
+
+  it('refuses once someone has signed up', async () => {
+    const fixture = new PasskeyIdentity();
+    const token = await fixture.issueToken();
+    await fixture.browser().setUp({ token });
+
+    const response = await fixture.browser().checkSetup({ token });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'SETUP_CLOSED' });
+  });
+});
+
+/** Posts wrong setup tokens through Dash's Better Auth, each claiming its own forwarded address. */
+class SetupCaller {
+  readonly fixture = new PasskeyIdentity();
+
+  async attempt(props: {
+    path: string;
+    forwardedFor: string;
+  }): Promise<Response> {
+    return this.fixture.identity.handle(
+      new Request(`http://localhost:3000/api/auth${props.path}`, {
+        method: 'POST',
+        headers: {
+          origin: passkeyWebOrigin,
+          'content-type': 'application/json',
+          'x-forwarded-for': props.forwardedFor,
+        },
+        body: JSON.stringify({
+          token: 'guess',
+          name: 'Ada Lovelace',
+          email: 'ada@example.com',
+        }),
+      }),
+    );
+  }
+
+  /** Alternates check and begin until the shared minute's sixty attempts are used. */
+  async spendBudget(): Promise<number[]> {
+    const statuses = [];
+    for (let attempts = 0; attempts < 60; attempts += 1) {
+      const response = await this.attempt({
+        path: attempts % 2 === 0 ? '/setup/check' : '/setup/begin',
+        forwardedFor: `203.0.113.${attempts}`,
+      });
+      statuses.push(response.status);
+    }
+    return statuses;
+  }
+}
+
+describe('TokenSetup rate limit', () => {
+  it("pins Better Auth's rate limiter on, leaving setup to its own throttle", async () => {
+    const context = await new PasskeyIdentity().identity.auth.$context;
+
+    expect(context.rateLimit.enabled).toBe(true);
+    expect(context.rateLimit.customRules).toMatchObject({
+      '/setup/check': false,
+      '/setup/begin': false,
+    });
+  });
+
+  it('shares one budget between check and begin, whatever address the caller claims', async () => {
+    const caller = new SetupCaller();
+    await caller.fixture.issueToken();
+
+    const statuses = await caller.spendBudget();
+    const refused = await caller.attempt({
+      path: '/setup/check',
+      forwardedFor: '198.51.100.1',
+    });
+
+    expect(statuses).toEqual(Array.from({ length: 60 }, () => 401));
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toMatchObject({ code: 'SETUP_RATE_LIMITED' });
+    expect(refused.headers.get('retry-after')).toMatch(/^\d+$/u);
+  });
+
+  it('answers SETUP_CLOSED, not 429, once setup has closed', async () => {
+    const caller = new SetupCaller();
+    const token = await caller.fixture.issueToken();
+    await caller.spendBudget();
+    const context = await caller.fixture.identity.auth.$context;
+    await context.internalAdapter.createUser(
+      { name: 'Grace', email: 'grace@example.com' },
+      { method: 'test' },
+    );
+
+    const response = await caller.fixture.browser().checkSetup({ token });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'SETUP_CLOSED' });
   });
 });
 

@@ -4,14 +4,24 @@
   let {
     title,
     lede,
+    step,
     children,
     footer,
   }: {
     title: string;
     lede: string;
+    /** Where this screen sits in a multi-screen flow, such as "Step 1 of 4", shown above the title. */
+    step?: string;
     children: Snippet;
     footer?: Snippet;
   } = $props();
+
+  let heading = $state<HTMLHeadingElement>();
+
+  /** Moves focus to the title, so a screen reader announces the new screen and its step. */
+  export function focusTitle(): void {
+    heading?.focus();
+  }
 </script>
 
 <section class="auth" aria-labelledby="auth-title">
@@ -35,7 +45,17 @@
         />
       </svg>
     </span>
-    <h1 id="auth-title">{title}</h1>
+    {#if step}
+      <p class="step" id="auth-step">{step}</p>
+    {/if}
+    <h1
+      id="auth-title"
+      tabindex="-1"
+      aria-describedby={step ? 'auth-step' : undefined}
+      bind:this={heading}
+    >
+      {title}
+    </h1>
     <p class="lede">{lede}</p>
     {@render children()}
   </div>
@@ -71,6 +91,16 @@
     border-radius: var(--radius-control);
     background: var(--ink);
     color: var(--surface);
+  }
+
+  .step {
+    margin-bottom: calc(var(--space-2) * -1);
+    font-size: var(--font-size-xs);
+    color: var(--ink-muted);
+  }
+
+  h1:focus {
+    outline: none;
   }
 
   h1 {

@@ -54,6 +54,22 @@ export class SetupTokenRejectedError extends APIError {
   }
 }
 
+/** Answers every caller once setup's shared budget is spent, whatever address they claim. */
+export class SetupRateLimitedError extends APIError {
+  override name = 'SetupRateLimitedError';
+
+  constructor(props: { retryAfterSeconds: number }) {
+    super(
+      'TOO_MANY_REQUESTS',
+      {
+        code: 'SETUP_RATE_LIMITED',
+        message: `Too many setup attempts. Try again in ${props.retryAfterSeconds} seconds.`,
+      },
+      { 'retry-after': String(props.retryAfterSeconds) },
+    );
+  }
+}
+
 export class PasskeyEnrolmentRejectedError extends APIError {
   override name = 'PasskeyEnrolmentRejectedError';
 
