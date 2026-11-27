@@ -29,6 +29,8 @@ const recoveryCodesWebUrl = `http://localhost:${recoveryCodesPort}`;
 const recoveryCodesStubUrl = `http://localhost:${recoveryCodesStubPort}`;
 const connectGithubPort = 4327;
 const connectGithubStubPort = 59991;
+const secondPasskeyPort = 4328;
+const secondPasskeyStubPort = 59990;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -51,6 +53,7 @@ export default defineConfig({
         '**/recovery.e2e.test.ts',
         '**/recovery-codes.e2e.test.ts',
         '**/connect-github.e2e.test.ts',
+        '**/second-passkey.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -114,6 +117,17 @@ export default defineConfig({
         baseURL: `http://localhost:${connectGithubPort}`,
       },
     },
+    {
+      name: 'second-passkey',
+      testMatch: '**/second-passkey.e2e.test.ts',
+      metadata: {
+        missionControlUrl: `http://localhost:${secondPasskeyStubPort}`,
+      },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${secondPasskeyPort}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -174,6 +188,7 @@ export default defineConfig({
       { port: recoveryPort, stubPort: recoveryStubPort },
       { port: recoveryCodesPort, stubPort: recoveryCodesStubPort },
       { port: connectGithubPort, stubPort: connectGithubStubPort },
+      { port: secondPasskeyPort, stubPort: secondPasskeyStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',

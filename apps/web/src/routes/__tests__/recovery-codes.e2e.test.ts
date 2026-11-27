@@ -64,7 +64,7 @@ test('setup goes from the passkey to the codes step, which needs the box ticked'
   await page.getByLabel('Email').fill('ada@example.com');
   await page.getByRole('button', { name: 'Register passkey' }).click();
 
-  await expect(page).toHaveURL('/setup/recovery-codes');
+  await expect(page).toHaveURL('/setup/recovery-codes?onboarding');
   const title = page.getByRole('heading', { name: 'Save your recovery codes' });
   await expect(title).toBeFocused();
   await expect(title).toHaveAccessibleDescription('Step 3 of 4');
@@ -118,7 +118,7 @@ test('the step fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
-test('confirming opens Connect GitHub, and the saved codes work', async () => {
+test('confirming after the gate sent you back skips to Connect GitHub, and the saved codes work', async () => {
   await CodesStep.savedBox().check();
   await page.getByRole('button', { name: 'Continue' }).click();
 

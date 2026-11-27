@@ -1,6 +1,10 @@
 import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { z } from 'zod';
-import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
+import {
+  missionControlBaseUrlSchema,
+  type Passkey,
+  passkeySchema,
+} from '#lib/api/mission-control.ts';
 import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
 import {
@@ -58,7 +62,11 @@ export interface PasskeyAuth {
   /** Registers a passkey with prepared options and signs in with it. */
   enrol(props: { prepared: PreparedEnrolment }): Promise<void>;
   signOut(): Promise<void>;
-  addPasskey(props: { name: string }): Promise<void>;
+  /** Registers another passkey for the signed-in person and returns it. With `onAnotherDevice`, asks for a roaming one, such as a phone over the hybrid transport, so the browser offers its QR code first. */
+  addPasskey(props: {
+    name?: string;
+    onAnotherDevice?: boolean;
+  }): Promise<Passkey>;
   renamePasskey(props: { id: string; name: string }): Promise<void>;
   removePasskey(props: { id: string }): Promise<void>;
 }
@@ -146,6 +154,7 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     await this.completeRegistration({
       options: props.prepared.options,
       createSession: true,
+      schema: acknowledgedSchema,
     });
   }
 
@@ -157,8 +166,19 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     });
   }
 
-  async addPasskey(props: { name: string }): Promise<void> {
-    await this.register({ name: props.name });
+  async addPasskey(props: {
+    name?: string;
+    onAnotherDevice?: boolean;
+  }): Promise<Passkey> {
+    const anotherDevice = props.onAnotherDevice === true;
+    const options = await this.registrationOptions({
+      attachment: anotherDevice ? 'cross-platform' : undefined,
+    });
+    return this.completeRegistration({
+      options: anotherDevice ? { ...options, hints: ['hybrid'] } : options,
+      name: props.name,
+      schema: passkeySchema,
+    });
   }
 
   async renamePasskey(props: { id: string; name: string }): Promise<void> {
@@ -178,44 +198,50 @@ export class HttpPasskeyAuth implements PasskeyAuth {
   }
 
   private async register(props: {
-    context?: string;
-    name?: string;
-    createSession?: boolean;
+    context: string;
+    createSession: boolean;
   }): Promise<void> {
     await this.completeRegistration({
       options: await this.registrationOptions({ context: props.context }),
-      name: props.name,
       createSession: props.createSession,
+      schema: acknowledgedSchema,
     });
   }
 
+  /** `attachment` is Better Auth's `authenticatorAttachment` query, which it copies into `authenticatorSelection`. */
   private async registrationOptions(props: {
     context?: string | undefined;
+    attachment?: 'cross-platform' | undefined;
   }): Promise<PublicKeyCredentialCreationOptionsJSON> {
     const query = new URLSearchParams();
     if (props.context !== undefined) query.set('context', props.context);
+    if (props.attachment !== undefined) {
+      query.set('authenticatorAttachment', props.attachment);
+    }
     return this.get({
       path: `passkey/generate-register-options?${query.toString()}`,
       schema: registrationOptionsSchema,
     });
   }
 
-  private async completeRegistration(props: {
+  /** Runs the ceremony and verifies it. Mission Control answers with the new passkey. */
+  private async completeRegistration<T>(props: {
     options: PublicKeyCredentialCreationOptionsJSON;
     name?: string | undefined;
     createSession?: boolean | undefined;
-  }): Promise<void> {
+    schema: z.ZodType<T>;
+  }): Promise<T> {
     const response = await this.ceremonies.register({
       options: props.options,
     });
-    await this.post({
+    return this.post({
       path: 'passkey/verify-registration',
       body: JSON.stringify({
         response,
         name: props.name,
         createSession: props.createSession,
       }),
-      schema: acknowledgedSchema,
+      schema: props.schema,
     });
   }
 

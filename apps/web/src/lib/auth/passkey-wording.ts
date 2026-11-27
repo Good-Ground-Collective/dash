@@ -76,6 +76,18 @@ export class PasskeyWording {
     return name === undefined || name === '' ? 'Unnamed passkey' : name;
   }
 
+  /** When a passkey was added, relative while it's under an hour old, such as "Added just now". */
+  added(passkey: Passkey, now: Date): string {
+    const minutes = Math.floor(
+      (now.getTime() - passkey.createdAt.getTime()) / 60_000,
+    );
+    if (minutes < 1) return 'Added just now';
+    if (minutes < 60) {
+      return `Added ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    }
+    return `Added ${createdFormat.format(passkey.createdAt)}`;
+  }
+
   detail(passkey: Passkey): string {
     const reach = passkey.backedUp
       ? 'Synced across your devices'

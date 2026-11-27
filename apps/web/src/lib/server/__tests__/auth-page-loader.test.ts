@@ -159,6 +159,34 @@ describe('MissionControlAuthPageLoader connect GitHub', () => {
   });
 });
 
+describe('MissionControlAuthPageLoader second passkey', () => {
+  it('sends a signed-out visitor to sign in', async () => {
+    const visit = new PageVisit({ viewer: null });
+
+    expect(
+      await RedirectCatcher.location(loader.secondPasskey(visit.event)),
+    ).toBe('/sign-in');
+    expect(visit.requested).toEqual([]);
+  });
+
+  it('lists the passkeys, or says it couldn’t', async () => {
+    const listed = new PageVisit({
+      viewer: ada,
+      answers: {
+        '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
+      },
+    });
+    const down = new PageVisit({ viewer: ada });
+
+    await expect(loader.secondPasskey(listed.event)).resolves.toEqual({
+      passkeys: [],
+    });
+    await expect(loader.secondPasskey(down.event)).resolves.toEqual({
+      passkeys: null,
+    });
+  });
+});
+
 describe('MissionControlAuthPageLoader settings', () => {
   it('sends a signed-out visitor to sign in', async () => {
     const visit = new PageVisit({ viewer: null });

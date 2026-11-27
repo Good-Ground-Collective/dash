@@ -6,6 +6,7 @@
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
+  import PasskeyNameForm from '#lib/auth-ui/PasskeyNameForm.svelte';
   import RecoveryCodesPanel from '#lib/auth-ui/RecoveryCodesPanel.svelte';
   import RemovePasskeyDialog from '#lib/auth-ui/RemovePasskeyDialog.svelte';
   import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
@@ -64,9 +65,7 @@
     });
   };
 
-  const rename = async (event: SubmitEvent, id: string): Promise<void> => {
-    event.preventDefault();
-    const name = renameTo.trim();
+  const rename = async (id: string, name: string): Promise<void> => {
     await change(async () => {
       await auth.renamePasskey({ id, name });
       renamingId = null;
@@ -119,29 +118,14 @@
         {#each passkeys as passkey (passkey.id)}
           <li>
             {#if renamingId === passkey.id}
-              <form
-                class="rename"
-                onsubmit={(event) => rename(event, passkey.id)}
-              >
-                <label class="visually-hidden" for={`rename-${passkey.id}`}>
-                  New name for {passkeyWording.label(passkey)}
-                </label>
-                <input
-                  id={`rename-${passkey.id}`}
-                  bind:value={renameTo}
-                  required
-                />
-                <button class="auth-button small" type="submit" disabled={busy}>
-                  Save
-                </button>
-                <button
-                  class="auth-button quiet small"
-                  type="button"
-                  onclick={() => (renamingId = null)}
-                >
-                  Cancel
-                </button>
-              </form>
+              <PasskeyNameForm
+                label={`New name for ${passkeyWording.label(passkey)}`}
+                labelHidden
+                bind:value={renameTo}
+                {busy}
+                onSave={(name) => rename(passkey.id, name)}
+                onCancel={() => (renamingId = null)}
+              />
             {:else}
               <div class="passkey">
                 <span class="name">{passkeyWording.label(passkey)}</span>
@@ -298,23 +282,9 @@
     font-size: var(--font-size-sm);
   }
 
-  .row-actions,
-  .rename {
+  .row-actions {
     display: flex;
     gap: var(--space-2);
-  }
-
-  .rename {
-    flex: 1;
-  }
-
-  .rename input {
-    flex: 1;
-    min-height: var(--touch-target);
-    padding: 0 var(--space-3);
-    border: var(--border-hairline) solid var(--line);
-    border-radius: var(--radius-control);
-    background: var(--bg);
   }
 
   .add {

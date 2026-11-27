@@ -2,7 +2,9 @@
   import '#lib/auth-ui/auth-form.css';
   import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { API_BASE_URL } from '$app/env/public';
+  import { OnboardingRoute } from '#lib/auth/onboarding-route.ts';
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
   import {
@@ -23,14 +25,16 @@
   let busy = $state(false);
   let card = $state<AuthCard>();
 
-  /** Runs one request. When a new set appears, focus goes to the title so the step is announced again with the codes below it. Once confirmed, the page stays busy until the next step loads. */
+  /** Runs one request. When a new set appears, focus goes to the title so the step is announced again with the codes below it. Once confirmed, the page stays busy until the next page loads: the second passkey step during setup, otherwise Connect GitHub. */
   const advance = async (next: () => Promise<RecoveryCodeStep>) => {
     const before = current.step === 'saving' ? current.set.setId : null;
     busy = true;
     current = await next();
 
     if (current.step === 'confirmed') {
-      await goto('/setup/github', { invalidateAll: true });
+      await goto(OnboardingRoute.afterRecoveryCodes(page.url), {
+        invalidateAll: true,
+      });
       return;
     }
 

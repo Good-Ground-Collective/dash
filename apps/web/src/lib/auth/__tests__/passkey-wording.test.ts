@@ -55,3 +55,21 @@ describe('PasskeyWording', () => {
     );
   });
 });
+
+describe('PasskeyWording added', () => {
+  it('says when a passkey was added, relative for its first hour', () => {
+    const passkey = {
+      id: 'p1',
+      name: null,
+      createdAt: new Date('2026-11-20T10:00:00.000Z'),
+      deviceType: 'multiDevice',
+      backedUp: true,
+    };
+    const at = (time: string) => passkeyWording.added(passkey, new Date(time));
+
+    expect(at('2026-11-20T10:00:59.000Z')).toBe('Added just now');
+    expect(at('2026-11-20T10:01:00.000Z')).toBe('Added 1 minute ago');
+    expect(at('2026-11-20T10:59:00.000Z')).toBe('Added 59 minutes ago');
+    expect(at('2026-11-20T11:00:00.000Z')).toBe('Added Nov 20, 2026');
+  });
+});

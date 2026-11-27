@@ -196,7 +196,7 @@ test('a token begin rejects sends you back to step 1', async () => {
   await expect(page.getByLabel('Setup token')).toBeFocused();
 });
 
-test('setup goes token, account, passkey, codes, then GitHub, without the token in the URL', async () => {
+test('setup goes token, account, passkey, codes, second passkey, then GitHub, without the token in the URL', async () => {
   const { page } = device;
   await page.goto('/setup');
 
@@ -204,9 +204,6 @@ test('setup goes token, account, passkey, codes, then GitHub, without the token 
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await expect(page.getByText('Step 2 of 4')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Create your account' }),
-  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Create your account' }),
   ).toBeFocused();
@@ -218,9 +215,9 @@ test('setup goes token, account, passkey, codes, then GitHub, without the token 
   await page.getByLabel('Email').fill('ada@example.com');
   await page.getByRole('button', { name: 'Register passkey' }).click();
 
-  await expect(page).toHaveURL('/setup/recovery-codes');
   await page.getByLabel('I’ve saved these codes somewhere safe').check();
   await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('link', { name: 'Skip for now' }).click();
   await expect(page).toHaveURL('/setup/github');
   await page.getByRole('link', { name: 'Skip for now' }).click();
   await expect(

@@ -5,6 +5,7 @@
   import { API_BASE_URL } from '$app/env/public';
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
+  import { onboardingRecoveryCodesPath } from '#lib/auth/onboarding-route.ts';
   import { SetupFlow, type SetupStep } from '#lib/auth/setup-flow.ts';
   import AuthCard from '#lib/auth-ui/AuthCard.svelte';
   import type { PageProps } from './$types';
@@ -39,7 +40,7 @@
       throw cause;
     }
     if (current.step === 'done') {
-      await goto('/setup/recovery-codes', { invalidateAll: true });
+      await goto(onboardingRecoveryCodesPath, { invalidateAll: true });
       return;
     }
     busy = false;
