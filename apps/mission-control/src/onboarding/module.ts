@@ -9,17 +9,16 @@ import {
 } from '#src/onboarding/services/setup-checklist/setup-checklist.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 
-/** What's left of a person's setup, read from the passkeys and connections they already have. Home shows it until it's all done. */
+/** What's left of a person's setup, read from the connections Dash already has. Home shows it until it's all done. */
 export class OnboardingModule implements HttpModule {
   readonly plugin: FastifyPluginAsyncZod;
   readonly checklist: SetupChecklist;
 
   constructor(props: {
-    identity: Pick<Identity, 'session' | 'passkeyCount'>;
+    identity: Pick<Identity, 'session'>;
     connections: ConnectionPresence;
   }) {
     this.checklist = new SourcedSetupChecklist({
-      passkeys: props.identity,
       connections: props.connections,
     });
     const routes = new ChecklistRoutes({

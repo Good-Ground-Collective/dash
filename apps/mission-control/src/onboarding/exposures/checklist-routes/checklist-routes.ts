@@ -23,11 +23,10 @@ export class ChecklistRoutes {
       '/onboarding/checklist',
       { schema: { response: { 200: setupChecklistSchema } } },
       async (request) => {
-        const userId = await this.person.of(request);
-        if (userId === null) {
+        if ((await this.person.of(request)) === null) {
           throw new SignInRequiredError();
         }
-        return this.checklist.for({ userId });
+        return this.checklist.report();
       },
     );
   }

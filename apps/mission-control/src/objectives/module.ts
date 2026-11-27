@@ -2,7 +2,9 @@ import {
   type IntegrationRegistry,
   taskTrackerCapability,
 } from '@dash/integrations-core';
+import { DBOS } from '@dbos-inc/dbos-sdk';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
 import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
@@ -19,6 +21,14 @@ import { ObjectiveReconcileWorkflows } from '#src/objectives/services/objective-
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
 
+const objectivesModulePropsSchema = z.object({
+  registry: z.custom<IntegrationRegistry>(),
+  identity: z.custom<Pick<Identity, 'session'>>(),
+  reader: z.custom<ObjectiveRecordReader>(),
+  writer: z.custom<ObjectiveRecordWriter>(),
+  overlays: z.custom<ObjectiveOverlayRepository>(),
+});
+
 /**
  * Objectives: initiatives, epics and tickets read from each owned connection's tracker
  * through `taskTrackerCapability`, a reconcile that keeps them fresh, Dash's overlay beside
@@ -31,13 +41,8 @@ export class ObjectivesModule
   readonly reconcile: ObjectiveReconcile;
   private readonly workflows: ObjectiveReconcileWorkflows;
 
-  constructor(props: {
-    registry: IntegrationRegistry;
-    identity: Pick<Identity, 'session'>;
-    reader: ObjectiveRecordReader;
-    writer: ObjectiveRecordWriter;
-    overlays: ObjectiveOverlayRepository;
-  }) {
+  constructor(input: z.input<typeof objectivesModulePropsSchema>) {
+    const props = objectivesModulePropsSchema.parse(input);
     this.reconcile = new TrackedObjectiveReconcile({
       trackers: props.registry
         .offering(taskTrackerCapability)
@@ -67,6 +72,20 @@ export class ObjectivesModule
 
   async connected(props: { provider: string; userId: string }): Promise<void> {
     await this.workflows.syncPerson({ userId: props.userId });
+  }
+
+  /** Runs inside the workflow that reinstated the connection. */
+  async reinstated(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void> {
+    const connectionId = await DBOS.runStep(
+      () => this.reconcile.connectionIdOf(props),
+      { name: 'objectiveReinstatedConnection' },
+    );
+    if (connectionId !== null) {
+      await this.workflows.syncConnection({ connectionId });
+    }
   }
 
   async activate(): Promise<void> {

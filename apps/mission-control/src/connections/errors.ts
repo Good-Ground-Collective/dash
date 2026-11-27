@@ -64,3 +64,19 @@ export class ConnectionNotStoredError extends Error {
     super('Upsert into connection returned no row');
   }
 }
+
+export class WebhookWorkflowsNotRegisteredError extends Error {
+  override name = 'WebhookWorkflowsNotRegisteredError';
+
+  constructor() {
+    super('Register the webhook workflows before using them');
+  }
+}
+
+export class SuspensionRecheckNotRegisteredError extends Error {
+  override name = 'SuspensionRecheckNotRegisteredError';
+
+  constructor() {
+    super('Register the suspension recheck workflow before activating it');
+  }
+}

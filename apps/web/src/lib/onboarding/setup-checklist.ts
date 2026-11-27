@@ -1,9 +1,6 @@
 import type { SetupChecklistReport } from '#lib/api/mission-control.ts';
 import { connectGithubPath } from '#lib/auth/onboarding-route.ts';
 
-/** Where adding a passkey outside setup happens: the settings panel, which isn't a numbered setup step. */
-export const passkeySettingsPath = '/settings#passkeys-title';
-
 /** One row of the card, in the words home shows. */
 export interface SetupChecklistRow {
   id: string;
@@ -29,14 +26,6 @@ const copy: ReadonlyMap<string, RowCopy> = new Map([
       action: { label: 'Connect GitHub', href: connectGithubPath },
     },
   ],
-  [
-    'secondPasskey',
-    {
-      title: 'Add a second passkey',
-      body: 'A passkey on another device, like your phone, gets you in if this one is lost or wiped.',
-      action: { label: 'Add a passkey', href: passkeySettingsPath },
-    },
-  ],
 ]);
 
 /** The “Finish setting up” card on home: its rows, how many are done, and whether it shows at all. */
@@ -54,7 +43,7 @@ export class SetupChecklist {
     return this.rows.filter((row) => row.done).length;
   }
 
-  /** “1 of 2 done”. */
+  /** “0 of 1 done”. */
   get progress(): string {
     return `${this.doneCount} of ${this.rows.length} done`;
   }

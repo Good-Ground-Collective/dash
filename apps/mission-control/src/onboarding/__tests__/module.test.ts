@@ -74,14 +74,11 @@ class FreshAccount {
 }
 
 describe('OnboardingModule', () => {
-  it('shows a fresh account both items open', async () => {
+  it('leaves GitHub open on a fresh account', async () => {
     const account = new FreshAccount();
     const browser = await account.fixture.firstPerson();
 
-    expect(await account.done(browser)).toEqual({
-      connectGitHub: false,
-      secondPasskey: false,
-    });
+    expect(await account.done(browser)).toEqual({ connectGitHub: false });
   });
 
   it('leaves GitHub open while its only installation is suspended', async () => {
@@ -95,20 +92,11 @@ describe('OnboardingModule', () => {
     });
   });
 
-  it('ticks each item off as soon as its condition holds', async () => {
+  it('ticks GitHub off as soon as it connects', async () => {
     const account = new FreshAccount();
     const browser = await account.fixture.firstPerson();
 
     await account.connectGitHub();
-    expect(await account.done(browser)).toEqual({
-      connectGitHub: true,
-      secondPasskey: false,
-    });
-
-    await browser.registerPasskey({ name: 'Phone' });
-    expect(await account.done(browser)).toEqual({
-      connectGitHub: true,
-      secondPasskey: true,
-    });
+    expect(await account.done(browser)).toEqual({ connectGitHub: true });
   });
 });

@@ -19,7 +19,6 @@ afterEach(async () => {
 /** The module behind a fake session: `session=<id>` signs Ada in, `service=<id>` a service principal. */
 class ChecklistServer {
   static async start(props: {
-    passkeys: number;
     connected: boolean;
   }): Promise<ZodFastifyInstance> {
     const module = new OnboardingModule({
@@ -35,8 +34,6 @@ class ChecklistServer {
             expiresAt: new Date(Date.now() + 60_000),
           };
         },
-        passkeyCount: async ({ userId }) =>
-          userId === adaId ? props.passkeys : 0,
       },
       connections: { exists: async () => props.connected },
     });
@@ -56,7 +53,7 @@ class ChecklistServer {
 
 describe('GET /onboarding/checklist', () => {
   it('answers each item’s status for the signed-in person', async () => {
-    const app = await ChecklistServer.start({ passkeys: 2, connected: false });
+    const app = await ChecklistServer.start({ connected: false });
 
     const response = await app.inject({
       url: '/onboarding/checklist',
@@ -65,15 +62,12 @@ describe('GET /onboarding/checklist', () => {
 
     expect(response.statusCode).toBe(200);
     expect(setupChecklistSchema.parse(response.json())).toEqual({
-      items: [
-        { id: 'connectGitHub', done: false },
-        { id: 'secondPasskey', done: true },
-      ],
+      items: [{ id: 'connectGitHub', done: false }],
     });
   });
 
   it('refuses a visitor who isn’t signed in', async () => {
-    const app = await ChecklistServer.start({ passkeys: 2, connected: true });
+    const app = await ChecklistServer.start({ connected: true });
 
     const response = await app.inject({ url: '/onboarding/checklist' });
 
@@ -82,7 +76,7 @@ describe('GET /onboarding/checklist', () => {
   });
 
   it('refuses a service principal', async () => {
-    const app = await ChecklistServer.start({ passkeys: 2, connected: true });
+    const app = await ChecklistServer.start({ connected: true });
 
     const response = await app.inject({
       url: '/onboarding/checklist',

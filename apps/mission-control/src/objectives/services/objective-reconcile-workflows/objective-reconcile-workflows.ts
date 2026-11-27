@@ -1,4 +1,5 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
+import { z } from 'zod';
 
 import { ObjectiveReconcileNotRegisteredError } from '#src/objectives/errors.ts';
 import type {
@@ -10,25 +11,43 @@ import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts'
 const queueName = 'objective-reconcile';
 const scheduleName = 'objective-reconcile-every-15-minutes';
 
+/**
+ * Retries for a connection read, wherever it starts. Tracker errors are caught inside the read,
+ * so a retry follows a database failure, and each retry repeats the whole tracker read, so the
+ * attempts stay few.
+ */
+const readStepRetries = {
+  retriesAllowed: true,
+  maxAttempts: 3,
+  intervalSeconds: 1,
+  backoffRate: 2,
+};
+
+const objectiveReconcileWorkflowsPropsSchema = z.object({
+  reconcile: z.custom<ObjectiveReconcile>(),
+});
+
 type ConnectionWorkflow = (connectionId: string) => Promise<void>;
 type PersonWorkflow = (userId: string) => Promise<void>;
 type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
 
 /**
- * Durable objective reads: every 15 minutes, and for one person straight after they connect.
- * Both enqueue one workflow per connection on a queue that reads two connections at a time.
- * A connection whose read is still queued or running is not enqueued again; the later run
- * attaches to the earlier one.
+ * Durable objective reads: every 15 minutes, for one person straight after they connect, and for
+ * a connection whose suspension lifted. Each enqueues one workflow per connection on a queue that
+ * reads two connections at a time. A connection whose read is still queued or running is not
+ * enqueued again; the later request attaches to the earlier read.
  */
 export class ObjectiveReconcileWorkflows implements WorkflowModule {
   private readonly reconcile: ObjectiveReconcile;
   private registered: {
+    connection: ConnectionWorkflow;
     scheduled: ScheduledWorkflow;
     person: PersonWorkflow;
   } | null = null;
 
-  constructor(props: { reconcile: ObjectiveReconcile }) {
-    this.reconcile = props.reconcile;
+  constructor(props: z.input<typeof objectiveReconcileWorkflowsPropsSchema>) {
+    const parsed = objectiveReconcileWorkflowsPropsSchema.parse(props);
+    this.reconcile = parsed.reconcile;
   }
 
   async activate(): Promise<void> {
@@ -55,30 +74,38 @@ export class ObjectiveReconcileWorkflows implements WorkflowModule {
     );
   }
 
-  registerWorkflows(): void {
-    const connection: ConnectionWorkflow = DBOS.registerWorkflow(
-      async (connectionId: string) => {
-        const outcome = await DBOS.runStep(
-          () => this.reconcile.syncConnection({ connectionId }),
-          { name: 'objectiveSyncConnection' },
-        );
-        ObjectiveReconcileWorkflows.log({ connectionId, outcome });
+  /** Enqueues a read of the connection unless one is already queued or running; the request then attaches to that read. */
+  async syncConnection(props: { connectionId: string }): Promise<void> {
+    if (this.registered === null) {
+      throw new ObjectiveReconcileNotRegisteredError();
+    }
+    await DBOS.startWorkflow(this.registered.connection, {
+      queueName,
+      enqueueOptions: {
+        deduplicationID: `objective-reconcile-${props.connectionId}`,
       },
-      { name: 'objectiveReconcileConnection' },
-    );
+      duplicationPolicy: 'return-existing',
+    })(props.connectionId);
+  }
+
+  registerWorkflows(): void {
     const enqueue = async (connectionIds: readonly string[]) => {
       for (const connectionId of connectionIds) {
-        await DBOS.startWorkflow(connection, {
-          queueName,
-          enqueueOptions: {
-            deduplicationID: `objective-reconcile-${connectionId}`,
-          },
-          duplicationPolicy: 'return-existing',
-        })(connectionId);
+        await this.syncConnection({ connectionId });
       }
     };
 
     this.registered = {
+      connection: DBOS.registerWorkflow(
+        async (connectionId: string) => {
+          const outcome = await DBOS.runStep(
+            () => this.reconcile.syncConnection({ connectionId }),
+            { ...readStepRetries, name: 'objectiveSyncConnection' },
+          );
+          ObjectiveReconcileWorkflows.log({ connectionId, outcome });
+        },
+        { name: 'objectiveReconcileConnection' },
+      ),
       person: DBOS.registerWorkflow(
         async (userId: string) => {
           await enqueue(

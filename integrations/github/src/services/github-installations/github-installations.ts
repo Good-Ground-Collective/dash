@@ -88,15 +88,7 @@ export class GithubInstallations {
   }
 
   async get(props: { installationId: string }): Promise<Installation> {
-    const app = await this.auth({ type: 'app' });
-    const { data } = await this.request(
-      'GET /app/installations/{installation_id}',
-      {
-        headers: { authorization: `Bearer ${app.token}` },
-        installation_id: Number(props.installationId),
-      },
-    );
-    const installation = installationResponseSchema.parse(data);
+    const installation = await this.readAsApp(props);
 
     return {
       provider: 'github',
@@ -107,6 +99,10 @@ export class GithubInstallations {
       repositories: await this.listRepositories(props),
       suspended: installation.suspendedAt !== null,
     };
+  }
+
+  async isSuspended(props: { installationId: string }): Promise<boolean> {
+    return (await this.readAsApp(props)).suspendedAt !== null;
   }
 
   /** How many repositories the installation covers, from one page of one. */
@@ -139,6 +135,18 @@ export class GithubInstallations {
         return repositories;
       }
     }
+  }
+
+  private async readAsApp(props: { installationId: string }) {
+    const app = await this.auth({ type: 'app' });
+    const { data } = await this.request(
+      'GET /app/installations/{installation_id}',
+      {
+        headers: { authorization: `Bearer ${app.token}` },
+        installation_id: Number(props.installationId),
+      },
+    );
+    return installationResponseSchema.parse(data);
   }
 
   private async tokenFor(props: { installationId: string }): Promise<string> {

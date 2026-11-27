@@ -7,9 +7,11 @@ import { ConnectionsModule } from '#src/connections/module.ts';
 import { DrizzleConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import { DrizzleLinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import { DrizzleWebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
+import { InMemoryWebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
 import { GithubFeedModule } from '#src/github-feed/module.ts';
 import { DrizzleGithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import { DrizzleGithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
+import { DrizzleSyncRequestRepository } from '#src/github-feed/repositories/sync-requests/sync-request-repository.ts';
 import { HealthModule } from '#src/health/module.ts';
 import { HeartbeatModule } from '#src/heartbeat/module.ts';
 import { DrizzleHeartbeatRepository } from '#src/heartbeat/repositories/heartbeats/heartbeat-repository.ts';
@@ -48,12 +50,16 @@ const auth = new AuthModule({
 const integrations = new IntegrationsModule({ githubApp: config.githubApp });
 const connectionRepository = new DrizzleConnectionRepository({ database });
 const linkedAccounts = new DrizzleLinkedAccountRepository({ database });
+const webhookEvents = new InMemoryWebhookEventRegistry();
 const githubFeed = new GithubFeedModule({
   registry: integrations.registry,
   identity: auth.identity,
   linkedAccounts,
   reader: new DrizzleGithubRecordReader({ database }),
   writer: new DrizzleGithubRecordWriter({ database }),
+  connections: connectionRepository,
+  syncRequests: new DrizzleSyncRequestRepository({ database }),
+  webhookEvents,
 });
 const objectives = new ObjectivesModule({
   registry: integrations.registry,
@@ -68,6 +74,7 @@ const connections = new ConnectionsModule({
   connections: connectionRepository,
   linkedAccounts,
   deliveries: new DrizzleWebhookDeliveryRepository({ database }),
+  webhookEvents,
   secret: config.authSecret,
   baseUrl: config.authBaseUrl,
   webOrigin: config.webOrigin,
@@ -100,7 +107,7 @@ const platform = new PlatformModule({
     new LiveModule({ liveEvents }),
     heartbeat,
   ],
-  workflowModules: [heartbeat, githubFeed, objectives],
+  workflowModules: [heartbeat, githubFeed, objectives, connections],
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

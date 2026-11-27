@@ -31,6 +31,7 @@ export interface ObjectiveRecordReader {
   syncTargets(props: {
     providers: readonly string[];
     connectionId?: string;
+    installationId?: string;
     connectedBy?: string;
     limit: number;
   }): Promise<ObjectiveSyncTarget[]>;
@@ -48,6 +49,7 @@ export class DrizzleObjectiveRecordReader implements ObjectiveRecordReader {
   async syncTargets(props: {
     providers: readonly string[];
     connectionId?: string;
+    installationId?: string;
     connectedBy?: string;
     limit: number;
   }): Promise<ObjectiveSyncTarget[]> {
@@ -60,6 +62,9 @@ export class DrizzleObjectiveRecordReader implements ObjectiveRecordReader {
     ];
     if (props.connectionId !== undefined) {
       filters.push(eq(connectionTable.id, props.connectionId));
+    }
+    if (props.installationId !== undefined) {
+      filters.push(eq(connectionTable.installationId, props.installationId));
     }
     if (props.connectedBy !== undefined) {
       filters.push(eq(connectionTable.connectedBy, props.connectedBy));

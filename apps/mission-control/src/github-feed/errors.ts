@@ -54,3 +54,12 @@ export class ReconcileNotRegisteredError extends Error {
     super('Register the GitHub reconcile workflows before using them');
   }
 }
+
+/** A connection read's follow-up is keyed by the read's workflow id, so the read must run as a workflow. */
+export class ReconcileOutsideWorkflowError extends Error {
+  override name = 'ReconcileOutsideWorkflowError';
+
+  constructor() {
+    super('A connection read ran outside a DBOS workflow');
+  }
+}

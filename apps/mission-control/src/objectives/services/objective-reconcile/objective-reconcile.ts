@@ -31,6 +31,11 @@ export type ObjectiveSyncOutcome =
 export interface ObjectiveReconcile {
   dueConnectionIds(): Promise<string[]>;
   connectionIdsOf(props: { userId: string }): Promise<string[]>;
+  /** The owned connection of the provider's installation, or null when Dash reads no tracker for it. */
+  connectionIdOf(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<string | null>;
   syncConnection(props: {
     connectionId: string;
   }): Promise<ObjectiveSyncOutcome>;
@@ -72,6 +77,20 @@ export class TrackedObjectiveReconcile implements ObjectiveReconcile {
       limit: maxConnectionsPerPerson,
     });
     return targets.map(({ connectionId }) => connectionId);
+  }
+
+  async connectionIdOf(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<string | null> {
+    const [target] = await this.reader.syncTargets({
+      providers: this.providers().filter(
+        (provider) => provider === props.provider,
+      ),
+      installationId: props.installationId,
+      limit: 1,
+    });
+    return target?.connectionId ?? null;
   }
 
   async syncConnection(props: {

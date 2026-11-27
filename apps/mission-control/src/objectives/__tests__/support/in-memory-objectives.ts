@@ -36,6 +36,7 @@ export class InMemoryObjectiveRecords
   async syncTargets(props: {
     providers: readonly string[];
     connectionId?: string;
+    installationId?: string;
     connectedBy?: string;
     limit: number;
   }): Promise<ObjectiveSyncTarget[]> {
@@ -47,6 +48,8 @@ export class InMemoryObjectiveRecords
           props.providers.includes(target.provider) &&
           (props.connectionId === undefined ||
             target.connectionId === props.connectionId) &&
+          (props.installationId === undefined ||
+            target.installationId === props.installationId) &&
           (props.connectedBy === undefined ||
             target.connectedBy === props.connectedBy),
       )
