@@ -42,18 +42,19 @@ export class TrackerGithub {
    * Acme's open Project 1 (target date 2026-12-31) and closed Project 2. Project 1 holds epic
    * 10 (Priority `P2 - Soon`, Target date 2026-12-15, two tickets), epic 20 (only a `p3`
    * label), an issue labelled `bug`, an issue the App can't see and a draft. Project 2 holds
-   * epic 20 again, with Priority P1.
+   * epic 20 again, with Priority P1. `reversed` has GitHub list Project 2 first.
    */
-  static organisation(): FakeGithubGraphql {
+  static organisation(props: { reversed?: boolean } = {}): FakeGithubGraphql {
+    const nodes = [
+      project({ number: 1, targetDate: '2026-12-31' }),
+      project({ number: 2, closed: true }),
+    ];
     return new FakeGithubGraphql()
       .on({
         operation: 'DashProjects',
         reply: () =>
           projects({
-            nodes: [
-              project({ number: 1, targetDate: '2026-12-31' }),
-              project({ number: 2, closed: true }),
-            ],
+            nodes: props.reversed === true ? nodes.toReversed() : nodes,
           }),
       })
       .on({

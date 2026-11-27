@@ -82,17 +82,35 @@ describe('GithubTaskTracker epic fields', () => {
     });
   });
 
-  it('falls back to a P1–P3 label without a Priority value, and lists an epic in two Projects once', async () => {
-    const snapshot = await TrackerGithub.organisation().tracker().read(query);
+  it('falls back to a P1–P3 label without a Priority value', async () => {
+    const snapshot = await TrackerGithub.withEpics([
+      TrackerNodes.epicItem({ number: 20, labels: ['Epic', 'p3'] }),
+    ])
+      .tracker()
+      .read(query);
 
-    expect(
-      snapshot.epics.find(({ externalId }) => externalId === 'I_20'),
-    ).toMatchObject({
-      priority: 'P3',
-      dueDate: null,
-      initiativeIds: ['PVT_1', 'PVT_2'],
-    });
+    expect(snapshot.epics[0]).toMatchObject({ priority: 'P3' });
   });
+
+  it.each([
+    {
+      order: 'label first',
+      reversed: false,
+      initiativeIds: ['PVT_1', 'PVT_2'],
+    },
+    { order: 'field first', reversed: true, initiativeIds: ['PVT_2', 'PVT_1'] },
+  ])(
+    'lists an epic in two Projects once, with another Project’s Priority over its label ($order)',
+    async ({ reversed, initiativeIds }) => {
+      const snapshot = await TrackerGithub.organisation({ reversed })
+        .tracker()
+        .read(query);
+
+      expect(
+        snapshot.epics.find(({ externalId }) => externalId === 'I_20'),
+      ).toMatchObject({ priority: 'P1', dueDate: null, initiativeIds });
+    },
+  );
 
   it('keeps only issues labelled epic, skipping drafts and issues the App can’t see', async () => {
     const snapshot = await TrackerGithub.organisation().tracker().read(query);

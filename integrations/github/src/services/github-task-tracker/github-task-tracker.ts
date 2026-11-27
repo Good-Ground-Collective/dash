@@ -47,8 +47,12 @@ const githubTrackerQuerySchema = trackerQuerySchema.extend({
   }),
 });
 
+/** Whether an epic's priority came from a Project's Priority field or its `P1`–`P3` label. */
+type PrioritySource = 'field' | 'label';
+
 interface ReadEpics {
   epics: Map<string, Epic>;
+  prioritySources: Map<string, PrioritySource>;
   tickets: Map<string, Ticket>;
   activity: TicketActivity[];
   truncated: boolean;
@@ -89,6 +93,7 @@ export class GithubTaskTracker implements TaskTracker {
     const projects = data.organization?.projectsV2.nodes ?? [];
     const read: ReadEpics = {
       epics: new Map(),
+      prioritySources: new Map(),
       tickets: new Map(),
       activity: [],
       truncated: data.organization?.projectsV2.pageInfo.hasNextPage ?? false,
@@ -115,7 +120,7 @@ export class GithubTaskTracker implements TaskTracker {
     };
   }
 
-  /** One Project's epics, merged into `read`: an epic already read in another Project gains this one as an initiative and keeps its fields. */
+  /** One Project's epics, merged into `read`: an epic already read in another Project gains this one as an initiative. */
   private static async readEpics(props: {
     graphql: GraphqlCall;
     project: GithubProject;
@@ -153,6 +158,7 @@ export class GithubTaskTracker implements TaskTracker {
                 issue,
                 initiativeId: project.id,
               }),
+              prioritySource: item.priority === null ? 'label' : 'field',
             }),
           );
         }
@@ -167,20 +173,35 @@ export class GithubTaskTracker implements TaskTracker {
     return found;
   }
 
-  private static merge(props: { read: ReadEpics; epic: Epic }): Epic {
-    const known = props.read.epics.get(props.epic.externalId);
+  /** Keeps the first due date and Priority field read, and lets a Priority field replace a label fallback from an earlier Project. */
+  private static merge(props: {
+    read: ReadEpics;
+    epic: Epic;
+    prioritySource: PrioritySource;
+  }): Epic {
+    const { read, epic, prioritySource } = props;
+    const known = read.epics.get(epic.externalId);
+    const keepsPriority =
+      known !== undefined &&
+      (read.prioritySources.get(epic.externalId) === 'field' ||
+        prioritySource === 'label');
     const merged: Epic =
       known === undefined
-        ? props.epic
+        ? epic
         : {
             ...known,
-            priority: known.priority ?? props.epic.priority,
-            dueDate: known.dueDate ?? props.epic.dueDate,
+            priority: keepsPriority
+              ? (known.priority ?? epic.priority)
+              : epic.priority,
+            dueDate: known.dueDate ?? epic.dueDate,
             initiativeIds: [
-              ...new Set([...known.initiativeIds, ...props.epic.initiativeIds]),
+              ...new Set([...known.initiativeIds, ...epic.initiativeIds]),
             ],
           };
-    props.read.epics.set(merged.externalId, merged);
+    if (!keepsPriority) {
+      read.prioritySources.set(epic.externalId, prioritySource);
+    }
+    read.epics.set(merged.externalId, merged);
     return merged;
   }
 
