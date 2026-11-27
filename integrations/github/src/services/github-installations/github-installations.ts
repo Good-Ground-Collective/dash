@@ -1,0 +1,124 @@
+import type { Installation, Repository } from '@dash/integrations-core';
+import { createAppAuth } from '@octokit/auth-app';
+import { z } from 'zod';
+
+import { githubAccountSchema } from '#src/contracts/github-account.ts';
+import type { GithubRequest } from '#src/contracts/github-request.ts';
+
+const pageSize = 100;
+
+const installationResponseSchema = z.object({
+  id: z.number(),
+  account: githubAccountSchema,
+  repository_selection: z.enum(['all', 'selected']),
+  html_url: z.url(),
+  suspended_at: z.string().nullable(),
+});
+
+const installationRepositoriesSchema = z.object({
+  total_count: z.number(),
+  repositories: z.array(
+    z
+      .object({
+        id: z.number(),
+        full_name: z.string(),
+        html_url: z.url(),
+        default_branch: z.string(),
+        archived: z.boolean(),
+      })
+      .transform((repository): Repository => ({
+        provider: 'github',
+        externalId: String(repository.id),
+        url: repository.html_url,
+        fullName: repository.full_name,
+        defaultBranch: repository.default_branch,
+        archived: repository.archived,
+      })),
+  ),
+});
+
+/**
+ * Installations of the App, read as the App. `@octokit/auth-app` mints the App JWTs and the
+ * installation tokens, and caches each installation token until shortly before it expires.
+ */
+export class GithubInstallations {
+  private readonly slug: string;
+  private readonly request: GithubRequest;
+  private readonly auth: ReturnType<typeof createAppAuth>;
+
+  constructor(props: {
+    appId: string;
+    slug: string;
+    privateKey: string;
+    request: GithubRequest;
+  }) {
+    this.slug = props.slug;
+    this.request = props.request;
+    this.auth = createAppAuth({
+      appId: props.appId,
+      privateKey: props.privateKey,
+      request: props.request,
+    });
+  }
+
+  installUrl(props: { state: string; targetAccountId?: string }): string {
+    const base = `https://github.com/apps/${this.slug}/installations/new`;
+    if (props.targetAccountId === undefined) {
+      const url = new URL(base);
+      url.searchParams.set('state', props.state);
+      return url.toString();
+    }
+    const url = new URL(`${base}/permissions`);
+    url.searchParams.set('target_id', props.targetAccountId);
+    url.searchParams.set('state', props.state);
+    return url.toString();
+  }
+
+  async get(props: { installationId: string }): Promise<Installation> {
+    const app = await this.auth({ type: 'app' });
+    const { data } = await this.request(
+      'GET /app/installations/{installation_id}',
+      {
+        headers: { authorization: `Bearer ${app.token}` },
+        installation_id: Number(props.installationId),
+      },
+    );
+    const installation = installationResponseSchema.parse(data);
+
+    return {
+      provider: 'github',
+      externalId: String(installation.id),
+      url: installation.html_url,
+      account: installation.account,
+      repositorySelection: installation.repository_selection,
+      repositories: await this.listRepositories(props),
+      suspended: installation.suspended_at !== null,
+    };
+  }
+
+  /** Every repository the installation covers, read with an installation token. */
+  async listRepositories(props: {
+    installationId: string;
+  }): Promise<Repository[]> {
+    const { token } = await this.auth({
+      type: 'installation',
+      installationId: props.installationId,
+    });
+    const repositories: Repository[] = [];
+    for (let page = 1; ; page += 1) {
+      const { data } = await this.request('GET /installation/repositories', {
+        headers: { authorization: `Bearer ${token}` },
+        per_page: pageSize,
+        page,
+      });
+      const parsed = installationRepositoriesSchema.parse(data);
+      repositories.push(...parsed.repositories);
+      if (
+        parsed.repositories.length < pageSize ||
+        repositories.length >= parsed.total_count
+      ) {
+        return repositories;
+      }
+    }
+  }
+}

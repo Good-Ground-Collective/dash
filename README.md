@@ -77,7 +77,7 @@ ESLint uses preflight's `recommended` config, which includes the blocking `go-no
 
 ## Mission Control
 
-Mission Control runs on Node 24's built-in TypeScript type stripping, so there is no build step: `node src/main.ts` is the entry point in every environment. It needs Postgres, which Docker Compose provides locally on port 54329:
+Mission Control runs on Node 24's built-in TypeScript type stripping, so there is no build step: `node src/main.ts` is the entry point in every environment. The `integrations/*` packages it imports export TypeScript too, but in the image they sit under `node_modules`, where Node won't strip types. Their `build` (`dash-strip-types`, from `@dash/config`) writes type-stripped JavaScript to `dist/`, and the image sets `NODE_OPTIONS=--conditions=dash-dist`, which points their exports and `#src` imports there. Everywhere else they resolve to `src/`. It needs Postgres, which Docker Compose provides locally on port 54329:
 
 ```sh
 cd apps/mission-control
@@ -122,6 +122,21 @@ There's no email fallback. Someone who has lost every passkey gets back in with 
 
 Mission Control's tests don't need Postgres, and CI runs none: auth tests use Better Auth's memory adapter, and repositories are tested through in-memory fakes. Behaviour that lives in Postgres (transactions, foreign keys, check constraints) is checked by hand against the Compose database when a migration changes it.
 
+### Connections
+
+`src/connections` records `owned` connections: installations of a provider's app, which Dash reads with the app's credentials. It is provider-neutral. For each registered integration that offers `connectFlowCapability`, it serves these routes under `/integrations/<provider>`; GitHub offers it once the App is configured (`GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, all six or none; production needs them):
+
+| Route                                 | What it does                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /connect?returnTo=/setup/github` | Signed in: the App's install URL and authorize URL for the web's "Connect GitHub" button, the linked GitHub account (or null) and the owned connections with their repositories.                                                                                                                                                                |
+| `GET /setup`                          | The App's setup URL. GitHub sends `installation_id` and `setup_action`. `install` and `update` record the installation once the person's own token shows they can manage it; before they've authorized, it sends them to authorize first and finishes in the callback. `request` (a member asked an owner) records the account the state names. |
+| `GET /callback`                       | The App's OAuth callback. The `state` must be one Mission Control issued to the signed-in person in the last ten minutes. It links the GitHub login to the Dash person and stores their token.                                                                                                                                                  |
+| `POST /webhooks`                      | Verifies `X-Hub-Signature-256` over the exact body, records `X-GitHub-Delivery` in `webhook_delivery` and answers 202 (`duplicate: true` for a redelivery). Processing events is the feed's job.                                                                                                                                                |
+
+Both callbacks end by redirecting to the web app's `returnTo` path with `connect=linked|installed|requested|error`, `provider` and, on error, `reason`.
+
+User tokens are stored sealed: AES in GCM mode, with the row and column as associated data, under a key derived with HKDF from `BETTER_AUTH_SECRET`. The connect state is signed with another key derived the same way. Rotating `BETTER_AUTH_SECRET` therefore asks everyone to authorize GitHub again, and needs no new secret.
+
 #### Service accounts and API keys
 
 Benches and agents authenticate with API keys from Better Auth's api-key plugin. Each key belongs to a service principal (`references: "user"`). People manage them at `/settings/service-accounts`, backed by `/api/auth/service-accounts/{list,create,revoke}` and `/api/auth/service-accounts/keys/{create,revoke}`. Creating or revoking needs a passkey sign-in from the last 15 minutes, like passkey changes. The plugin's own `/api/auth/api-key/*` endpoints are closed.
@@ -151,9 +166,9 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
 3. `images` runs in the `production` environment, so its scan can check the production secrets, and builds, scans and pushes both images with `bin/image --push --tag vX.Y.Z`, using the job's `GITHUB_TOKEN`.
 4. `deploy` runs in the `production` environment, one at a time (`concurrency: production`, never cancelled). It runs `bin/deploy-gate` to confirm its version is still the newest release, joins the tailnet as an ephemeral `tag:ci` node, checks `dash-app`'s SSH host key against the pinned `DASH_APP_SSH_HOST_KEY` variable, deploys Mission Control first (it migrates at boot), then web, both with `--skip-push --version vX.Y.Z`, then checks both `/healthz` endpoints. The box logs in to GHCR with the job's `GITHUB_TOKEN`, which expires when the job ends.
 
-Pull requests run `image-check` for each app, so a broken image fails before merge rather than after release. When the pull request touches anything an image is built from (`apps/`, `packages/`, `integrations/`, a Dockerfile, `.dockerignore`, the root package and workspace files, the lockfile, `bin/image` or `ci.yml`), it builds the image with `bin/image` without pushing, which runs the same secret scan, then boots it: Mission Control against a throwaway Postgres until `/healthz` answers, and web until its `/healthz` does. Otherwise it posts a notice and skips its steps, so the job still passes and can be a required check. It needs no environment or secrets beyond the job's `GITHUB_TOKEN`, and keeps BuildKit layers in the GitHub Actions cache through `IMAGE_CACHE_FROM` and `IMAGE_CACHE_TO`.
+Pull requests run `image-check` for each app, so a broken image fails before merge rather than after release. When the pull request touches anything an image is built from (`apps/`, `packages/`, `integrations/`, a Dockerfile, `.dockerignore`, the root package and workspace files, the lockfile, `bin/image` or `ci.yml`), it builds the image with `bin/image` without pushing, which runs the same secret scan, then boots it: Mission Control against a throwaway Postgres, with a throwaway GitHub App and a freshly generated key, until `/healthz` answers, and web until its `/healthz` does. Otherwise it posts a notice and skips its steps, so the job still passes and can be a required check. It needs no environment or secrets beyond the job's `GITHUB_TOKEN`, and keeps BuildKit layers in the GitHub Actions cache through `IMAGE_CACHE_FROM` and `IMAGE_CACHE_TO`.
 
-`images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. Until it also holds the Tailscale and SSH secrets below, and the host key variable is set, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on. `deploy` only ships the newest `vX.Y.Z` tag, so re-running an older run posts a notice and skips instead of rolling production back; roll back by hand as below.
+`images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. It also scans for the GitHub App's secrets when `production` holds them. Until it also holds the Tailscale and SSH secrets below, and the host key variable is set, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on. `deploy` only ships the newest `vX.Y.Z` tag, so re-running an older run posts a notice and skips instead of rolling production back; roll back by hand as below.
 
 ### One-time deploy setup
 
@@ -194,7 +209,20 @@ Pull requests run `image-check` for each app, so a broken image fails before mer
 
    The deploy writes it to `known_hosts` and connects with `StrictHostKeyChecking=yes`, so a changed host key stops the deploy. Update the variable after rebuilding `dash-app`.
 
-8. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
+8. Give `production` the GitHub App's settings, so Mission Control's connect flow and webhook can run. Mission Control refuses to start in production without them. The App ID, slug and client ID are public, so they are variables; the rest are secrets. The deploy passes them to Mission Control as `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_WEBHOOK_SECRET`:
+
+   ```sh
+   gh variable set DASH_GITHUB_APP_ID --env production
+   gh variable set DASH_GITHUB_APP_SLUG --env production
+   gh variable set DASH_GITHUB_APP_CLIENT_ID --env production
+   gh secret set DASH_GITHUB_APP_CLIENT_SECRET --env production
+   gh secret set DASH_GITHUB_APP_PRIVATE_KEY --env production < the-app.private-key.pem
+   gh secret set DASH_GITHUB_WEBHOOK_SECRET --env production
+   ```
+
+   Kamal's env file turns the key's newlines into literal `\n`; Mission Control turns them back. Locally, `bin/kamal` passes the same `DASH_GITHUB_*` names through from the environment.
+
+9. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
 
 ### Deploying by hand
 

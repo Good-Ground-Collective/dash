@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import {
+  connectFlowCapability,
   sourceControlCapability,
   taskTrackerCapability,
 } from '@dash/integrations-core';
@@ -36,11 +37,17 @@ const providerImport =
 
 describe('IntegrationsModule', () => {
   it('registers GitHub for task tracking and source control', () => {
-    const { registry } = new IntegrationsModule();
+    const { registry } = new IntegrationsModule({ githubApp: null });
     const ids = (offers: readonly { integration: { id: string } }[]) =>
       offers.map(({ integration }) => integration.id);
     expect(ids(registry.offering(taskTrackerCapability))).toEqual(['github']);
     expect(ids(registry.offering(sourceControlCapability))).toEqual(['github']);
+  });
+
+  it('offers no connect flow until the GitHub App is configured', () => {
+    const { registry } = new IntegrationsModule({ githubApp: null });
+
+    expect(registry.offering(connectFlowCapability)).toEqual([]);
   });
 });
 

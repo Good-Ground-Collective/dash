@@ -32,6 +32,27 @@ export const webOriginSchema = z
       'Expected a bare origin such as https://example.com, with no path or trailing slash',
   });
 
+const optionalSecretSchema = z.string().min(1).optional();
+
+/** The registered GitHub App's variables, set all together or not at all. The provider checks the values themselves. */
+const githubAppVariables = [
+  'GITHUB_APP_ID',
+  'GITHUB_APP_SLUG',
+  'GITHUB_APP_CLIENT_ID',
+  'GITHUB_APP_CLIENT_SECRET',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_WEBHOOK_SECRET',
+] as const;
+
+export interface GithubAppSettings {
+  appId: string;
+  slug: string;
+  clientId: string;
+  clientSecret: string;
+  privateKey: string;
+  webhookSecret: string;
+}
+
 export const appConfigSchema = z
   .object({
     NODE_ENV: environmentSchema,
@@ -54,7 +75,30 @@ export const appConfigSchema = z
     BETTER_AUTH_URL: webOriginSchema,
     APP_VERSION: z.string().optional(),
     APP_COMMIT: z.string().optional(),
+    GITHUB_APP_ID: optionalSecretSchema,
+    GITHUB_APP_SLUG: optionalSecretSchema,
+    GITHUB_APP_CLIENT_ID: optionalSecretSchema,
+    GITHUB_APP_CLIENT_SECRET: optionalSecretSchema,
+    GITHUB_APP_PRIVATE_KEY: optionalSecretSchema,
+    GITHUB_WEBHOOK_SECRET: optionalSecretSchema,
   })
+  .refine(
+    (env) => {
+      const set = githubAppVariables.filter((name) => env[name] !== undefined);
+      return set.length === 0 || set.length === githubAppVariables.length;
+    },
+    {
+      message: `Set all of ${githubAppVariables.join(', ')} for the GitHub App, or none of them`,
+      path: ['GITHUB_APP_ID'],
+    },
+  )
+  .refine(
+    (env) => env.NODE_ENV !== 'production' || env.GITHUB_APP_ID !== undefined,
+    {
+      message: `Production needs the GitHub App: set ${githubAppVariables.join(', ')}`,
+      path: ['GITHUB_APP_ID'],
+    },
+  )
   .refine(
     (env) =>
       env.NODE_ENV !== 'production' ||
@@ -101,6 +145,22 @@ export const appConfigSchema = z
       version: env.APP_VERSION?.trim() || 'dev',
       commit: env.APP_COMMIT?.trim() || null,
     },
+    githubApp:
+      env.GITHUB_APP_ID === undefined ||
+      env.GITHUB_APP_SLUG === undefined ||
+      env.GITHUB_APP_CLIENT_ID === undefined ||
+      env.GITHUB_APP_CLIENT_SECRET === undefined ||
+      env.GITHUB_APP_PRIVATE_KEY === undefined ||
+      env.GITHUB_WEBHOOK_SECRET === undefined
+        ? null
+        : {
+            appId: env.GITHUB_APP_ID,
+            slug: env.GITHUB_APP_SLUG,
+            clientId: env.GITHUB_APP_CLIENT_ID,
+            clientSecret: env.GITHUB_APP_CLIENT_SECRET,
+            privateKey: env.GITHUB_APP_PRIVATE_KEY,
+            webhookSecret: env.GITHUB_WEBHOOK_SECRET,
+          },
   }));
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -118,6 +178,8 @@ export class AppConfig {
   readonly corsOrigins: readonly string[];
   readonly databaseUrl: string;
   readonly environment: Environment;
+  /** The GitHub App, or null outside production when it isn't configured. */
+  readonly githubApp: GithubAppSettings | null;
   readonly host: string;
   readonly logLevel: LogLevel;
   readonly port: number;
@@ -141,6 +203,7 @@ export class AppConfig {
     this.authSecret = config.authSecret;
     this.authBaseUrl = config.authBaseUrl;
     this.build = config.build;
+    this.githubApp = config.githubApp;
     this.secureCookies = config.environment === 'production';
     this.apiKeyPrefix =
       config.environment === 'production' ? 'dash_live_' : 'dash_dev_';

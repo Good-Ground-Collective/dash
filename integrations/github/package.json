@@ -4,22 +4,36 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "dash-dist": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
   },
   "imports": {
-    "#src/*": "./src/*"
+    "#src/*.ts": {
+      "dash-dist": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "dash-strip-types",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@dash/integrations-core": "workspace:*",
+    "@octokit/auth-app": "catalog:",
+    "@octokit/request": "catalog:",
+    "@octokit/webhooks-methods": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
+    "@types/node": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

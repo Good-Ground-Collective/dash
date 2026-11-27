@@ -10,14 +10,23 @@ import {
 import { ConfigError } from '#src/platform/errors.ts';
 
 const databaseUrl = 'postgres://dash:dash@127.0.0.1:54329/mission_control';
-const productionEnv = {
+const githubAppEnv = {
+  GITHUB_APP_ID: '5947367',
+  GITHUB_APP_SLUG: 'good-ground-dash',
+  GITHUB_APP_CLIENT_ID: 'Iv23-client',
+  GITHUB_APP_CLIENT_SECRET: 'client-secret',
+  GITHUB_APP_PRIVATE_KEY: 'pem',
+  GITHUB_WEBHOOK_SECRET: 'webhook-secret',
+};
+const productionEnvWithoutGithub = {
   NODE_ENV: 'production',
   DATABASE_URL: databaseUrl,
   BETTER_AUTH_SECRET: 'production-secret-that-is-long-enough',
   BETTER_AUTH_URL: 'https://api.dash.doublel.studio',
 };
+const productionEnv = { ...productionEnvWithoutGithub, ...githubAppEnv };
 const developmentEnv = {
-  ...productionEnv,
+  ...productionEnvWithoutGithub,
   NODE_ENV: 'development',
   BETTER_AUTH_URL: 'http://localhost:3000',
 };
@@ -176,5 +185,34 @@ describe('AppConfig build', () => {
       version: 'dev',
       commit: null,
     });
+  });
+});
+
+describe('AppConfig GitHub App', () => {
+  it('reads the App in production', () => {
+    expect(new AppConfig(productionEnv).githubApp).toEqual({
+      appId: '5947367',
+      slug: 'good-ground-dash',
+      clientId: 'Iv23-client',
+      clientSecret: 'client-secret',
+      privateKey: 'pem',
+      webhookSecret: 'webhook-secret',
+    });
+  });
+
+  it('runs without the App outside production', () => {
+    expect(new AppConfig(developmentEnv).githubApp).toBeNull();
+  });
+
+  it('refuses to start production without the App', () => {
+    expect(() => new AppConfig(productionEnvWithoutGithub)).toThrow(
+      /Production needs the GitHub App/u,
+    );
+  });
+
+  it('refuses half an App', () => {
+    expect(
+      () => new AppConfig({ ...developmentEnv, GITHUB_APP_ID: '5947367' }),
+    ).toThrow(/or none of them/u);
   });
 });
