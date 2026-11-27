@@ -11,6 +11,9 @@ import {
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
 import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 
+const unclaimedId = '40000000-0000-4000-8000-000000000001';
+const uninstalledId = '40000000-0000-4000-8000-000000000002';
+
 class Reconciling {
   static async linked(): Promise<GithubFeedHarness> {
     const harness = await new GithubFeedHarness().link({
@@ -97,14 +100,26 @@ describe('GithubReconcile failed reads', () => {
         suspended: true,
       }),
     );
+    for (const target of [
+      { connectionId: unclaimedId, connectedBy: null },
+      { connectionId: uninstalledId, installationId: null },
+    ]) {
+      harness.records.add(GithubFeedFixtures.target(target));
+    }
 
-    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
-    await harness.module.reconcile.syncConnection({ connectionId: guestId });
+    for (const connectionId of [ownedId, guestId, unclaimedId, uninstalledId]) {
+      await harness.module.reconcile.syncConnection({ connectionId });
+    }
 
     expect(harness.records.syncs.get(ownedId)?.lastError).toMatch(
       /Authorize the GitHub app/u,
     );
     expect(harness.records.syncs.get(guestId)?.lastError).toMatch(/suspended/u);
+    for (const connectionId of [unclaimedId, uninstalledId]) {
+      expect(harness.records.syncs.get(connectionId)?.lastError).toBe(
+        'This connection can’t be read until it is reconnected.',
+      );
+    }
     expect(harness.feed.queries).toEqual([]);
   });
 });

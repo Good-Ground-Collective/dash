@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ConnectionKind } from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSource } from '#src/github-feed/contracts/github-source.ts';
 import {
+  ConnectionNotReadableError,
+  ConnectorUnknownError,
   InstallationSuspendedError,
   ViewerNotLinkedError,
 } from '#src/github-feed/errors.ts';
@@ -104,6 +106,12 @@ export class GithubReconcile {
       error instanceof InstallationSuspendedError
     ) {
       return error.message;
+    }
+    if (
+      error instanceof ConnectionNotReadableError ||
+      error instanceof ConnectorUnknownError
+    ) {
+      return 'This connection can’t be read until it is reconnected.';
     }
     const status = statusSchema.safeParse(error);
     return status.success
