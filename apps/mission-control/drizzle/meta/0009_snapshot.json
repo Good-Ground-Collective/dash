@@ -1,5 +1,5 @@
 {
-  "id": "f074d88d-653c-438a-9f92-6870dbb08162",
+  "id": "7a5e7ac7-ed05-4f7b-90f7-a192eedf0494",
   "prevId": "e4fff15d-ea39-4a08-a0ad-65396312ff5d",
   "version": "7",
   "dialect": "postgresql",
@@ -1613,6 +1613,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "webhook_delivery_pending_idx": {
+          "name": "webhook_delivery_pending_idx",
+          "columns": [
+            {
+              "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"webhook_delivery\".\"dispatch_pending\"",
           "concurrently": false,
           "method": "btree",
           "with": {}

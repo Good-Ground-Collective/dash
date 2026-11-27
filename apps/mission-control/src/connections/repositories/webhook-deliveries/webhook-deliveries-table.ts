@@ -1,4 +1,5 @@
 import type { WebhookPayload } from '@dash/integrations-core';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -36,5 +37,8 @@ export const webhookDeliveryTable = pgTable(
   (table) => [
     primaryKey({ columns: [table.provider, table.deliveryId] }),
     index('webhook_delivery_received_at_idx').on(table.receivedAt),
+    index('webhook_delivery_pending_idx')
+      .on(table.receivedAt)
+      .where(sql`${table.dispatchPending}`),
   ],
 );

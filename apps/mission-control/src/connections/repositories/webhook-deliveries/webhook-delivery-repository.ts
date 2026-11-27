@@ -27,7 +27,6 @@ export interface WebhookDeliveryRepository {
     receivedBefore: Date;
     limit: number;
   }): Promise<DispatchedDelivery[]>;
-  /** Deletes deliveries received before `cutoff` and says how many went. */
   deleteReceivedBefore(props: { cutoff: Date }): Promise<number>;
 }
 
