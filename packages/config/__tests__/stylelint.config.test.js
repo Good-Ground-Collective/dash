@@ -6,6 +6,16 @@ import { describe, expect, it } from 'vitest';
 import config from '../stylelint.config.js';
 
 class Lint {
+  /** The warnings for a source, linted as if it lived at `file`. */
+  static async warnings(props) {
+    const { results } = await stylelint.lint({
+      code: props.code,
+      codeFilename: path.join(process.cwd(), 'src', props.file),
+      config,
+    });
+    return results.flatMap((result) => result.warnings);
+  }
+
   /** The rules a source breaks, linted as if it lived at `file`. */
   static async rules(props) {
     const { results } = await stylelint.lint({
@@ -98,6 +108,11 @@ describe('stylelint config: Svelte components', () => {
       'a named colour in a border shorthand',
       '<p style:border-top="1px solid white">x</p>',
     ],
+    ['a named colour in a custom property', '<p style:--accent="red">x</p>'],
+    [
+      'a named colour in a column rule',
+      '<p style:column-rule="1px solid red">x</p>',
+    ],
   ])('rejects %s in a style directive', async (_label, code) => {
     expect(await Lint.rules({ file: 'lib/Thing.svelte', code })).toEqual([
       'dash/style-directive-tokens',
@@ -154,6 +169,25 @@ describe('stylelint config: Svelte components', () => {
 
     expect(await Lint.rules({ file: 'lib/Thing.svelte', code })).toEqual([
       'dash/style-directive-tokens',
+    ]);
+  });
+
+  it('reports a directive on its own line, below other stylesheets', async () => {
+    const code = [
+      '<style>',
+      '  p {',
+      '    color: var(--ink);',
+      '  }',
+      '</style>',
+      '<p style="margin: 0">x</p>',
+      '<p style:color="white">y</p>',
+      '',
+    ].join('\n');
+
+    const warnings = await Lint.warnings({ file: 'lib/Thing.svelte', code });
+
+    expect(warnings).toMatchObject([
+      { rule: 'dash/style-directive-tokens', line: 7, column: 4 },
     ]);
   });
 

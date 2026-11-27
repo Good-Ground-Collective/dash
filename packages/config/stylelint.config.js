@@ -1,23 +1,14 @@
 import { fileURLToPath } from 'node:url';
 
 import styleDirectives from './stylelint-style-directives.js';
-
-/** Colour functions a theme file may use and nothing else may. */
-const colourFunctions = [
-  'rgb',
-  'rgba',
-  'hsl',
-  'hsla',
-  'hwb',
-  'lab',
-  'lch',
-  'oklab',
-  'oklch',
-  'color',
-];
+import {
+  colourFunctions,
+  fontShorthand,
+  fontToken,
+} from './stylelint-tokens.js';
 
 /** A component names a token, never a literal stack. */
-const fontFamilyValues = ['/^var\\(--font-[\\w-]+\\)$/', 'inherit'];
+const fontFamilyValues = [`/^${fontToken}$/`, 'inherit'];
 
 export default {
   extends: [fileURLToPath(import.meta.resolve('stylelint-config-standard'))],
@@ -28,7 +19,7 @@ export default {
     'function-disallowed-list': colourFunctions,
     'declaration-property-value-allowed-list': {
       'font-family': fontFamilyValues,
-      font: ['inherit', '/^(?:[^,]*\\s)?var\\(--font-[\\w-]+\\)$/'],
+      font: ['inherit', `/${fontShorthand}/`],
     },
     'dash/style-directive-tokens': true,
   },

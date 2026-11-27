@@ -1,5 +1,7 @@
 import stylelint from 'stylelint';
 
+import { colourFunctions, fontShorthand } from './stylelint-tokens.js';
+
 const ruleName = 'dash/style-directive-tokens';
 
 const messages = stylelint.utils.ruleMessages(ruleName, {
@@ -7,15 +9,13 @@ const messages = stylelint.utils.ruleMessages(ruleName, {
     `Use a theme token for ${property}, not "${value}"`,
 });
 
-/** Properties whose value carries a colour. Border widths, styles and radii are not among them. */
-const colourProperties =
-  /^(color|background(-color)?|border(-(top|right|bottom|left|block|inline)(-(start|end))?)?(-color)?|outline(-color)?|fill|stroke|stop-color|flood-color|lighting-color|box-shadow|text-shadow|caret-color|accent-color|text-decoration-color)$/u;
-
 const fontProperties = /^font(-family)?$/u;
 
 /** A literal colour: hex, or a colour function. */
-const rawColour =
-  /#[\da-f]{3,8}\b|\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/iu;
+const rawColour = new RegExp(
+  String.raw`#[\da-f]{3,8}\b|\b(${colourFunctions.join('|')})\(`,
+  'iu',
+);
 
 /** CSS named colours, as `color-named: never` rejects them in stylesheets. */
 const namedColours = new Set(
@@ -48,8 +48,8 @@ const namedColours = new Set(
     .filter(Boolean),
 );
 
-/** A font shorthand may lead with a size, weight or style, then must name one font token. */
-const fontValue = /^(inherit|(?:[^,]*\s)?var\(--font-[\w-]+\))$/iu;
+/** `inherit`, or a font shorthand that ends in one font token. */
+const fontValue = new RegExp(`^inherit$|${fontShorthand}`, 'iu');
 
 /** `style:property=` directives and SVG colour attributes, with a quoted or braced value. */
 const binding =
@@ -71,12 +71,11 @@ const position = (source, index) => {
   return { line: before.length, column: (before.at(-1) ?? '').length + 1 };
 };
 
-/** Whether a literal value names a raw colour or font stack for `property`. */
+/** Whether a literal value names a raw colour, for any property, or a font stack for a font property. */
 const isRawValue = (property, value) => {
   const bare = value.replaceAll(/url\([^)]*\)/gu, ' ');
   if (rawColour.test(bare)) return true;
   if (fontProperties.test(property)) return !fontValue.test(value.trim());
-  if (!colourProperties.test(property)) return false;
   return bare
     .replaceAll(/var\(--[\w-]+\)|[\w-]+\(/gu, ' ')
     .split(/[\s,/()]+/u)
