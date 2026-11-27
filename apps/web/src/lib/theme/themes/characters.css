@@ -25,6 +25,7 @@
   --density-panel: var(--space-5);
   --density-row-block: var(--space-3);
   --density-row-inline: var(--space-4);
+  --space-float-clearance: calc(var(--touch-target) + var(--space-5) * 2);
   --content-width: 72rem;
   --touch-target: 44px;
   --radius-panel: 14px;

@@ -83,7 +83,7 @@
     max-width: var(--content-width);
     margin: 0 auto;
     padding: var(--space-6) var(--space-5)
-      calc(var(--space-7) * 2 + env(safe-area-inset-bottom));
+      calc(var(--space-float-clearance) + env(safe-area-inset-bottom));
   }
 
   @media (width < 40rem) {
@@ -100,7 +100,7 @@
 
     .content {
       padding: var(--space-5) var(--space-4)
-        calc(var(--space-7) * 2 + env(safe-area-inset-bottom));
+        calc(var(--space-float-clearance) + env(safe-area-inset-bottom));
     }
   }
 </style>
