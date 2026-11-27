@@ -1,4 +1,9 @@
+import { readFile } from 'node:fs/promises';
+
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { examplePing } from '#src/messages/example.js';
 
@@ -9,6 +14,17 @@ const ping = {
   emittedAt: '2026-11-27T09:30:00Z',
   payload: { text: 'hello' },
 };
+
+const jsonSchema = z
+  .record(z.string(), z.unknown())
+  .parse(
+    JSON.parse(
+      await readFile(
+        new URL('../../../schemas/example.ping.v1.json', import.meta.url),
+        'utf8',
+      ),
+    ),
+  );
 
 describe('examplePing', () => {
   it('parses a valid example.ping', () => {
@@ -41,5 +57,36 @@ describe('examplePing', () => {
     expect(
       examplePing.schema.safeParse({ ...ping, schemaVersion: '2.0' }).success,
     ).toBe(false);
+  });
+});
+
+describe('the generated example.ping JSON Schema', () => {
+  const ajv = new Ajv2020({ strict: true });
+  addFormats.default(ajv);
+  const validate = ajv.compile(jsonSchema);
+
+  it('accepts the fixture the Zod schema accepts', () => {
+    expect(validate(ping)).toBe(true);
+  });
+
+  it('accepts unknown fields', () => {
+    expect(
+      validate({
+        ...ping,
+        sender: 'bench-1',
+        payload: { ...ping.payload, priority: 'high' },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a newer minor version and rejects an unknown major', () => {
+    expect(validate({ ...ping, schemaVersion: '1.7' })).toBe(true);
+    expect(validate({ ...ping, schemaVersion: '2.0' })).toBe(false);
+  });
+
+  it('rejects a message without schemaVersion', () => {
+    const { schemaVersion: _omitted, ...withoutVersion } = ping;
+
+    expect(validate(withoutVersion)).toBe(false);
   });
 });

@@ -2,7 +2,8 @@
   "extends": "@dash/config/tsconfig/base.json",
   "compilerOptions": {
     "noEmit": true,
+    "types": ["node"],
     "customConditions": ["@good-ground-collective/standards-source"]
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": ["src", "scripts", "vitest.config.ts"]
 }

@@ -32,11 +32,26 @@ import { examplePing } from '@good-ground-collective/agentic-communication-stand
 const ping = examplePing.schema.parse(JSON.parse(body));
 ```
 
+## JSON Schema
+
+Consumers that don't run TypeScript can read the same schemas as JSON Schema (draft 2020-12). The package ships one file per message kind and major version:
+
+```js
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const path =
+  require.resolve('@good-ground-collective/agentic-communication-standards/schemas/example.ping.v1.json');
+```
+
+The files are generated from the Zod schemas and committed under `schemas/`. They describe what a reader accepts, so they allow unknown fields. CI fails when they are stale.
+
 ## Adding a message
 
 1. Create `src/messages/<area>.ts` and construct a `MessageDefinition` with the kind, the starting version (`1.0`) and a `z.object` payload. `src/messages/example.ts` is the model.
 2. Add the definition to `messageRegistry` in `src/registry.ts`. Generators read the registry, so a message missing from it is missing from the generated schemas.
 3. Export it from `src/index.ts`.
+4. Run `pnpm --filter @good-ground-collective/agentic-communication-standards generate` and commit the new file in `schemas/`. Do the same after any schema change.
 
 ## Versioning rules
 
