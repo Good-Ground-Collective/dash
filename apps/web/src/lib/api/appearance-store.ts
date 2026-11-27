@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
-import { MissionControlError } from '#lib/api/mission-control-error.ts';
+import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import type { ThemePreference } from '#lib/theme/theme-preference-reader.ts';
-
-const failureSchema = z.object({ code: z.string().optional() });
 
 export const httpAppearanceStorePropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
@@ -21,37 +19,34 @@ export interface AppearanceStore {
 
 /** Calls Mission Control's `/api/auth/appearance/update` with credentials. Failures are `MissionControlError`s. */
 export class HttpAppearanceStore implements AppearanceStore {
-  private readonly url: URL;
+  private readonly endpoint: MissionControlEndpoint;
   private readonly fetcher: typeof fetch;
 
   constructor(props: HttpAppearanceStoreProps) {
     const valid = httpAppearanceStorePropsSchema.parse(props);
-    const baseUrl = new URL(valid.baseUrl);
-    if (!baseUrl.pathname.endsWith('/')) baseUrl.pathname += '/';
-    this.url = new URL(HttpAppearanceStore.PATH, baseUrl);
+    this.endpoint = new MissionControlEndpoint({ baseUrl: valid.baseUrl });
     this.fetcher = valid.fetch;
   }
 
   async save(preference: ThemePreference): Promise<void> {
-    const response = await this.fetcher(this.url, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
+    const response = await this.fetcher(
+      this.endpoint.url(HttpAppearanceStore.PATH),
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(preference),
       },
-      body: JSON.stringify(preference),
+    );
+
+    await this.endpoint.read({
+      path: HttpAppearanceStore.PATH,
+      response,
+      schema: z.unknown(),
     });
-    if (!response.ok) {
-      const failure = failureSchema.safeParse(
-        await response.json().catch(() => null),
-      );
-      throw new MissionControlError({
-        path: HttpAppearanceStore.PATH,
-        status: response.status,
-        code: failure.success ? failure.data.code : undefined,
-      });
-    }
   }
 
   static readonly PATH = 'api/auth/appearance/update';

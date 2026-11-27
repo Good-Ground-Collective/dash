@@ -15,7 +15,7 @@ export interface SavedAppearance {
 /** Keeps the theme cookies in step with the preference saved on the server. */
 export interface ThemeCookieMirror {
   /** The saved preference wins over the request's; cookies that disagree with it are rewritten. */
-  adopt(props: {
+  resolve(props: {
     cookies: Pick<Cookies, 'get' | 'set'>;
     requested: ThemePreference;
     saved: SavedAppearance | null;
@@ -24,7 +24,7 @@ export interface ThemeCookieMirror {
 
 /** Writes the cookies `CookieThemePreferenceReader` reads, server-side and HttpOnly: only SvelteKit reads them. */
 export class ServerThemeCookieMirror implements ThemeCookieMirror {
-  adopt(props: {
+  resolve(props: {
     cookies: Pick<Cookies, 'get' | 'set'>;
     requested: ThemePreference;
     saved: SavedAppearance | null;

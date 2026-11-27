@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '#lib/auth-ui/auth-form.css';
   import { RadioGroup } from 'bits-ui';
   import { invalidateAll } from '$app/navigation';
   import { API_BASE_URL } from '$app/env/public';
@@ -23,15 +24,18 @@
   ];
 
   let error = $state<string | null>(null);
+  let saving = $state(false);
 
-  /** Shows the choice at once, then saves it. A refusal puts the saved appearance back. */
+  /** Shows the choice at once, then saves it. A refusal puts the saved appearance back. The toggles wait while a save is in flight, so saves land in the order they were chosen. */
   const choose = async (change: {
     theme?: ThemeName;
     mode?: ColorMode;
   }): Promise<void> => {
     const next = { ...theme.current, ...change };
     error = null;
+    saving = true;
     theme.preview(next);
+
     try {
       await store.save(next);
       await invalidateAll();
@@ -39,6 +43,7 @@
       error = 'Mission Control didn’t save that. Try again.';
     } finally {
       theme.settle();
+      saving = false;
     }
   };
 </script>
@@ -81,6 +86,7 @@
       class="segments"
       orientation="horizontal"
       aria-labelledby={`appearance-${props.label}`}
+      disabled={saving}
       value={props.value}
       onValueChange={props.onChange}
     >
@@ -149,6 +155,10 @@
     color: var(--ink-muted);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
+  }
+
+  .segment:disabled {
+    cursor: progress;
   }
 
   .segment:hover {

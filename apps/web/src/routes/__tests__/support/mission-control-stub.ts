@@ -188,7 +188,7 @@ export class MissionControlStub {
     if (session === null || this.person === null) {
       return { status: 200, body: null };
     }
-    const user = this.appearance.dress(this.person);
+    const user = this.appearance.withAppearance(this.person);
     return {
       status: 200,
       body: { session: { token: session }, user },

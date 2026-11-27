@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
+import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
 import {
   authenticationOptionsSchema,
@@ -39,14 +40,13 @@ export interface PasskeyAuth {
 
 /** Calls Mission Control's `/api/auth` with credentials and runs WebAuthn ceremonies in between. */
 export class HttpPasskeyAuth implements PasskeyAuth {
-  private readonly baseUrl: URL;
+  private readonly endpoint: MissionControlEndpoint;
   private readonly fetcher: typeof fetch;
   private readonly ceremonies: WebAuthnCeremonies;
 
   constructor(props: HttpPasskeyAuthProps) {
     const valid = httpPasskeyAuthPropsSchema.parse(props);
-    this.baseUrl = new URL(valid.baseUrl);
-    if (!this.baseUrl.pathname.endsWith('/')) this.baseUrl.pathname += '/';
+    this.endpoint = new MissionControlEndpoint({ baseUrl: valid.baseUrl });
     this.fetcher = valid.fetch;
     this.ceremonies = valid.ceremonies;
   }
@@ -169,7 +169,7 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     init: RequestInit;
   }): Promise<T> {
     const response = await this.fetcher(
-      new URL(`api/auth/${props.path}`, this.baseUrl),
+      this.endpoint.url(`api/auth/${props.path}`),
       { ...props.init, credentials: 'include' },
     );
     const text = await response.text();
