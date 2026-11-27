@@ -35,6 +35,8 @@ catalog:
   fastify-type-provider-zod: 7.0.0
   pg: 8.23.1
   pino-pretty: 13.2.0
+  postcss: 8.5.33
+  postcss-html: 2.0.1
   prettier: 3.10.1
   prettier-plugin-svelte: 4.2.0
   semantic-release: 25.0.9

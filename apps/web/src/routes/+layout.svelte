@@ -1,7 +1,7 @@
 <script lang="ts">
   import '@fontsource-variable/geist';
   import '@fontsource-variable/geist-mono';
-  import '#lib/theme/characters.css';
+  import '#lib/theme/themes/characters.css';
   import '#lib/theme/base.css';
   import { onMount } from 'svelte';
   import { API_BASE_URL } from '$app/env/public';
