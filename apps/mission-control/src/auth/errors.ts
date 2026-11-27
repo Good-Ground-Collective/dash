@@ -88,6 +88,55 @@ export class SessionNotFreshError extends APIError {
   }
 }
 
+/** The same answer for an unknown email, a wrong code and a used one, so it never says whether an account exists. */
+export class RecoveryRejectedError extends APIError {
+  override name = 'RecoveryRejectedError';
+
+  constructor() {
+    super('UNAUTHORIZED', {
+      code: 'RECOVERY_REJECTED',
+      message:
+        "That email and recovery code don't match an unused code. Check both, or use another code.",
+    });
+  }
+}
+
+export class RecoveryRateLimitedError extends APIError {
+  override name = 'RecoveryRateLimitedError';
+
+  constructor(props: { retryAfterSeconds: number }) {
+    super(
+      'TOO_MANY_REQUESTS',
+      {
+        code: 'RECOVERY_RATE_LIMITED',
+        message: `Too many recovery attempts. Try again in ${Math.ceil(props.retryAfterSeconds / 60)} minutes.`,
+      },
+      { 'retry-after': String(props.retryAfterSeconds) },
+    );
+  }
+}
+
+export class RecoveryCodeSetNotPendingError extends APIError {
+  override name = 'RecoveryCodeSetNotPendingError';
+
+  constructor() {
+    super('CONFLICT', {
+      code: 'RECOVERY_CODE_SET_NOT_PENDING',
+      message:
+        'Those codes are no longer waiting to be confirmed. Generate a new set.',
+    });
+  }
+}
+
+/** For the break-glass command, which runs on the host and may say who exists. */
+export class RecoveryPersonNotFoundError extends Error {
+  override name = 'RecoveryPersonNotFoundError';
+
+  constructor(props: { email: string }) {
+    super(`Nobody who signs in with a passkey has the email ${props.email}.`);
+  }
+}
+
 export class ServiceAccountNotFoundError extends APIError {
   override name = 'ServiceAccountNotFoundError';
 

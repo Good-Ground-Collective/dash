@@ -15,6 +15,9 @@ export interface StoredRow {
   emailVerified?: boolean;
   image?: string | null;
   userId?: string;
+  identifier?: string;
+  state?: string;
+  expiresAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -29,6 +32,7 @@ export class PasskeyIdentity {
     verification: new Array<StoredRow>(),
     passkey: new Array<StoredRow>(),
     setupToken: new Array<StoredRow>(),
+    recoveryCode: new Array<StoredRow>(),
   };
 
   constructor() {

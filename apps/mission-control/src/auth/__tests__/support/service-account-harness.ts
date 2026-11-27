@@ -34,6 +34,7 @@ export class ServiceAccountHarness {
     verification: new Array<HarnessRow>(),
     passkey: new Array<HarnessRow>(),
     setupToken: new Array<HarnessRow>(),
+    recoveryCode: new Array<HarnessRow>(),
     apikey: new Array<HarnessRow>(),
   };
   readonly repository = new InMemoryServicePrincipalRepository({

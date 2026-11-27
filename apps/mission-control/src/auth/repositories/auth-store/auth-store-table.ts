@@ -157,6 +157,43 @@ export const setupTokenTable = pgTable(
   ],
 );
 
+/**
+ * A person's recovery codes, as HMACs keyed with the auth secret and bound to the person. A set
+ * starts `pending` and turns `active` once its owner confirms they saved it, which deletes every
+ * other set; a redeemed code turns `used`.
+ */
+export const recoveryCodeTable = pgTable(
+  'recovery_code',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => userTable.id, { onDelete: 'cascade' }),
+    setId: uuid('set_id').notNull(),
+    codeHash: text('code_hash').notNull(),
+    state: text('state', { enum: ['pending', 'active', 'used'] }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('recovery_code_user_id_code_hash_idx').on(
+      table.userId,
+      table.codeHash,
+    ),
+    index('recovery_code_set_id_idx').on(table.setId),
+    check(
+      'recovery_code_state_check',
+      sql`${table.state} in ('pending', 'active', 'used')`,
+    ),
+    check(
+      'recovery_code_used_at_check',
+      sql`(${table.state} = 'used') = (${table.usedAt} is not null)`,
+    ),
+  ],
+);
+
 /** A service principal's API key, as the api-key plugin stores it: a hash of the key, never the key itself. */
 export const apikeyTable = pgTable(
   'apikey',

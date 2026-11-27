@@ -108,6 +108,14 @@ People sign in only with passkeys. The relying party is the web app: RP ID `dash
 
 The first person signs up with a setup token. While nobody has signed up, every boot logs a new one-time token (a `warn` line with `setupToken`) and stores only its hash. Open `/setup` in the web app, enter the token with your name and email, and enrol a passkey: that creates the account and signs you in. Setup closes for good once anyone has signed up, and a restart then logs nothing.
 
+#### Recovery
+
+There's no email fallback. Someone who has lost every passkey gets back in with a recovery code or, failing that, the break-glass command. Both end by registering a new passkey, which signs them in.
+
+- **Recovery codes.** A person has 10 one-time codes, formatted `xxxx-xxxx`. `POST /api/auth/recovery-codes/generate` (a passkey sign-in from the last 15 minutes) returns a new pending set and its `setId`, the only time the codes are readable; generating again discards a pending set. `POST /api/auth/recovery-codes/confirm` with `{ "setId" }` makes that set the person's codes and deletes every other set, so the old codes stop working. `GET /api/auth/recovery-codes/status` answers `{ confirmed, remaining }`. The `recovery_code` table keeps only an HMAC of each code, keyed with `BETTER_AUTH_SECRET` and the person's id, so rotating the secret voids every code.
+- **Redeeming.** `POST /api/auth/recovery/redeem` with `{ "email", "code" }` answers `{ "enrolment" }`, which the web app passes as the passkey registration `context` with `createSession`, as setup does. Registering spends the code, so a code is used once and an abandoned ceremony keeps it. A wrong code, a used code and an unknown email all get the same 401 `RECOVERY_REJECTED`. Attempts are limited to 5 per email and 20 overall every 15 minutes, counted in memory, and the 429 carries `Retry-After`.
+- **Break glass.** `dash admin recover <email>`, run in the Mission Control container, prints a link to `/recover/passkey` on the web app that registers a new passkey for that person. It works once and expires after 15 minutes. Shell access to `dash-app` over the tailnet is the root of trust, so the command needs no other proof. See [Deploying by hand](#deploying-by-hand) for how to run it. Locally, `pnpm dash admin recover <email>` runs it against the Compose database.
+
 `BETTER_AUTH_SECRET` (at least 32 characters, for example from `openssl rand -base64 32`) signs the cookies, and `BETTER_AUTH_URL` is Mission Control's public origin. `.env.example` has a placeholder secret for local use only, and production refuses it. In production `BETTER_AUTH_URL` must be https and on `dash.doublel.studio` or a subdomain, or browsers would drop the session cookie.
 
 Mission Control's tests don't need Postgres, and CI runs none: auth tests use Better Auth's memory adapter, and repositories are tested through in-memory fakes. Behaviour that lives in Postgres (transactions, foreign keys, check constraints) is checked by hand against the Compose database when a migration changes it.
@@ -197,6 +205,12 @@ bin/kamal deploy -c deploy/mission-control.yml --skip-push --version "$(git rev-
 ```
 
 To roll back, deploy an older tag the same way, for example `--version v1.1.0`. The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
+
+If someone has lost every passkey and every recovery code, print them a one-time sign-in link from the running container. Open it on the device that should get the new passkey within 15 minutes:
+
+```sh
+bin/kamal app exec -c deploy/mission-control.yml --interactive --reuse 'dash admin recover you@example.com'
+```
 
 Mission Control migrates its database as the container boots, before it listens. kamal-proxy moves traffic to a new container only once its `/healthz` reports the database and workflows ok, so a failed migration leaves the old container serving. Migrations must therefore stay compatible with the version still running. Server-Sent Events on `/events` pass through kamal-proxy unbuffered: it stops buffering `text/event-stream` responses, and its 30-second response timeout covers only the wait for headers.
 

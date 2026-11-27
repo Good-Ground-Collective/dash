@@ -1,0 +1,4 @@
+#!/bin/sh
+# The Mission Control command line, for example `dash admin recover you@example.com`.
+set -eu
+exec node "$(dirname "$0")/../src/cli.ts" "$@"
