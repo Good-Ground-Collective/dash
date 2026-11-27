@@ -151,7 +151,7 @@ jobs:
       - name: Check for image changes
         id: changes
         run: |
-          changed=$(git diff --name-only HEAD^1 HEAD)
+          changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
           pattern='^(apps|packages|integrations)/|(^|/)Dockerfile$|^\.dockerignore$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|tsconfig\.json)$|^bin/(image|lib/)|^\.github/workflows/ci\.yml$'
           if grep -qE "$pattern" <<<"$changed"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
