@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { SampleFeed } from '#lib/github-feed/__tests__/support/sample-feed.ts';
 import { HomeFeed } from '#lib/home/home-feed.ts';
 
@@ -58,15 +58,6 @@ const feed = SampleFeed.feed({
 });
 
 const loaded = new HomeFeed({ state: { status: 'loaded', feed }, now });
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.setSystemTime(now);
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe('HomeFeed status', () => {
   it('is failed when Mission Control sent no feed', () => {

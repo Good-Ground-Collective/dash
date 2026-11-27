@@ -35,7 +35,7 @@ export class HomeGreeting {
       : `${greeting}, ${this.firstName}`;
   }
 
-  /** “Friday 28 November”. */
+  /** “Friday 27 November”. */
   get date(): string {
     return dateFormat.format(this.now);
   }

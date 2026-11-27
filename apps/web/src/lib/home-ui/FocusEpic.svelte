@@ -19,7 +19,7 @@
       type="button"
       class="toggle"
       aria-expanded={open}
-      aria-controls={panelId}
+      aria-controls={open ? panelId : undefined}
       onclick={ontoggle}
     >
       <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
