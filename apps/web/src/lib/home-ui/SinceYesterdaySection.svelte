@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { HomeFeed } from '#lib/home/home-feed.ts';
-  import FeedNotice from '#lib/github-feed-ui/FeedNotice.svelte';
   import FeedRowLink from '#lib/github-feed-ui/FeedRowLink.svelte';
   import HomeSection from '#lib/home-ui/HomeSection.svelte';
 
@@ -13,7 +12,7 @@
 <HomeSection id="since-yesterday-title" title="Since yesterday">
   {#snippet aside()}Last 24 hours{/snippet}
   {#if status !== 'ready'}
-    <div class="notice"><FeedNotice kind={status} /></div>
+    <p class="empty">No GitHub activity to show</p>
   {:else if rows.length === 0}
     <p class="empty">Nothing merged in the last 24 hours</p>
   {:else}
@@ -26,10 +25,6 @@
 </HomeSection>
 
 <style>
-  .notice {
-    padding: var(--space-4);
-  }
-
   .empty {
     padding: var(--density-row-block) var(--density-row-inline);
     font-size: var(--font-size-sm);

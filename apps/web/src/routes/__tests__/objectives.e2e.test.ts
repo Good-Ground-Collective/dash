@@ -122,12 +122,17 @@ test('active initiatives lead home, in Mission Control’s order, with their epi
   await expect(epics.getByRole('listitem').first()).toContainText(
     '4 of 6 done',
   );
+  await expect(Objectives.epicToggle('Billing page')).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(Objectives.epicToggle('Billing page')).toContainText(
+    'Due after its initiative',
+  );
+  await expect(Objectives.panel()).toContainText('No activity in 14 days');
   await Objectives.expand('Sign-in with passkeys');
-  await Objectives.expand('Billing page');
-  await expect(epics).toContainText('Due after its initiative');
   await expect(epics).toContainText('Next Rate-limit sign-in attempts');
   await expect(epics).toContainText('grace closed “Hash recovery codes”');
-  await expect(Objectives.panel()).toContainText('No activity in 14 days');
   await expect(
     Objectives.panel().getByRole('link', { name: /^Public launch/u }),
   ).toHaveAttribute('href', 'https://github.com/orgs/acme-labs/projects/1');
@@ -189,6 +194,17 @@ test('Dash sets and clears what the tracker leaves empty, and hides what it owns
   const clearing = await Objectives.openMenu('Status page');
   await clearing.getByRole('button', { name: 'Clear progress (%)' }).click();
   await expect(status).toContainText('No progress yet');
+
+  const prioritising = await Objectives.openMenu('Status page');
+  await prioritising.getByLabel('Priority').selectOption('P2');
+  await prioritising.getByRole('button', { name: 'Save' }).first().click();
+  const toggle = Objectives.epicToggle('Status page');
+  await expect(toggle.getByTitle('Set in Dash')).toHaveText(
+    /^P2\s*, set in Dash$/u,
+  );
+  const unsetting = await Objectives.openMenu('Status page');
+  await unsetting.getByRole('button', { name: 'Clear priority' }).click();
+  await expect(toggle).not.toContainText('set in Dash');
 
   const owned = await Objectives.openMenu('Sign-in with passkeys');
   await expect(owned.getByLabel('Priority')).toHaveCount(0);

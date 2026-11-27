@@ -53,6 +53,12 @@ test('before any connection, home and the GitHub page point to Connect GitHub', 
       page.getByRole('link', { name: 'Connect GitHub' }).last(),
     ).toHaveAttribute('href', '/setup/github');
   }
+
+  await page.goto('/');
+  const since = page.getByRole('region', { name: 'Since yesterday' });
+  await expect(since).toContainText('No GitHub activity to show');
+  await expect(since).not.toContainText('Nothing merged');
+  await expect(since.getByRole('link')).toHaveCount(0);
 });
 
 test('while the first read runs, both say so', async () => {
@@ -259,9 +265,10 @@ test('when the feed fails, home still renders with an inline error', async () =>
       .getByRole('status')
       .filter({ hasText: 'GitHub activity didn’t load' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('region', { name: 'Since yesterday' }),
-  ).not.toContainText('Nothing merged');
+  const since = page.getByRole('region', { name: 'Since yesterday' });
+  await expect(since).toContainText('No GitHub activity to show');
+  await expect(since).not.toContainText('Nothing merged');
+  await expect(since).not.toContainText('GitHub activity didn’t load');
   await page.goto('/github');
   await expect(
     page.getByRole('status').filter({ hasText: 'GitHub activity didn’t load' }),

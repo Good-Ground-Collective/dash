@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ObjectiveEntry } from '#lib/objectives/objectives-view.ts';
+  import DashFieldLabel from '#lib/objectives-ui/DashFieldLabel.svelte';
   import OverlayMenu from '#lib/objectives-ui/OverlayMenu.svelte';
   import ProgressMeter from '#lib/objectives-ui/ProgressMeter.svelte';
 
@@ -28,7 +29,7 @@
           class="chip {row.priority.label.toLowerCase()}"
           class:dash={row.priority.fromDash}
         >
-          {row.priority.label}
+          <DashFieldLabel field={row.priority} />
         </span>
       {/if}
       {#if row.status !== 'active'}
@@ -37,9 +38,17 @@
         </span>
       {/if}
       <span class="title">{row.title}</span>
+      {#if row.dueAfterInitiative}
+        <span class="chip warn">Due after its initiative</span>
+      {/if}
+      {#each row.hints as hint (hint)}
+        <span class="chip hint">{hint}</span>
+      {/each}
       <span class="meter"><ProgressMeter progress={row.progress} /></span>
       {#if row.due !== null}
-        <span class="due" class:dash={row.due.fromDash}>{row.due.label}</span>
+        <span class="due" class:dash={row.due.fromDash}>
+          <DashFieldLabel field={row.due} />
+        </span>
       {/if}
     </button>
     <OverlayMenu id={row.id} title={row.title} actions={epic.actions} />
@@ -57,12 +66,6 @@
           {row.update.text}
         </a>
       {/if}
-      {#if row.dueAfterInitiative}
-        <p class="line warn">Due after its initiative</p>
-      {/if}
-      {#each row.hints as hint (hint)}
-        <p class="line">{hint}</p>
-      {/each}
       <a class="line open" href={row.href} target="_blank" rel="noreferrer">
         Open on GitHub<span class="visually-hidden">: {row.title}</span>
       </a>
@@ -139,6 +142,17 @@
     color: var(--ink-muted);
   }
 
+  .warn {
+    background: var(--warn-surface);
+    color: var(--warn);
+  }
+
+  .hint {
+    border-color: var(--line);
+    font-weight: var(--font-weight-regular);
+    color: var(--ink-muted);
+  }
+
   .title {
     flex: 1 1 10rem;
     min-width: 0;
@@ -181,10 +195,6 @@
   a.line:hover {
     color: var(--ink);
     text-decoration: underline;
-  }
-
-  .line.warn {
-    color: var(--warn);
   }
 
   .line.open {

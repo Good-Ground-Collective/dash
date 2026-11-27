@@ -99,6 +99,24 @@ describe('HomeFeed needsYou', () => {
     expect(red?.href).toBe('https://github.com/acme-labs/api/pull/42');
   });
 
+  it('keeps the Draft badge on a draft review request', () => {
+    const home = new HomeFeed({
+      state: {
+        status: 'loaded',
+        feed: SampleFeed.feed({
+          connections: [SampleFeed.connection()],
+          reviewRequests: [SampleFeed.pull({ id: 'draft', draft: true })],
+        }),
+      },
+      now,
+    });
+
+    expect(home.needsYou[0]?.badges).toEqual([
+      { label: 'Review', tone: 'warn' },
+      { label: 'Draft', tone: 'neutral' },
+    ]);
+  });
+
   it('is empty when nothing waits on the viewer', () => {
     const quiet = new HomeFeed({
       state: {

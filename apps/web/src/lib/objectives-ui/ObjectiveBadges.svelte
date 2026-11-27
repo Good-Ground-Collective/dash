@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ObjectiveRow } from '#lib/objectives/objective-rows.ts';
+  import DashFieldLabel from '#lib/objectives-ui/DashFieldLabel.svelte';
 
   let { row }: { row: ObjectiveRow } = $props();
 </script>
@@ -14,24 +15,13 @@
     <span
       class="badge priority {row.priority.label.toLowerCase()}"
       class:dash={row.priority.fromDash}
-      title={row.priority.fromDash ? 'Set in Dash' : undefined}
     >
-      {row.priority.label}{#if row.priority.fromDash}<span
-          class="visually-hidden"
-        >
-          , set in Dash
-        </span>{/if}
+      <DashFieldLabel field={row.priority} />
     </span>
   {/if}
   {#if row.due !== null}
-    <span
-      class="badge neutral"
-      class:dash={row.due.fromDash}
-      title={row.due.fromDash ? 'Set in Dash' : undefined}
-    >
-      {row.due.label}{#if row.due.fromDash}<span class="visually-hidden">
-          , set in Dash
-        </span>{/if}
+    <span class="badge neutral" class:dash={row.due.fromDash}>
+      <DashFieldLabel field={row.due} />
     </span>
   {/if}
   {#if row.dueAfterInitiative}

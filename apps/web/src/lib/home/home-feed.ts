@@ -42,10 +42,7 @@ export class HomeFeed {
 
     const reviews = reviewRequests
       .filter((pull) => pull.state === 'open')
-      .map((pull) => ({
-        ...FeedRows.reviewRequest(pull),
-        badges: [{ label: 'Review', tone: 'warn' as const }],
-      }));
+      .map((pull) => HomeFeed.reviewWaiting(pull));
     const failing = myPullRequests
       .filter(
         (pull) => pull.state === 'open' && pull.checks?.state === 'failure',
@@ -55,7 +52,10 @@ export class HomeFeed {
     return HomeFeed.newestFirst([...reviews, ...failing]);
   }
 
-  /** Pull requests the viewer opened or reviewed that merged in the last 24 hours, newest first. */
+  /**
+   * Merged pull requests the viewer opened or reviewed, last updated in the past 24 hours, newest first.
+   * The feed carries no merge time, so `updatedAt` stands in for it: an old merge with new activity shows here too.
+   */
   get sinceYesterday(): FeedRow[] {
     if (this.state.status === 'failed') return [];
     const { reviewRequests, myPullRequests } = this.state.feed;
@@ -70,6 +70,15 @@ export class HomeFeed {
       });
     }
     return HomeFeed.newestFirst([...merged.values()]);
+  }
+
+  /** Leads with “Review” and keeps the “Draft” badge, so a draft doesn't read as ready to review. */
+  private static reviewWaiting(pull: GithubFeedPullRequest): FeedRow {
+    const row = FeedRows.reviewRequest(pull);
+    return {
+      ...row,
+      badges: [{ label: 'Review', tone: 'warn' }, ...row.badges],
+    };
   }
 
   /** “2 checks failing” is all the row needs to say; the review state waits until CI passes. */
