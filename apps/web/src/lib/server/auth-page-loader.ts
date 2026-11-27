@@ -41,6 +41,11 @@ export interface SettingsPageData {
   passkeys: Passkey[] | null;
 }
 
+export interface SecondPasskeyPageData {
+  /** `null` when Mission Control couldn't list them. */
+  passkeys: Passkey[] | null;
+}
+
 export interface ServiceAccountsPageData {
   viewer: Viewer;
   /** `null` when Mission Control couldn't list them. */
@@ -57,6 +62,10 @@ export interface AuthPageLoader {
   readonly recoveryCodes: (event: AuthPageLoadEvent) => Promise<void>;
   /** `/setup/github`, for a signed-in person. The accounts load in the browser, since listing them calls GitHub. */
   readonly connectGithub: (event: AuthPageLoadEvent) => Promise<void>;
+  /** `/setup/second-passkey`, for a signed-in person. Nothing sends anyone here but the codes step during setup. */
+  readonly secondPasskey: (
+    event: AuthPageLoadEvent,
+  ) => Promise<SecondPasskeyPageData>;
   readonly settings: (event: AuthPageLoadEvent) => Promise<SettingsPageData>;
   readonly serviceAccounts: (
     event: AuthPageLoadEvent,
@@ -96,17 +105,19 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
     if ((await this.viewer(event)) === null) redirect(303, '/sign-in');
   };
 
+  readonly secondPasskey = async (
+    event: AuthPageLoadEvent,
+  ): Promise<SecondPasskeyPageData> => {
+    if ((await this.viewer(event)) === null) redirect(303, '/sign-in');
+    return { passkeys: await this.passkeys(event) };
+  };
+
   readonly settings = async (
     event: AuthPageLoadEvent,
   ): Promise<SettingsPageData> => {
     const viewer = await this.viewer(event);
     if (viewer === null) redirect(303, '/sign-in');
-    try {
-      return { viewer, passkeys: await this.reads(event).listPasskeys() };
-    } catch (error) {
-      console.warn(`Mission Control did not list passkeys: ${String(error)}`);
-      return { viewer, passkeys: null };
-    }
+    return { viewer, passkeys: await this.passkeys(event) };
   };
 
   readonly serviceAccounts = async (
@@ -126,6 +137,15 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
       return { viewer, serviceAccounts: null };
     }
   };
+
+  private async passkeys(event: AuthPageLoadEvent): Promise<Passkey[] | null> {
+    try {
+      return await this.reads(event).listPasskeys();
+    } catch (error) {
+      console.warn(`Mission Control did not list passkeys: ${String(error)}`);
+      return null;
+    }
+  }
 
   private async viewer(event: AuthPageLoadEvent): Promise<Viewer | null> {
     return shellDataSchema.parse(await event.parent()).viewer;

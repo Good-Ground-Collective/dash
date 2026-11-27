@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
 import { GithubStub } from './github-stub.ts';
+import { PasskeysStub } from './passkeys-stub.ts';
 import { RecoveryCodesStub } from './recovery-codes-stub.ts';
 import { RecoveryStub } from './recovery-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
@@ -19,20 +20,6 @@ const credentialBodySchema = z.object({
   response: z.object({ id: z.string() }),
   name: z.string().optional(),
 });
-const passkeyIdSchema = z.object({
-  id: z.string(),
-  name: z.string().optional(),
-});
-
-interface StubPasskey {
-  id: string;
-  credentialId: string;
-  name: string | null;
-  createdAt: string;
-  deviceType: string;
-  backedUp: boolean;
-}
-
 interface StubPerson {
   id: string;
   name: string;
@@ -60,7 +47,7 @@ interface StubReply {
 export class MissionControlStub {
   private readonly webOrigin: string;
   private person: StubPerson | null = null;
-  private passkeys: StubPasskey[] = [];
+  private readonly passkeys = new PasskeysStub();
   private sessions = new Set<string>();
   private sessionStale = false;
   private readonly appearance = new AppearanceStub();
@@ -110,6 +97,7 @@ export class MissionControlStub {
       session: this.sessionOf(request),
       body,
       context: url.searchParams.get('context'),
+      attachment: url.searchParams.get('authenticatorAttachment'),
     });
     if (reply.cookie !== undefined) {
       response.setHeader('set-cookie', reply.cookie);
@@ -126,6 +114,7 @@ export class MissionControlStub {
     session: string | null;
     body: string;
     context: string | null;
+    attachment: string | null;
   }): StubReply {
     const { path, session, body } = props;
     switch (path) {
@@ -145,7 +134,7 @@ export class MissionControlStub {
       case '/setup/begin':
         return this.setup.begin({ body, signedUp: this.person !== null });
       case '/passkey/generate-register-options':
-        return this.registrationOptions({ session, context: props.context });
+        return this.registrationOptions(props);
       case '/passkey/verify-registration':
         return this.register({ session, body });
       case '/passkey/generate-authenticate-options':
@@ -167,15 +156,10 @@ export class MissionControlStub {
     if (props.session === null) {
       return this.fail(401, 'UNAUTHORIZED');
     }
-    const codes = this.recoveryCodes.route(props);
-    if (codes !== null) return codes;
+    const handled =
+      this.recoveryCodes.route(props) ?? this.passkeys.route(props);
+    if (handled !== null) return handled;
     switch (props.path) {
-      case '/passkey/list-user-passkeys':
-        return { status: 200, body: this.passkeys };
-      case '/passkey/update-passkey':
-        return this.rename(props.body);
-      case '/passkey/delete-passkey':
-        return this.remove(props.body);
       case '/appearance/update':
         return this.appearance.save(props.body);
       case '/service-accounts/list':
@@ -190,7 +174,7 @@ export class MissionControlStub {
   private reset(): StubReply {
     this.person = null;
     this.setup.reset();
-    this.passkeys = [];
+    this.passkeys.reset();
     this.sessions = new Set();
     this.sessionStale = false;
     this.appearance.reset();
@@ -229,6 +213,7 @@ export class MissionControlStub {
   private registrationOptions(props: {
     session: string | null;
     context: string | null;
+    attachment: string | null;
   }): StubReply {
     const recovery =
       props.session === null ? this.recovery.prepare(props.context) : 'none';
@@ -243,7 +228,8 @@ export class MissionControlStub {
       status: 200,
       body: WebAuthnOptions.registration({
         ...person,
-        passkeys: this.passkeys,
+        passkeys: this.passkeys.all,
+        attachment: props.attachment,
       }),
     };
   }
@@ -260,15 +246,7 @@ export class MissionControlStub {
         return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
       }
     }
-    const passkey: StubPasskey = {
-      id: randomUUID(),
-      credentialId: input.response.id,
-      name: input.name ?? null,
-      createdAt: new Date().toISOString(),
-      deviceType: 'multiDevice',
-      backedUp: true,
-    };
-    this.passkeys.push(passkey);
+    const passkey = this.passkeys.add(input);
     if (signedUp === null) return { status: 200, body: passkey };
 
     if (this.setup.pending !== null) this.recoveryCodes.markUnconfirmed();
@@ -279,29 +257,11 @@ export class MissionControlStub {
 
   private authenticate(body: string): StubReply {
     const input = credentialBodySchema.parse(JSON.parse(body || '{}'));
-    const known = this.passkeys.some(
-      (passkey) => passkey.credentialId === input.response.id,
-    );
-    if (!known) return this.fail(401, 'PASSKEY_NOT_FOUND');
+    if (!this.passkeys.knows(input.response.id)) {
+      return this.fail(401, 'PASSKEY_NOT_FOUND');
+    }
     this.sessionStale = false;
     return this.newSession();
-  }
-
-  private rename(body: string): StubReply {
-    const input = passkeyIdSchema.parse(JSON.parse(body || '{}'));
-    const passkey = this.passkeys.find(
-      (candidate) => candidate.id === input.id,
-    );
-    if (passkey === undefined) return this.fail(404, 'PASSKEY_NOT_FOUND');
-    passkey.name = input.name ?? passkey.name;
-    return { status: 200, body: { passkey } };
-  }
-
-  private remove(body: string): StubReply {
-    const input = passkeyIdSchema.parse(JSON.parse(body || '{}'));
-    if (this.passkeys.length <= 1) return this.fail(409, 'LAST_PASSKEY');
-    this.passkeys = this.passkeys.filter((passkey) => passkey.id !== input.id);
-    return { status: 200, body: { status: true } };
   }
 
   private signOut(session: string | null): StubReply {

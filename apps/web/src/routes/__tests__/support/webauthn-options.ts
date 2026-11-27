@@ -7,6 +7,8 @@ export class WebAuthnOptions {
     name: string;
     /** The person's passkeys, which the browser won't register again. */
     passkeys: readonly { credentialId: string }[];
+    /** Better Auth's `authenticatorAttachment` query, when the page sent one. */
+    attachment?: string | null;
   }) {
     return {
       challenge: randomBytes(32).toString('base64url'),
@@ -26,6 +28,7 @@ export class WebAuthnOptions {
       authenticatorSelection: {
         residentKey: 'required',
         userVerification: 'required',
+        authenticatorAttachment: props.attachment ?? undefined,
       },
     };
   }
