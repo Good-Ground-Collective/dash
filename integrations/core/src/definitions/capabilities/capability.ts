@@ -1,3 +1,9 @@
+import { z } from 'zod';
+
+export const capabilityPropsSchema = z.object({
+  name: z.string().regex(/^[a-z][a-z\d-]*$/u),
+});
+
 /**
  * Names a capability and the interface that implements it. Business code asks an integration
  * for a capability by key and must handle `undefined`, which is the narrowing check.
@@ -7,7 +13,7 @@ export class Capability<T extends object> {
   declare readonly implementation: T;
   readonly name: string;
 
-  constructor(props: { name: string }) {
-    this.name = props.name;
+  constructor(props: z.input<typeof capabilityPropsSchema>) {
+    this.name = capabilityPropsSchema.parse(props).name;
   }
 }

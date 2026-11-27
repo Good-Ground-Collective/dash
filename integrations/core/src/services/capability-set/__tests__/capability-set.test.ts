@@ -56,8 +56,9 @@ describe('CapabilitySet', () => {
   });
 
   it('cannot be built from a caller-supplied map', () => {
-    // @ts-expect-error -- the constructor is private, so `with` is the only writer.
-    const forged = () => new CapabilitySet(new Map([['task-tracker', {}]]));
+    const forged = () =>
+      // @ts-expect-error -- the constructor is private, so `with` is the only writer.
+      new CapabilitySet({ implementations: new Map([['task-tracker', {}]]) });
     expectTypeOf(forged).toBeFunction();
   });
 

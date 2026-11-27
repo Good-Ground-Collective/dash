@@ -15,8 +15,8 @@ export interface Capabilities {
 export class CapabilitySet implements Capabilities {
   private readonly implementations: ReadonlyMap<string, object>;
 
-  private constructor(implementations: ReadonlyMap<string, object>) {
-    this.implementations = implementations;
+  private constructor(props: { implementations: ReadonlyMap<string, object> }) {
+    this.implementations = props.implementations;
   }
 
   with<T extends object>(
@@ -26,9 +26,12 @@ export class CapabilitySet implements Capabilities {
     if (this.implementations.has(capability.name)) {
       throw new DuplicateCapabilityError({ capabilityName: capability.name });
     }
-    return new CapabilitySet(
-      new Map([...this.implementations, [capability.name, implementation]]),
-    );
+    return new CapabilitySet({
+      implementations: new Map([
+        ...this.implementations,
+        [capability.name, implementation],
+      ]),
+    });
   }
 
   get<T extends object>(capability: Capability<T>): T | undefined {
@@ -37,6 +40,6 @@ export class CapabilitySet implements Capabilities {
   }
 
   static empty(): Capabilities {
-    return new CapabilitySet(new Map());
+    return new CapabilitySet({ implementations: new Map() });
   }
 }
