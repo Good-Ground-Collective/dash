@@ -9,6 +9,7 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
+import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 
 class Reconciling {
   static async linked(): Promise<GithubFeedHarness> {
@@ -105,6 +106,32 @@ describe('GithubReconcile failed reads', () => {
     );
     expect(harness.records.syncs.get(guestId)?.lastError).toMatch(/suspended/u);
     expect(harness.feed.queries).toEqual([]);
+  });
+});
+
+describe('GithubReconcile overlapping reads', () => {
+  it('keeps a newer read’s failure when an older read finishes after it', async () => {
+    const harness = await Reconciling.linked();
+    const later = new Date(fixedNow.getTime() + 15 * 60_000);
+    vi.setSystemTime(later);
+    harness.feed.failure = Object.assign(new Error('Bad gateway'), {
+      status: 502,
+    });
+    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
+
+    await harness.records.replace({
+      connectionId: ownedId,
+      viewerLogin: 'ada',
+      records: InMemoryGithubRecords.empty(),
+      truncated: false,
+      syncedAt: fixedNow,
+    });
+
+    expect(harness.records.syncs.get(ownedId)).toMatchObject({
+      lastSyncedAt: fixedNow,
+      lastAttemptedAt: later,
+      lastError: 'GitHub answered 502. Dash tries again at the next sync.',
+    });
   });
 });
 

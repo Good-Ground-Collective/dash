@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import {
   afterAll,
   beforeAll,
@@ -15,6 +16,7 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubRecordsDatabase } from '#src/github-feed/__tests__/support/github-records-database.ts';
+import { githubSyncTable } from '#src/github-feed/repositories/github-records/github-records-table.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
 
 const databaseUrl = inject('databaseUrl');
@@ -162,6 +164,30 @@ describe.skipIf(databaseUrl === null)(
       expect(await Stored.owned()).toMatchObject({
         lastSyncedAt: later.toISOString(),
         lastError: null,
+      });
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter attempts',
+  () => {
+    it('keeps a newer read’s failure when an older read finishes after it', async () => {
+      await Opened.store().writer.recordFailure({
+        connectionId: ownedId,
+        error: 'GitHub answered 502.',
+        attemptedAt: later,
+      });
+      await Opened.store().writer.replace({ ...read, syncedAt: fixedNow });
+
+      const [sync] = await Opened.store()
+        .database.orm.select()
+        .from(githubSyncTable)
+        .where(eq(githubSyncTable.connectionId, ownedId));
+      expect(sync).toMatchObject({
+        lastSyncedAt: fixedNow,
+        lastAttemptedAt: later,
+        lastError: 'GitHub answered 502.',
       });
     });
   },
