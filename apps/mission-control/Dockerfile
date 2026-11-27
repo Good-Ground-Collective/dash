@@ -27,6 +27,9 @@ COPY --from=build /srv/mission-control/package.json ./package.json
 COPY --from=build /srv/mission-control/node_modules ./node_modules
 COPY --from=build /srv/mission-control/src ./src
 COPY --from=build /srv/mission-control/drizzle ./drizzle
+ARG APP_VERSION=dev
+ARG APP_COMMIT=
+ENV APP_VERSION=${APP_VERSION} APP_COMMIT=${APP_COMMIT}
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=3 \

@@ -2,6 +2,9 @@
 # Builds an app's linux/amd64 image, proves it holds no credentials, and with
 # --push publishes it to GHCR tagged with the commit SHA, plus each --tag (a
 # release version such as v1.2.0), for `kamal deploy --skip-push --version <tag>`.
+# The image carries APP_VERSION (the first --tag, or `dev` without one) and
+# APP_COMMIT (the commit SHA) as runtime environment, for the web app's
+# account menu and Mission Control's /healthz.
 # Run from anywhere in the repository.
 # Usage: bin/image <web|mission-control> [--push] [--tag <tag>]...
 # Pushing reads GHCR_PUSH_USERNAME and GHCR_PUSH_TOKEN (write:packages), and
@@ -45,6 +48,7 @@ fi
 dockerfile=apps/$app/Dockerfile
 repository=ghcr.io/good-ground-collective/dash-$app
 version=$(git rev-parse HEAD)
+app_version=${extra_tags[0]:-dev}
 base=$(sed -n 's/^ARG NODE_IMAGE=//p' "$dockerfile")
 
 if [[ -z ${NODE_AUTH_TOKEN:-} ]]; then
@@ -54,6 +58,7 @@ export NODE_AUTH_TOKEN
 
 docker buildx build --platform linux/amd64 --load \
   --secret id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN \
+  --build-arg APP_VERSION="$app_version" --build-arg APP_COMMIT="$version" \
   --file "$dockerfile" --tag "$repository:$version" .
 
 # Load every secret in infra.env, not only the app's, so the scan proves none of them leaked.

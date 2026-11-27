@@ -43,7 +43,7 @@ const platform = new PlatformModule({
   database,
   workflows,
   httpModules: [
-    new HealthModule({ probes: [database, workflows] }),
+    new HealthModule({ probes: [database, workflows], build: config.build }),
     auth,
     new AgentsModule({
       authentication: auth.agentAuthentication,

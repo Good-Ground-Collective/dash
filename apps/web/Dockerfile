@@ -27,6 +27,9 @@ WORKDIR /app
 COPY --from=build /srv/web/package.json ./package.json
 COPY --from=build /srv/web/node_modules ./node_modules
 COPY --from=build /repo/apps/web/build ./build
+ARG APP_VERSION=dev
+ARG APP_COMMIT=
+ENV APP_VERSION=${APP_VERSION} APP_COMMIT=${APP_COMMIT}
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
