@@ -39,8 +39,8 @@
 <style>
   .needs-you {
     position: fixed;
-    left: var(--space-5);
-    bottom: var(--space-5);
+    left: calc(var(--space-5) + env(safe-area-inset-left));
+    bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
     z-index: 20;
   }
 
@@ -100,8 +100,8 @@
 
   @media (width < 40rem) {
     .needs-you {
-      left: var(--space-4);
-      bottom: var(--space-4);
+      left: calc(var(--space-4) + env(safe-area-inset-left));
+      bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
     }
   }
 </style>

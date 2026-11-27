@@ -33,7 +33,7 @@
       {/snippet}
     </DropdownMenu.Trigger>
     <DropdownMenu.Portal>
-      <DropdownMenu.Content align="end" sideOffset={8}>
+      <DropdownMenu.Content align="end" sideOffset={8} collisionPadding={8}>
         {#snippet child({ wrapperProps, props })}
           <div {...wrapperProps}>
             <div {...props} class="menu">
@@ -173,6 +173,8 @@
   }
 
   .menu {
+    position: relative;
+    z-index: 30;
     width: 15rem;
     padding: 0.375rem;
     display: flex;
@@ -181,6 +183,10 @@
     border: var(--border-hairline) solid var(--line);
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-float);
+  }
+
+  .menu:focus-visible {
+    outline: none;
   }
 
   .who {
