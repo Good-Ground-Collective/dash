@@ -8,7 +8,10 @@ type JsonSchemaObject = z.core.JSONSchema.JSONSchema;
 /** The most bytes one string character can take in JSON: a control character escaped as `\u001f`. */
 const bytesPerCharacter = 6;
 
-/** Characters allowed for a string with only a format or pattern, such as a UUID or a timestamp. */
+/**
+ * Characters assumed for a string with only a format or pattern, such as a UUID, timestamp or
+ * version. A schema whose pattern allows longer values must declare `maxLength`.
+ */
 const unsizedStringCharacters = 64;
 
 /** Characters in the longest JSON number, such as `-1.7976931348623157e+308`. */
@@ -16,8 +19,9 @@ const numberCharacters = 24;
 
 /**
  * The largest JSON a schema accepts, in UTF-8 bytes, read from the limits its fields declare. Each
- * string counts `maxLength` characters at their worst-case escaped size, so a limit sized from it
- * holds any valid document. Fields a schema drops aren't counted, since they have no limit.
+ * string counts `maxLength` characters at their worst-case escaped size. A string without
+ * `maxLength` is assumed to be at most `unsizedStringCharacters` long, so the bound holds only when
+ * every pattern- or format-only string fits that. Fields a schema drops aren't counted.
  */
 export class JsonSizeBound {
   /** Throws `UnboundedJsonSchemaError` for an array without `maxItems` or an object open to any key. */
