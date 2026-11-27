@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Decides whether CI may deploy a release: reads tag names on stdin, one per
+# line, and prints the newest vX.Y.Z among them. Exits 0 when <version> is that
+# newest release (or newer), 3 when a newer release supersedes it, and 1 when
+# stdin holds no release tag. Usage: bin/deploy-gate <version> < tags
+set -euo pipefail
+
+version=${1:-}
+semver='^v[0-9]+\.[0-9]+\.[0-9]+$'
+if (($# != 1)) || [[ ! $version =~ $semver ]]; then
+  echo 'usage: bin/deploy-gate <vX.Y.Z> < tags' >&2
+  exit 2
+fi
+
+latest=$({ grep -E "$semver" || true; } | sort -V | tail -n 1)
+if [[ -z $latest ]]; then
+  echo "no release tags found, so cannot tell whether $version is current" >&2
+  exit 1
+fi
+
+newest=$(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1)
+if [[ $newest != "$version" ]]; then
+  echo "$latest"
+  exit 3
+fi
+echo "$version"

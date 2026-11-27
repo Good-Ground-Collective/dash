@@ -139,9 +139,9 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
 1. `shellcheck`, `verify` (including every end-to-end test) and `tofu` must all pass.
 2. `release` runs [semantic-release](https://semantic-release.gitbook.io) over the conventional commits since the last `vX.Y.Z` tag. `feat` cuts a minor, `fix` and `perf` a patch, and a `!` or `BREAKING CHANGE` footer a major. It pushes the tag and a GitHub release with notes, and commits nothing back to `main`. The whole repository shares one version. Commits that need no release (`docs`, `chore`, `test` and so on) stop the pipeline here.
 3. `images` runs in the `production` environment, so its scan can check the production secrets, and builds, scans and pushes both images with `bin/image --push --tag vX.Y.Z`, using the job's `GITHUB_TOKEN`.
-4. `deploy` runs in the `production` environment, one at a time (`concurrency: production`, never cancelled). It joins the tailnet as an ephemeral `tag:ci` node, deploys Mission Control first (it migrates at boot), then web, both with `--skip-push --version vX.Y.Z`, then checks both `/healthz` endpoints. The box logs in to GHCR with the job's `GITHUB_TOKEN`, which expires when the job ends.
+4. `deploy` runs in the `production` environment, one at a time (`concurrency: production`, never cancelled). It runs `bin/deploy-gate` to confirm its version is still the newest release, joins the tailnet as an ephemeral `tag:ci` node, checks `dash-app`'s SSH host key against the pinned `DASH_APP_SSH_HOST_KEY` variable, deploys Mission Control first (it migrates at boot), then web, both with `--skip-push --version vX.Y.Z`, then checks both `/healthz` endpoints. The box logs in to GHCR with the job's `GITHUB_TOKEN`, which expires when the job ends.
 
-`images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. Until it also holds the Tailscale and SSH secrets below, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on. `deploy` only ships the newest `vX.Y.Z` tag, so re-running an older run posts a notice and skips instead of rolling production back; roll back by hand as below.
+`images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. Until it also holds the Tailscale and SSH secrets below, and the host key variable is set, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on. `deploy` only ships the newest `vX.Y.Z` tag, so re-running an older run posts a notice and skips instead of rolling production back; roll back by hand as below.
 
 ### One-time deploy setup
 
@@ -154,7 +154,7 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
 
 2. Create a Tailscale OAuth client with the `auth_keys` write scope and tag `tag:ci`.
 3. Make the deploy key on your laptop, outside the repository: `ssh-keygen -t ed25519 -N '' -C dash-ci-deploy -f dash-ci-deploy`.
-4. Add its public half to the running `dash-app`. The `from` option limits it to tailnet addresses:
+4. Add its public half to the running `dash-app`. The `from` option limits it to tailnet addresses. `dash` has passwordless sudo, so `DASH_DEPLOY_SSH_KEY` is effectively root on `dash-app`; [#57](https://github.com/Good-Ground-Collective/dash/issues/57) tracks a lower-privileged CI deploy user.
 
    ```sh
    printf 'from="100.64.0.0/10,fd7a:115c:a1e0::/48",no-agent-forwarding,no-port-forwarding,no-X11-forwarding %s\n' "$(cat dash-ci-deploy.pub)" \
@@ -174,7 +174,15 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
    ```
 
 6. In each GHCR package's settings, under Manage Actions access, give this repository the Write role, so the workflow's `GITHUB_TOKEN` can push and pull.
-7. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
+7. Pin `dash-app`'s SSH host key in the `DASH_APP_SSH_HOST_KEY` repository variable. It is public, so a variable rather than a secret. Scan it over the tailnet and check the fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the box:
+
+   ```sh
+   ssh-keyscan -t ed25519 dash-app | cut -d' ' -f2- | gh variable set DASH_APP_SSH_HOST_KEY
+   ```
+
+   The deploy writes it to `known_hosts` and connects with `StrictHostKeyChecking=yes`, so a changed host key stops the deploy. Update the variable after rebuilding `dash-app`.
+
+8. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
 
 ### Deploying by hand
 
@@ -194,7 +202,7 @@ Mission Control migrates its database as the container boots, before it listens.
 
 ## CI
 
-`.github/workflows/ci.yml` runs shellcheck on the host and deploy scripts, and `tofu fmt` and `tofu validate` on `infra/tofu`. The `verify` job installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything, then release and deploy as described under [Release pipeline](#release-pipeline). Each job gets only the permissions it needs: `release` can push tags, `images` can write packages, and the rest read. The repository needs Actions read access to the preflight package, granted in the package's settings.
+`.github/workflows/ci.yml` runs shellcheck on the host and deploy scripts, tests `bin/deploy-gate` with `bin/test-deploy-gate`, and runs `tofu fmt` and `tofu validate` on `infra/tofu`. The `verify` job installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything, then release and deploy as described under [Release pipeline](#release-pipeline). Each job gets only the permissions it needs: `release` can push tags, `images` can write packages, and the rest read. The repository needs Actions read access to the preflight package, granted in the package's settings.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org), since they decide the next version.
 

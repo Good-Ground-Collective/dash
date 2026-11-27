@@ -24,7 +24,9 @@ jobs:
 
       - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh infra/hosts/db/files/bin/*
 
-      - run: shellcheck -x bin/image bin/image-secret-scan bin/kamal bin/test-image-secret-scan
+      - run: shellcheck -x bin/deploy-gate bin/image bin/image-secret-scan bin/kamal bin/test-deploy-gate bin/test-image-secret-scan
+
+      - run: bin/test-deploy-gate
 
       - run: infra/hosts/db/test-alerts.sh
 
@@ -199,31 +201,30 @@ jobs:
       packages: read
     env:
       VERSION: ${{ needs.release.outputs.version }}
-      READY: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && secrets.DASH_DEPLOY_SSH_KEY != '' }}
+      READY: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && secrets.DASH_DEPLOY_SSH_KEY != '' && vars.DASH_APP_SSH_HOST_KEY != '' }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Check deploy is current and configured
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -o pipefail
-          latest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' | sed 's|^refs/tags/||' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n 1)
-          if [[ -z $latest ]]; then
-            echo "::error title=Deploy blocked::Could not find any release tags, so cannot tell whether $VERSION is current."
-            exit 1
-          fi
-          if [[ $latest != "$VERSION" ]]; then
+          tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")')
+          status=0
+          latest=$(bin/deploy-gate "$VERSION" <<<"$tags") || status=$?
+          if ((status == 3)); then
             echo "::notice title=Deploy skipped::$VERSION is not the newest release, $latest is. Deploying it would roll production back; re-run the run for $latest instead."
+          elif ((status != 0)); then
+            echo "::error title=Deploy blocked::Could not tell whether $VERSION is the newest release."
+            exit "$status"
           elif [[ $READY != true ]]; then
-            echo "::notice title=Deploy skipped::$VERSION is released and its images are pushed, but the production environment lacks one of TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET or DASH_DEPLOY_SSH_KEY. See README.md, Deploys."
+            echo "::notice title=Deploy skipped::$VERSION is released and its images are pushed, but the production environment lacks one of TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET or DASH_DEPLOY_SSH_KEY, or the DASH_APP_SSH_HOST_KEY variable is unset. See README.md, Deploys."
           else
             echo "go=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.gate.outputs.go == 'true'
-        with:
-          persist-credentials: false
 
       - name: Read host
         id: host
@@ -245,10 +246,14 @@ jobs:
           echo "SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock" >> "$GITHUB_ENV"
           SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock ssh-add -q - <<<"$DASH_DEPLOY_SSH_KEY"
           mkdir -p ~/.ssh
-          ssh-keyscan -T 15 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          while IFS= read -r key; do
+            [[ -z $key ]] || printf '%s %s\n' "$HOST" "$key" >> ~/.ssh/known_hosts
+          done <<<"$HOST_KEY"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "dash@$HOST" true
         env:
           DASH_DEPLOY_SSH_KEY: ${{ secrets.DASH_DEPLOY_SSH_KEY }}
           HOST: ${{ steps.host.outputs.address }}
+          HOST_KEY: ${{ vars.DASH_APP_SSH_HOST_KEY }}
 
       - name: Deploy Mission Control
         if: steps.gate.outputs.go == 'true'
