@@ -1,3 +1,4 @@
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
 import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
@@ -12,6 +13,13 @@ import {
 export const setupEnrolmentSchema = z.object({ enrolment: z.string() });
 
 export const setupCheckedSchema = z.object({ valid: z.literal(true) });
+
+export const recoveryEnrolmentSchema = z.object({ enrolment: z.string() });
+
+/** The account an enrolment's registration options are for. Without a name, the page can't show whose passkey it is, so it doesn't continue. */
+export const enrolmentAccountSchema = z.object({
+  user: z.object({ name: z.string().trim().min(1) }),
+});
 
 const acknowledgedSchema = z.looseObject({});
 
@@ -28,6 +36,13 @@ export const httpPasskeyAuthPropsSchema = z.object({
 
 export type HttpPasskeyAuthProps = z.input<typeof httpPasskeyAuthPropsSchema>;
 
+/** Registration options for an enrolment, fetched before the ceremony so the page can say whose account the passkey is for. */
+export interface PreparedEnrolment {
+  /** The account's email, from the options' `user.name`. */
+  account: string;
+  options: PublicKeyCredentialCreationOptionsJSON;
+}
+
 /** Passkey ceremonies and passkey changes against Mission Control, from the browser. Reads go through `HttpMissionControl`. */
 export interface PasskeyAuth {
   /** Confirms the setup token is the current one, without spending it. Rejects like `setUp` does. */
@@ -36,6 +51,12 @@ export interface PasskeyAuth {
   setUp(props: { token: string; name: string; email: string }): Promise<void>;
   /** Signs in with a passkey. With `autofill`, waits for the browser's passkey autofill instead of prompting. */
   signIn(props: { autofill: boolean }): Promise<void>;
+  /** Trades an email and an unused recovery code for an enrolment. Rejects with `RECOVERY_REJECTED` or `RECOVERY_RATE_LIMITED`, neither of which says whether the email exists. */
+  redeemRecoveryCode(props: { email: string; code: string }): Promise<string>;
+  /** Fetches registration options for an enrolment. Rejects with `PASSKEY_ENROLMENT_REJECTED` when it has expired or was spent. */
+  prepareEnrolment(props: { enrolment: string }): Promise<PreparedEnrolment>;
+  /** Registers a passkey with prepared options and signs in with it. */
+  enrol(props: { prepared: PreparedEnrolment }): Promise<void>;
   signOut(): Promise<void>;
   addPasskey(props: { name: string }): Promise<void>;
   renamePasskey(props: { id: string; name: string }): Promise<void>;
@@ -92,6 +113,42 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     });
   }
 
+  async redeemRecoveryCode(props: {
+    email: string;
+    code: string;
+  }): Promise<string> {
+    const { enrolment } = await this.post({
+      path: 'recovery/redeem',
+      body: JSON.stringify(props),
+      schema: recoveryEnrolmentSchema,
+    });
+    return enrolment;
+  }
+
+  async prepareEnrolment(props: {
+    enrolment: string;
+  }): Promise<PreparedEnrolment> {
+    const options = await this.registrationOptions({
+      context: props.enrolment,
+    });
+    const named = enrolmentAccountSchema.safeParse(options);
+    if (!named.success) {
+      throw new PasskeyAuthError({
+        code: 'ENROLMENT_ACCOUNT_MISSING',
+        message: 'Mission Control’s registration options named no account.',
+        status: 0,
+      });
+    }
+    return { account: named.data.user.name, options };
+  }
+
+  async enrol(props: { prepared: PreparedEnrolment }): Promise<void> {
+    await this.completeRegistration({
+      options: props.prepared.options,
+      createSession: true,
+    });
+  }
+
   async signOut(): Promise<void> {
     await this.post({
       path: 'sign-out',
@@ -125,13 +182,32 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     name?: string;
     createSession?: boolean;
   }): Promise<void> {
+    await this.completeRegistration({
+      options: await this.registrationOptions({ context: props.context }),
+      name: props.name,
+      createSession: props.createSession,
+    });
+  }
+
+  private async registrationOptions(props: {
+    context?: string | undefined;
+  }): Promise<PublicKeyCredentialCreationOptionsJSON> {
     const query = new URLSearchParams();
     if (props.context !== undefined) query.set('context', props.context);
-    const options = await this.get({
+    return this.get({
       path: `passkey/generate-register-options?${query.toString()}`,
       schema: registrationOptionsSchema,
     });
-    const response = await this.ceremonies.register({ options });
+  }
+
+  private async completeRegistration(props: {
+    options: PublicKeyCredentialCreationOptionsJSON;
+    name?: string | undefined;
+    createSession?: boolean | undefined;
+  }): Promise<void> {
+    const response = await this.ceremonies.register({
+      options: props.options,
+    });
     await this.post({
       path: 'passkey/verify-registration',
       body: JSON.stringify({
@@ -194,6 +270,9 @@ export class HttpPasskeyAuth implements PasskeyAuth {
         code: (failure.success ? failure.data.code : undefined) ?? 'UNKNOWN',
         message: failure.success ? failure.data.message : undefined,
         status: response.status,
+        retryAfterSeconds: PasskeyAuthError.retryAfterSeconds(
+          response.headers.get('retry-after'),
+        ),
       });
     }
     return props.schema.parse(text === '' ? null : JSON.parse(text));

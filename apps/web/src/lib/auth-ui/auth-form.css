@@ -1,3 +1,11 @@
+:where(.auth) a:not(.auth-button) {
+  color: var(--ink);
+}
+
+:where(.auth) a:not(.auth-button):hover {
+  color: var(--ink-muted);
+}
+
 .auth-form {
   display: grid;
   gap: var(--space-4);
@@ -20,6 +28,10 @@
   border: var(--border-hairline) solid var(--line);
   border-radius: var(--radius-control);
   background: var(--bg);
+}
+
+.auth-field input[aria-invalid='true'] {
+  border-color: var(--bad);
 }
 
 .auth-field input.mono {

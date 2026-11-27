@@ -194,7 +194,11 @@ describe('AuthModule recovery', () => {
         }),
       });
       return response.statusCode === 429
-        ? response.headers['retry-after']?.toString()
+        ? [
+            response.json<{ code: string }>().code,
+            response.headers['retry-after'],
+            response.headers['access-control-expose-headers'],
+          ].join(' ')
         : response.statusCode;
     };
     const attempts: (number | string | undefined)[] = [];
@@ -202,6 +206,13 @@ describe('AuthModule recovery', () => {
       attempts.push(await redeem());
     }
 
-    expect(attempts).toEqual([401, 401, 401, 401, 401, '900']);
+    expect(attempts).toEqual([
+      401,
+      401,
+      401,
+      401,
+      401,
+      'RECOVERY_RATE_LIMITED 900 retry-after',
+    ]);
   });
 });

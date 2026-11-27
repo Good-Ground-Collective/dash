@@ -7,6 +7,7 @@
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
   import AuthCard from '#lib/auth-ui/AuthCard.svelte';
+  import KeyIcon from '#lib/auth-ui/KeyIcon.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -48,10 +49,7 @@
   <title>Sign in · Dash</title>
 </svelte:head>
 
-<AuthCard
-  title="Sign in to Dash"
-  lede="Use a passkey from this device, your phone or a security key."
->
+<AuthCard title="Sign in">
   <form
     class="auth-form"
     onsubmit={(event) => {
@@ -66,21 +64,28 @@
         type="email"
         name="username"
         autocomplete="username webauthn"
-        placeholder="Pick a passkey from autofill"
+        placeholder="you@example.com"
+        aria-describedby="sign-in-email-hint"
       />
+      <span class="hint" id="sign-in-email-hint">
+        Your browser offers your passkey as you focus this field.
+      </span>
     </div>
     {#if error}
       <p class="auth-error" role="alert">{error}</p>
     {/if}
     <button class="auth-button" type="submit" disabled={busy}>
-      {busy ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
+      {#if busy}
+        Waiting for your passkey…
+      {:else}
+        <KeyIcon /> Sign in with passkey
+      {/if}
     </button>
   </form>
   {#snippet footer()}
+    <p>Lost your passkey? <a href="/recover">Use a recovery code</a></p>
     {#if data.setupOpen}
-      First time here? <a href="/setup">Set up Dash</a>
-    {:else}
-      Lost your passkeys? Ask whoever runs Dash to recover your account.
+      <p>First time here? <a href="/setup">Set up Dash</a></p>
     {/if}
   {/snippet}
 </AuthCard>

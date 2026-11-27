@@ -137,8 +137,10 @@ test('the page stays clickable after the menu closes, and sign out returns to si
   await expect(page.getByRole('img', { name: 'Signed out' })).toBeVisible();
 });
 
-test('sign-in fits a phone without scrolling sideways', async () => {
+test('sign-in and recovery fit a phone without scrolling sideways', async () => {
   await page.setViewportSize(phone);
-  await page.goto('/sign-in');
-  expect(await PhoneLayout.scrollsSideways()).toBe(false);
+  for (const path of ['/sign-in', '/recover', '/recover/passkey']) {
+    await page.goto(path);
+    expect(await PhoneLayout.scrollsSideways(), path).toBe(false);
+  }
 });

@@ -19,6 +19,10 @@ const accountMenuPort = 4324;
 const accountMenuStubPort = 59994;
 const accountMenuWebUrl = `http://localhost:${accountMenuPort}`;
 const accountMenuStubUrl = `http://localhost:${accountMenuStubPort}`;
+const recoveryPort = 4325;
+const recoveryStubPort = 59993;
+const recoveryWebUrl = `http://localhost:${recoveryPort}`;
+const recoveryStubUrl = `http://localhost:${recoveryStubPort}`;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -38,6 +42,7 @@ export default defineConfig({
         '**/appearance.e2e.test.ts',
         '**/visual.e2e.test.ts',
         '**/account-menu.e2e.test.ts',
+        '**/recovery.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -77,6 +82,12 @@ export default defineConfig({
       testMatch: '**/account-menu.e2e.test.ts',
       metadata: { missionControlUrl: accountMenuStubUrl },
       use: { ...devices['Desktop Chrome'], baseURL: accountMenuWebUrl },
+    },
+    {
+      name: 'recovery',
+      testMatch: '**/recovery.e2e.test.ts',
+      metadata: { missionControlUrl: recoveryStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: recoveryWebUrl },
     },
   ],
   webServer: [
@@ -135,6 +146,7 @@ export default defineConfig({
     ...[
       { port: appearancePort, stubPort: appearanceStubPort },
       { port: visualPort, stubPort: visualStubPort },
+      { port: recoveryPort, stubPort: recoveryStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',
