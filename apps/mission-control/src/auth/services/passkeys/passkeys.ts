@@ -144,6 +144,12 @@ export class WebAuthnPasskeys implements Passkeys {
   }) => {
     const session = await getSessionFromCtx(ctx);
     if (session !== null) {
+      if (context !== null && context !== undefined && context !== '') {
+        throw new PasskeyEnrolmentRejectedError({
+          reason:
+            'an enrolment is for a passkey-first registration, so sign out first.',
+        });
+      }
       await this.guard.assertPerson({
         context: ctx.context,
         userId: session.user.id,

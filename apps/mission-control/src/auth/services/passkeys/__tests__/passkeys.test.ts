@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { PasskeyBrowser } from '#src/auth/__tests__/support/passkey-browser.ts';
+import { RecoveryPerson } from '#src/auth/__tests__/support/recovery-person.ts';
 import {
   PasskeyIdentity,
   passkeyWebOrigin,
@@ -146,6 +147,46 @@ describe('WebAuthnPasskeys sessionless registration', () => {
     });
     expect(enrolment.tables.passkey).toEqual([]);
     expect(enrolment.tables.session).toEqual([]);
+  });
+});
+
+describe('WebAuthnPasskeys enrolments with a session', () => {
+  it('refuses a recovery enrolment from a signed-in browser and leaves the code unspent', async () => {
+    const person = new RecoveryPerson();
+    const signedIn = await person.signedIn();
+    const [code = ''] = await person.savedCodes(signedIn);
+
+    const refused = await person.recover(signedIn, { code });
+    const later = await person.recover(person.fixture.browser(), { code });
+
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toMatchObject({
+      code: 'PASSKEY_ENROLMENT_REJECTED',
+    });
+    expect(later.status).toBe(200);
+    expect(person.fixture.tables.passkey).toHaveLength(2);
+  });
+
+  it('refuses a setup enrolment from a signed-in browser', async () => {
+    const { fixture } = new PasskeyManagement();
+    const token = await fixture.issueToken();
+    const begun = await fixture.browser().beginSetup({ token });
+    const { enrolment } = z
+      .object({ enrolment: z.string() })
+      .parse(await begun.json());
+    const signedIn = fixture.browser();
+    await signedIn.setUp({ token });
+
+    const refused = await signedIn.registerPasskey({
+      context: enrolment,
+      createSession: true,
+    });
+
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toMatchObject({
+      code: 'PASSKEY_ENROLMENT_REJECTED',
+    });
+    expect(fixture.tables.passkey).toHaveLength(1);
   });
 });
 
