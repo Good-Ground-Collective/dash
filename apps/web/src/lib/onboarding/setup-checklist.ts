@@ -43,8 +43,8 @@ const copy: ReadonlyMap<string, RowCopy> = new Map([
 export class SetupChecklist {
   readonly rows: readonly SetupChecklistRow[];
 
-  constructor(report: SetupChecklistReport) {
-    this.rows = report.items.flatMap((item) => {
+  constructor(props: { report: SetupChecklistReport }) {
+    this.rows = props.report.items.flatMap((item) => {
       const words = copy.get(item.id);
       return words === undefined ? [] : [{ ...words, ...item }];
     });
@@ -67,7 +67,7 @@ export class SetupChecklist {
   /** The card for a report, or `null` when there's nothing left to do or Mission Control couldn't say. */
   static from(report: SetupChecklistReport | null): SetupChecklist | null {
     if (report === null) return null;
-    const checklist = new SetupChecklist(report);
+    const checklist = new SetupChecklist({ report });
     return checklist.visible ? checklist : null;
   }
 }

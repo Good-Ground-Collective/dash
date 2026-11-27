@@ -13,7 +13,7 @@ const fresh = {
 
 describe('SetupChecklist', () => {
   it('lists each item with its copy and where to do it', () => {
-    const checklist = new SetupChecklist(fresh);
+    const checklist = new SetupChecklist({ report: fresh });
 
     expect(
       checklist.rows.map((row) => [row.title, row.action.href, row.done]),
@@ -26,10 +26,12 @@ describe('SetupChecklist', () => {
 
   it('counts done items', () => {
     const checklist = new SetupChecklist({
-      items: [
-        { id: 'connectGitHub', done: true },
-        { id: 'secondPasskey', done: false },
-      ],
+      report: {
+        items: [
+          { id: 'connectGitHub', done: true },
+          { id: 'secondPasskey', done: false },
+        ],
+      },
     });
 
     expect(checklist.doneCount).toBe(1);
@@ -39,7 +41,9 @@ describe('SetupChecklist', () => {
 
   it('leaves out items it has no words for', () => {
     const checklist = new SetupChecklist({
-      items: [...fresh.items, { id: 'firstInitiative', done: false }],
+      report: {
+        items: [...fresh.items, { id: 'firstInitiative', done: false }],
+      },
     });
 
     expect(checklist.rows.map((row) => row.id)).toEqual([

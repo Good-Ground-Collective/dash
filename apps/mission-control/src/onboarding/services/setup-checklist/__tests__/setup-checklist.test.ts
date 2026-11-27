@@ -13,8 +13,8 @@ class CountedPasskeys implements PasskeyCounter {
   readonly asked: string[] = [];
   private readonly counts: ReadonlyMap<string, number>;
 
-  constructor(counts: Record<string, number>) {
-    this.counts = new Map(Object.entries(counts));
+  constructor(props: { counts: Record<string, number> }) {
+    this.counts = new Map(Object.entries(props.counts));
   }
 
   async passkeyCount(props: { userId: string }): Promise<number> {
@@ -26,8 +26,8 @@ class CountedPasskeys implements PasskeyCounter {
 class ConnectedProviders implements ConnectionPresence {
   private readonly providers: ReadonlySet<string>;
 
-  constructor(providers: readonly string[]) {
-    this.providers = new Set(providers);
+  constructor(props: { providers: readonly string[] }) {
+    this.providers = new Set(props.providers);
   }
 
   async exists(props: { provider: string }): Promise<boolean> {
@@ -41,8 +41,8 @@ class Checklist {
     connected: readonly string[];
   }): Promise<SetupChecklistReport> {
     return new SourcedSetupChecklist({
-      passkeys: new CountedPasskeys({ [adaId]: props.passkeys }),
-      connections: new ConnectedProviders(props.connected),
+      passkeys: new CountedPasskeys({ counts: { [adaId]: props.passkeys } }),
+      connections: new ConnectedProviders({ providers: props.connected }),
     }).for({ userId: adaId });
   }
 }
@@ -86,10 +86,10 @@ describe('SourcedSetupChecklist', () => {
   });
 
   it('counts the asking person’s passkeys', async () => {
-    const passkeys = new CountedPasskeys({ [adaId]: 2 });
+    const passkeys = new CountedPasskeys({ counts: { [adaId]: 2 } });
     const checklist = new SourcedSetupChecklist({
       passkeys,
-      connections: new ConnectedProviders([]),
+      connections: new ConnectedProviders({ providers: [] }),
     });
 
     await checklist.for({ userId: adaId });
