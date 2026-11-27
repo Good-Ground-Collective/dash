@@ -108,6 +108,7 @@ export class GithubStub {
     if (this.scenario === 'failing') {
       return { status: 502, body: { code: 'PROVIDER_UNAVAILABLE' } };
     }
+
     const stub = `${props.origin}/integrations/github/__stub`;
     const query = `returnTo=${encodeURIComponent(props.returnTo)}`;
     if (this.scenario === 'authorize') {
@@ -119,6 +120,7 @@ export class GithubStub {
         },
       };
     }
+
     return {
       status: 200,
       body: {

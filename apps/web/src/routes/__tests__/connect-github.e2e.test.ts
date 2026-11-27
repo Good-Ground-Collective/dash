@@ -153,6 +153,7 @@ test('coming back to the tab refreshes the list quietly', async () => {
     });
     await answered;
   };
+
   await ConnectStep.scenario('failing');
   await refresh(502);
   await expect(ConnectStep.accounts().getByRole('listitem')).toHaveCount(5);
