@@ -1,4 +1,5 @@
 locals {
+  deploy_key_options = "from=\"100.64.0.0/10,fd7a:115c:a1e0::/48\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding"
   hosts = {
     app = {
       label    = "dash-app"
@@ -73,10 +74,12 @@ resource "linode_instance" "host" {
 
   metadata {
     user_data = sensitive(base64encode(templatefile("${path.module}/templates/host.yaml.tftpl", {
-      hostname           = each.value.label
-      admin_username     = var.admin_username
-      ssh_public_keys    = var.admin_ssh_public_keys
-      tailscale_auth_key = var.tailscale_auth_key
+      hostname               = each.value.label
+      admin_username         = var.admin_username
+      ssh_public_keys        = var.admin_ssh_public_keys
+      deploy_ssh_public_keys = each.key == "app" ? var.deploy_ssh_public_keys : []
+      deploy_key_options     = local.deploy_key_options
+      tailscale_auth_key     = var.tailscale_auth_key
     })))
   }
 

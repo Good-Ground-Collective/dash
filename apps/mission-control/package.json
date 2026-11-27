@@ -20,6 +20,8 @@
   "dependencies": {
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
+    "@dash/integrations-core": "workspace:*",
+    "@dash/integrations-github": "workspace:*",
     "@dbos-inc/dbos-sdk": "catalog:",
     "@fastify/cors": "catalog:",
     "better-auth": "catalog:",

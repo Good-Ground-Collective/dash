@@ -24,6 +24,10 @@ jobs:
 
       - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh infra/hosts/db/files/bin/*
 
+      - run: shellcheck -x bin/deploy-gate bin/image bin/image-secret-scan bin/kamal bin/test-deploy-gate bin/test-image-secret-scan
+
+      - run: bin/test-deploy-gate
+
       - run: infra/hosts/db/test-alerts.sh
 
   verify:
@@ -49,6 +53,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: bin/test-release-notes
 
       - run: pnpm format:check
 
@@ -109,3 +115,171 @@ jobs:
       - run: tofu init -backend=false -input=false -lockfile=readonly
 
       - run: tofu validate
+
+  release:
+    needs: [shellcheck, verify, tofu]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: read
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Configure registry auth
+        run: echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: pnpm exec semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read released version
+        id: version
+        run: echo "version=$(git tag --points-at HEAD --list 'v*' --sort=-v:refname | head -n 1)" >> "$GITHUB_OUTPUT"
+
+  images:
+    needs: release
+    if: needs.release.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [web, mission-control]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - run: |
+          if [[ -z $DASH_BETTER_AUTH_SECRET || -z $DASH_DATABASE_URL ]]; then
+            echo "::error::The production environment needs DASH_BETTER_AUTH_SECRET and DASH_DATABASE_URL so the image scan covers them. See README.md, Deploys."
+            exit 1
+          fi
+          bin/image "$APP" --push --tag "$VERSION"
+        env:
+          APP: ${{ matrix.app }}
+          VERSION: ${{ needs.release.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PUSH_USERNAME: ${{ github.actor }}
+          GHCR_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DASH_BETTER_AUTH_SECRET: ${{ secrets.DASH_BETTER_AUTH_SECRET }}
+          DASH_DATABASE_URL: ${{ secrets.DASH_DATABASE_URL }}
+
+  deploy:
+    needs: [release, images]
+    if: needs.release.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://dash.doublel.studio
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      READY: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && secrets.DASH_DEPLOY_SSH_KEY != '' && vars.DASH_APP_SSH_HOST_KEY != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check deploy is current and configured
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")')
+          status=0
+          latest=$(bin/deploy-gate "$VERSION" <<<"$tags") || status=$?
+          if ((status == 3)); then
+            echo "::notice title=Deploy skipped::$VERSION is not the newest release, $latest is. Deploying it would roll production back; re-run the run for $latest instead."
+          elif ((status != 0)); then
+            echo "::error title=Deploy blocked::Could not tell whether $VERSION is the newest release."
+            exit "$status"
+          elif [[ $READY != true ]]; then
+            echo "::notice title=Deploy skipped::$VERSION is released and its images are pushed, but the production environment lacks one of TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET or DASH_DEPLOY_SSH_KEY, or the DASH_APP_SSH_HOST_KEY variable is unset. See README.md, Deploys."
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read host
+        id: host
+        if: steps.gate.outputs.go == 'true'
+        run: echo "address=$(yq '.servers.web.hosts[0]' deploy/web.yml)" >> "$GITHUB_OUTPUT"
+
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        if: steps.gate.outputs.go == 'true'
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ steps.host.outputs.address }}
+
+      - name: Load deploy key
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          export SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock
+          ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          ssh-add -q - <<<"$DASH_DEPLOY_SSH_KEY"
+          mkdir -p ~/.ssh
+          while IFS= read -r key; do
+            [[ -z $key ]] || printf '%s %s\n' "$HOST" "$key" >> ~/.ssh/known_hosts
+          done <<<"$HOST_KEY"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "dash@$HOST" true
+        env:
+          DASH_DEPLOY_SSH_KEY: ${{ secrets.DASH_DEPLOY_SSH_KEY }}
+          HOST: ${{ steps.host.outputs.address }}
+          HOST_KEY: ${{ vars.DASH_APP_SSH_HOST_KEY }}
+
+      - name: Deploy Mission Control
+        if: steps.gate.outputs.go == 'true'
+        run: bin/kamal deploy -c deploy/mission-control.yml --skip-push --version "$VERSION"
+        env:
+          KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DASH_BETTER_AUTH_SECRET: ${{ secrets.DASH_BETTER_AUTH_SECRET }}
+          DASH_DATABASE_URL: ${{ secrets.DASH_DATABASE_URL }}
+
+      - name: Deploy web
+        if: steps.gate.outputs.go == 'true'
+        run: bin/kamal deploy -c deploy/web.yml --skip-push --version "$VERSION"
+        env:
+          KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DASH_BETTER_AUTH_SECRET: ${{ secrets.DASH_BETTER_AUTH_SECRET }}
+          DASH_DATABASE_URL: ${{ secrets.DASH_DATABASE_URL }}
+
+      - name: Smoke check
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          for url in https://api.dash.doublel.studio/healthz https://dash.doublel.studio/healthz; do
+            curl --fail --silent --show-error --output /dev/null --retry 5 --retry-delay 5 --retry-all-errors --max-time 10 "$url"
+            echo "$url ok"
+          done
