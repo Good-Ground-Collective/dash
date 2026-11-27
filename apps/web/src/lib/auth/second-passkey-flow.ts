@@ -57,6 +57,9 @@ export class SecondPasskeyFlow {
   /** Names the passkey just added, as Rename in settings does. */
   async name(added: AddedStep, name: string): Promise<SecondPasskeyStep> {
     const trimmed = name.trim();
+    if (trimmed === '') {
+      return { ...added, error: 'Enter a name for the passkey.' };
+    }
     try {
       await this.auth.renamePasskey({ id: added.passkey.id, name: trimmed });
       return {

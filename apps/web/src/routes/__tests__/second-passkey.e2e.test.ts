@@ -131,6 +131,7 @@ test('a declined prompt puts focus back on the add button', async () => {
 });
 
 test('adds a passkey on another device, names it, and continues home', async () => {
+  await expect(page.getByRole('status')).toBeEmpty();
   const asked = page.waitForRequest((request) =>
     request.url().includes('/passkey/generate-register-options'),
   );
@@ -144,6 +145,12 @@ test('adds a passkey on another device, names it, and continues home', async () 
   ).toBe('cross-platform');
   await expect(page.getByRole('status')).toHaveText(/Added\. Name it/u);
   await expect(page.getByLabel('Name this passkey')).toBeFocused();
+  await page.getByLabel('Name this passkey').fill('   ');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByLabel('Name this passkey')).toHaveJSProperty(
+    'validity.patternMismatch',
+    true,
+  );
   await page.getByLabel('Name this passkey').fill('Phone');
   await page.getByRole('button', { name: 'Save' }).click();
 

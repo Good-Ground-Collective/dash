@@ -30,6 +30,14 @@
   let nameForm = $state<PasskeyNameForm>();
   let continueLink = $state<HTMLAnchorElement>();
 
+  /** Mounted from the start, so a screen reader announces each change to it. */
+  let announcement = $derived.by(() => {
+    if (current.step !== 'added') return '';
+    return current.named
+      ? 'Saved. You can rename it any time in settings.'
+      : 'Added. Name it so you can tell it apart in settings.';
+  });
+
   let rows = $derived(
     SecondPasskeyFlow.rows({ listed: data.passkeys ?? [], current }),
   );
@@ -105,12 +113,11 @@
     </ul>
   {/if}
 
+  <p class="status" class:added={current.step === 'added'} role="status">
+    {announcement}
+  </p>
+
   {#if current.step === 'added'}
-    <p class="added" role="status">
-      {current.named
-        ? 'Saved. You can rename it any time in settings.'
-        : 'Added. Name it so you can tell it apart in settings.'}
-    </p>
     {#if !current.named}
       <PasskeyNameForm
         bind:this={nameForm}
@@ -227,6 +234,11 @@
   .hint {
     margin-top: calc(var(--space-2) * -1);
     color: var(--ink-muted);
+  }
+
+  /* Out of the card's flow while empty, but still in the accessibility tree, so filling it is announced. */
+  .status:empty {
+    position: absolute;
   }
 
   .added {

@@ -244,6 +244,19 @@ describe('SecondPasskeyFlow naming', () => {
   });
 });
 
+describe('SecondPasskeyFlow blank names', () => {
+  it('asks for a name instead of saving one that is only spaces', async () => {
+    const harness = new Harness(adding);
+    const added = Steps.added(await harness.flow.add());
+
+    await expect(harness.flow.name(added, '   ')).resolves.toEqual({
+      ...added,
+      error: 'Enter a name for the passkey.',
+    });
+    expect(harness.requested).not.toContain(renamePath);
+  });
+});
+
 describe('SecondPasskeyFlow rows', () => {
   const laptop: Passkey = {
     id: 'p1',

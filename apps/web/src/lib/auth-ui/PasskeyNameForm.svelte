@@ -22,6 +22,8 @@
   } = $props();
 
   const id = $props.id();
+  /** `required` alone lets a name of only spaces through, which would save as no name. */
+  const nonBlankPattern = '.*\\S.*';
   let input = $state<HTMLInputElement>();
 
   /** Moves focus to the name field, such as when the form first appears. */
@@ -38,7 +40,15 @@
 <form class="name-form" onsubmit={submit}>
   <label class:visually-hidden={labelHidden} for={id}>{label}</label>
   <div class="row">
-    <input {id} bind:this={input} bind:value {placeholder} required />
+    <input
+      {id}
+      bind:this={input}
+      bind:value
+      {placeholder}
+      required
+      pattern={nonBlankPattern}
+      title="Enter a name, not just spaces"
+    />
     <button class="auth-button small" type="submit" disabled={busy}>
       Save
     </button>

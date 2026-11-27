@@ -61,25 +61,25 @@ export class BrowserWebAuthnCeremonies implements WebAuthnCeremonies {
     try {
       return await run();
     } catch (error) {
-      throw new PasskeyAuthError({
-        code:
-          error instanceof WebAuthnError
-            ? BrowserWebAuthnCeremonies.code(error)
-            : 'CEREMONY_FAILED',
-        message: error instanceof Error ? error.message : undefined,
-        status: 0,
-      });
+      throw error instanceof Error
+        ? BrowserWebAuthnCeremonies.failure(error)
+        : new PasskeyAuthError({ code: 'CEREMONY_FAILED', status: 0 });
     }
   }
 
-  /** SimpleWebAuthn passes a `NotAllowedError`, such as a closed prompt, through as its cause, so that name is the code. */
-  private static code(error: WebAuthnError): string {
-    if (
-      error.code === 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY' &&
-      error.cause instanceof Error
-    ) {
-      return error.cause.name;
+  /**
+   * What a cancelled or failed prompt becomes. SimpleWebAuthn passes a `NotAllowedError`, such as
+   * a closed prompt, through as its cause, so that name is the code.
+   */
+  static failure(error: Error): PasskeyAuthError {
+    let code = 'CEREMONY_FAILED';
+    if (error instanceof WebAuthnError) {
+      code =
+        error.code === 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY' &&
+        error.cause instanceof Error
+          ? error.cause.name
+          : error.code;
     }
-    return error.code;
+    return new PasskeyAuthError({ code, message: error.message, status: 0 });
   }
 }
