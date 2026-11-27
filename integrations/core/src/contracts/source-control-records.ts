@@ -38,6 +38,10 @@ export const reviewSchema = externalRecordSchema.extend({
   submittedAt: z.iso.datetime({ offset: true }),
 });
 
+/**
+ * Providers map every other outcome onto these three, as GitHub's own rollup does: neutral and
+ * skipped count as success; cancelled, timed out and action required count as failure.
+ */
 export const checkStateSchema = z.enum(['pending', 'success', 'failure']);
 
 export const checkRollupSchema = z.object({
