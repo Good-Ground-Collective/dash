@@ -120,6 +120,38 @@ jobs:
         if: github.event_name == 'push'
         run: pnpm turbo run test:e2e
 
+  standards-go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/standards/go
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: packages/standards/go/go.mod
+          cache: false
+
+      - run: shellcheck ../scripts/generate-go.sh
+
+      - name: Check generated Go
+        run: |
+          ../scripts/generate-go.sh
+          if [[ -n $(git status --porcelain -- .) ]]; then
+            git status --short -- .
+            git diff -- .
+            echo "::error title=Go types are stale::packages/standards/go does not match the JSON Schema. Run 'packages/standards/scripts/generate-go.sh' and commit the result."
+            exit 1
+          fi
+
+      - run: go vet ./...
+
+      - run: go test ./...
+
   tofu:
     runs-on: ubuntu-latest
     timeout-minutes: 10

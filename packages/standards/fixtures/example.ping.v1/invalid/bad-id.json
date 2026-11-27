@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "example.ping",
+  "id": "not-a-uuid",
+  "emittedAt": "2026-11-27T09:30:00Z",
+  "payload": { "text": "hello" }
+}
