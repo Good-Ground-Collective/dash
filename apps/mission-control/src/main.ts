@@ -111,7 +111,7 @@ const platform = new PlatformModule({
       connections: connectionRepository,
       initiatives: new DrizzleStoredInitiatives({ database }),
     }),
-    new LiveModule({ liveEvents }),
+    new LiveModule({ liveEvents, identity: auth.identity }),
     heartbeat,
   ],
   workflowModules: [heartbeat, agents, githubFeed, objectives, connections],

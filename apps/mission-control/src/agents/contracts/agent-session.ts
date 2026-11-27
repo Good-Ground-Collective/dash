@@ -59,13 +59,13 @@ export const agentActivitySchema = z.object({
 
 export type AgentActivity = z.infer<typeof agentActivitySchema>;
 
-/** One row of session state: a session's own, or one subagent's under it. Published as `agent.session.updated`. */
 const reportedBySchema = z
   .uuid()
   .describe(
     'The service account principal whose key reported it. Two keys sending the same `sessionId` are two sessions.',
   );
 
+/** One row of session state: a session's own, or one subagent's under it. Published as `agent.session.updated`. */
 export const agentSessionStateSchema = agentActivitySchema.extend({
   reportedBy: reportedBySchema,
   sessionId: z.string(),
