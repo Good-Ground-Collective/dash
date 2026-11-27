@@ -43,20 +43,6 @@ class Served {
     expect(response.statusCode).toBe(200);
     return githubFeedSchema.parse(response.json());
   }
-
-  /** The feed with connection ids and kinds blanked, to compare what each source produced. */
-  static comparable(feed: GithubFeed) {
-    const item = <T extends { connectionId: string }>(value: T) => ({
-      ...value,
-      connectionId: 'any',
-    });
-    return {
-      reviewRequests: feed.reviewRequests.map(item),
-      myPullRequests: feed.myPullRequests.map(item),
-      failedRuns: feed.failedRuns.map(item),
-      assignedIssues: feed.assignedIssues.map(item),
-    };
-  }
 }
 
 beforeEach(() => {
@@ -151,7 +137,9 @@ describe('GET /integrations/github/feed across connection kinds', () => {
       expect.objectContaining({ id: guestId, kind: 'guest' }),
     ]);
     expect(guest.failedRuns[0]?.connectionId).toBe(guestId);
-    expect(Served.comparable(guest)).toEqual(Served.comparable(owned));
+    expect(GithubFeedFixtures.comparable(guest)).toEqual(
+      GithubFeedFixtures.comparable(owned),
+    );
   });
 });
 

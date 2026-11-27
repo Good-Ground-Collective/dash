@@ -9,7 +9,6 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
-import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 
 const unclaimedId = '40000000-0000-4000-8000-000000000001';
 const uninstalledId = '40000000-0000-4000-8000-000000000002';
@@ -128,20 +127,27 @@ describe('GithubReconcile overlapping reads', () => {
   it('keeps a newer read’s failure when an older read finishes after it', async () => {
     const harness = await Reconciling.linked();
     const later = new Date(fixedNow.getTime() + 15 * 60_000);
-    vi.setSystemTime(later);
+    const { promise: held, resolve: release } = Promise.withResolvers<void>();
+    harness.feed.held = held;
+    const older = harness.module.reconcile.syncConnection({
+      connectionId: ownedId,
+    });
+    while (harness.feed.queries.length === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    harness.feed.held = null;
     harness.feed.failure = Object.assign(new Error('Bad gateway'), {
       status: 502,
     });
-    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
+    vi.setSystemTime(later);
 
-    await harness.records.replace({
+    const newer = await harness.module.reconcile.syncConnection({
       connectionId: ownedId,
-      viewerLogin: 'ada',
-      records: InMemoryGithubRecords.empty(),
-      truncated: false,
-      syncedAt: fixedNow,
     });
+    release();
 
+    expect(newer).toMatchObject({ status: 'failed' });
+    expect(await older).toEqual({ status: 'synced' });
     expect(harness.records.syncs.get(ownedId)).toMatchObject({
       lastSyncedAt: fixedNow,
       lastAttemptedAt: later,

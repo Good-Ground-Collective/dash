@@ -95,6 +95,16 @@ export class GithubRecordsDatabase {
     await this.database.close();
   }
 
+  /** The test database once the suite has opened it. */
+  static required(
+    store: GithubRecordsDatabase | undefined,
+  ): GithubRecordsDatabase {
+    if (store === undefined) {
+      throw new TypeError('Set DASH_TEST_DATABASE_URL to run repository tests');
+    }
+    return store;
+  }
+
   /** Creates `name` on the server at `serverUrl` when it is missing, and migrates it. */
   static async open(props: {
     serverUrl: string;
