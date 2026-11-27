@@ -5,7 +5,7 @@ export const onboardingRecoveryCodesPath = `/setup/recovery-codes?${onboardingPa
 
 export const secondPasskeyPath = '/setup/second-passkey';
 
-/** Where Continue and Skip lead from the second passkey step. Home, until the Connect GitHub step (#75) lands. */
+/** Where Continue and Skip lead from the second passkey step: home, the next place a newly set-up person goes. */
 export const afterSecondPasskeyPath = '/';
 
 /**

@@ -15,17 +15,20 @@ export type SecondPasskeyStep =
 
 export type AddedStep = Extract<SecondPasskeyStep, { step: 'added' }>;
 
+type SecondPasskeyAuth = Pick<
+  PasskeyAuth,
+  'addPasskey' | 'renamePasskey' | 'signIn'
+>;
+type SecondPasskeyWording = Pick<PasskeyWording, 'explain' | 'isCancellation'>;
+
 /** Adding a passkey on another device during setup, then naming it. */
 export class SecondPasskeyFlow {
-  private readonly auth: Pick<
-    PasskeyAuth,
-    'addPasskey' | 'renamePasskey' | 'signIn'
-  >;
-  private readonly wording: Pick<PasskeyWording, 'explain' | 'isCancellation'>;
+  private readonly auth: SecondPasskeyAuth;
+  private readonly wording: SecondPasskeyWording;
 
   constructor(props: {
-    auth: Pick<PasskeyAuth, 'addPasskey' | 'renamePasskey' | 'signIn'>;
-    wording: Pick<PasskeyWording, 'explain' | 'isCancellation'>;
+    auth: SecondPasskeyAuth;
+    wording: SecondPasskeyWording;
   }) {
     this.auth = props.auth;
     this.wording = props.wording;

@@ -67,8 +67,15 @@
     await advance(async () => flow.name(added, chosen));
   };
 
+  /** Keeps "Added 3 minutes ago" true while the person stays on the step. */
   onMount(() => {
     card?.focusTitle();
+    const clock = setInterval(() => {
+      now = new Date();
+    }, 30_000);
+    return () => {
+      clearInterval(clock);
+    };
   });
 </script>
 

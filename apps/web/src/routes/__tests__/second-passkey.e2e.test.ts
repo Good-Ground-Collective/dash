@@ -79,6 +79,7 @@ test.beforeAll(async ({ browser, baseURL }, testInfo) => {
   ).missionControlUrl;
   const context = await browser.newContext({ baseURL: baseURL ?? '' });
   page = await context.newPage();
+  await page.clock.install();
   cdp = await context.newCDPSession(page);
   await cdp.send('WebAuthn.enable');
   await Authenticators.platform();
@@ -102,6 +103,8 @@ test('saving codes during setup leads to the optional second passkey step', asyn
   );
   await expect(Step.rows()).toHaveCount(1);
   await expect(Step.rows()).toContainText('Added just now');
+  await page.clock.fastForward('03:00');
+  await expect(Step.rows()).toContainText('Added 3 minutes ago');
   await expect(Step.addButton()).toHaveAccessibleDescription(
     'Your browser shows a QR code to scan with your phone.',
   );
