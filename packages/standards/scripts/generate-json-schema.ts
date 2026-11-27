@@ -2,7 +2,7 @@ import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { format } from 'prettier';
+import { format, resolveConfig } from 'prettier';
 import { z } from 'zod';
 
 import { messageRegistry, type RegisteredMessage } from '#src/registry.js';
@@ -27,7 +27,7 @@ class JsonSchemaGenerator {
 
     await mkdir(JsonSchemaGenerator.OUTPUT_DIRECTORY, { recursive: true });
     for (const stale of await readdir(JsonSchemaGenerator.OUTPUT_DIRECTORY)) {
-      if (!files.has(stale)) {
+      if (stale.endsWith('.json') && !files.has(stale)) {
         await rm(path.join(JsonSchemaGenerator.OUTPUT_DIRECTORY, stale));
       }
     }
@@ -60,7 +60,15 @@ class JsonSchemaGenerator {
       return value;
     });
 
+    const config = await resolveConfig(
+      path.join(
+        JsonSchemaGenerator.OUTPUT_DIRECTORY,
+        JsonSchemaGenerator.fileName(definition),
+      ),
+    );
+
     return format(JSON.stringify(jsonSchema, [...keys].sort()), {
+      ...config,
       parser: 'json',
     });
   }
