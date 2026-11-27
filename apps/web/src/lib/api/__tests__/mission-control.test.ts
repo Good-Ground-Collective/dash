@@ -172,3 +172,43 @@ describe('HttpMissionControl configuration', () => {
     ).toThrow();
   });
 });
+
+describe('HttpMissionControl setup checklist', () => {
+  it('reads the checklist from /onboarding/checklist with credentials', async () => {
+    const items = [
+      { id: 'connectGitHub', done: true },
+      { id: 'secondPasskey', done: false },
+    ];
+    const recorder = new RecordingFetch({
+      respond: async () => Response.json({ items }),
+    });
+    const missionControl = new HttpMissionControl({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    await expect(missionControl.getSetupChecklist()).resolves.toEqual({
+      items,
+    });
+    expect(recorder.calls[0]?.url).toBe(
+      'https://api.example.test/onboarding/checklist',
+    );
+    expect(recorder.calls[0]?.init?.credentials).toBe('include');
+  });
+
+  it('rejects with Mission Control’s code when signed out', async () => {
+    const recorder = new RecordingFetch({
+      respond: async () =>
+        Response.json({ code: 'SIGN_IN_REQUIRED' }, { status: 401 }),
+    });
+    const missionControl = new HttpMissionControl({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    await expect(missionControl.getSetupChecklist()).rejects.toMatchObject({
+      status: 401,
+      code: 'SIGN_IN_REQUIRED',
+    });
+  });
+});

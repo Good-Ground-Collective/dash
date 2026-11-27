@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
 import { GithubStub } from './github-stub.ts';
+import { OnboardingStub } from './onboarding-stub.ts';
 import { PasskeysStub } from './passkeys-stub.ts';
 import { RecoveryCodesStub } from './recovery-codes-stub.ts';
 import { RecoveryStub } from './recovery-stub.ts';
@@ -42,7 +43,8 @@ interface StubReply {
  * passkey sign-in.
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
- * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`.
+ * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`,
+ * and `/onboarding/checklist` is `OnboardingStub`.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -54,6 +56,10 @@ export class MissionControlStub {
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
   private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
+  private readonly onboarding = new OnboardingStub({
+    passkeys: () => this.passkeys.all.length,
+    githubConnected: () => this.github.connected(),
+  });
   private readonly recovery = new RecoveryStub({
     email: () => this.person?.email ?? null,
     webOrigin: () => this.webOrigin,
@@ -88,6 +94,13 @@ export class MissionControlStub {
     if (url.pathname.startsWith('/integrations/github/')) {
       const signedIn = this.sessionOf(request) !== null;
       this.github.serve({ request, response, url, signedIn });
+      return;
+    }
+    if (url.pathname === '/onboarding/checklist') {
+      const signedIn = this.sessionOf(request) !== null;
+      const reply = this.onboarding.checklist({ signedIn });
+      response.writeHead(reply.status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(reply.body));
       return;
     }
     const body =

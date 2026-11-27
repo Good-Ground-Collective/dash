@@ -53,6 +53,14 @@ export class GithubStub {
     this.accounts = GithubStub.sampleAccounts();
   }
 
+  /** Whether Dash would hold a GitHub connection: authorized, with the app installed somewhere. */
+  connected(): boolean {
+    return (
+      this.scenario === 'linked' &&
+      this.accounts.some((account) => account.install.state === 'installed')
+    );
+  }
+
   /** Answers a `/integrations/github/…` request. */
   serve(props: {
     request: IncomingMessage;
