@@ -36,6 +36,7 @@
 <style>
   .shell {
     min-height: 100dvh;
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
     display: flex;
     flex-direction: column;
   }
@@ -81,7 +82,8 @@
     width: 100%;
     max-width: var(--content-width);
     margin: 0 auto;
-    padding: var(--space-6) var(--space-5) calc(var(--space-7) * 2);
+    padding: var(--space-6) var(--space-5)
+      calc(var(--space-7) * 2 + env(safe-area-inset-bottom));
   }
 
   @media (width < 40rem) {
@@ -97,7 +99,8 @@
     }
 
     .content {
-      padding: var(--space-5) var(--space-4) calc(var(--space-7) * 2);
+      padding: var(--space-5) var(--space-4)
+        calc(var(--space-7) * 2 + env(safe-area-inset-bottom));
     }
   }
 </style>

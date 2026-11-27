@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 
 const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
@@ -55,6 +55,77 @@ test('the keyboard reaches settings from the menu', async () => {
   await expect(page).toHaveURL('/settings');
 });
 
+const phone = { width: 390, height: 844 } as const;
+const desktop = { width: 1280, height: 720 } as const;
+
+/** Layout checks for the phone-width viewport. */
+class PhoneLayout {
+  static async scrollsSideways(): Promise<boolean> {
+    return page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    );
+  }
+
+  /**
+   * Whether something else paints over the middle of the element, or it sits
+   * outside the viewport. An open menu turns off pointer events on the body,
+   * which hit testing honours, so they are switched back on for the probe.
+   */
+  static async isCovered(locator: Locator): Promise<boolean> {
+    return locator.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const inView =
+        box.top >= 0 &&
+        box.left >= 0 &&
+        box.right <= window.innerWidth &&
+        box.bottom <= window.innerHeight;
+      const bodyPointerEvents = document.body.style.pointerEvents;
+      document.body.style.pointerEvents = 'auto';
+      const topmost = document.elementFromPoint(
+        box.left + box.width / 2,
+        box.top + box.height / 2,
+      );
+      document.body.style.pointerEvents = bodyPointerEvents;
+      return !inView || topmost === null || !element.contains(topmost);
+    });
+  }
+}
+
+test('main pages fit a phone without scrolling sideways', async () => {
+  await page.setViewportSize(phone);
+  for (const path of ['/', '/settings', '/settings/service-accounts']) {
+    await page.goto(path);
+    expect(await PhoneLayout.scrollsSideways(), path).toBe(false);
+  }
+});
+
+test('on a phone the open account menu sits above the top bar', async () => {
+  await page.setViewportSize(phone);
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
+    .click();
+  const heading = page.getByRole('menu').getByText('Ada Lovelace');
+  await expect(heading).toBeVisible();
+
+  await expect.poll(async () => PhoneLayout.isCovered(heading)).toBe(false);
+
+  const monoLoaded = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return [...document.fonts].some(
+      (face) =>
+        face.family === 'Geist Mono Variable' && face.status === 'loaded',
+    );
+  });
+  expect(monoLoaded).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
+  await page.setViewportSize(desktop);
+});
+
 test('the page stays clickable after the menu closes, and sign out returns to sign-in', async () => {
   await page
     .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
@@ -64,4 +135,10 @@ test('the page stays clickable after the menu closes, and sign out returns to si
   await expect(page).toHaveURL('/sign-in');
   await page.goto('/');
   await expect(page.getByRole('img', { name: 'Signed out' })).toBeVisible();
+});
+
+test('sign-in fits a phone without scrolling sideways', async () => {
+  await page.setViewportSize(phone);
+  await page.goto('/sign-in');
+  expect(await PhoneLayout.scrollsSideways()).toBe(false);
 });

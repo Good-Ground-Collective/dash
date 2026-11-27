@@ -67,4 +67,24 @@
   .unavailable {
     cursor: default;
   }
+
+  @media (width < 40rem) {
+    .primary-nav {
+      mask-image: linear-gradient(
+        to right,
+        var(--ink) calc(100% - var(--space-4)),
+        transparent
+      );
+    }
+
+    ul {
+      gap: 0;
+      padding-inline-end: var(--space-4);
+    }
+
+    .nav-link {
+      padding: 0 var(--space-2);
+      font-size: var(--font-size-sm);
+    }
+  }
 </style>
