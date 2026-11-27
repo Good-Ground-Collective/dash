@@ -14,6 +14,27 @@ describe('SetupChecklist', () => {
     expect(checklist.progress).toBe('0 of 1 done');
   });
 
+  it('lists the first initiative, pointing to how a Project is made', () => {
+    const checklist = new SetupChecklist({
+      report: {
+        items: [
+          { id: 'connectGitHub', done: true },
+          { id: 'createInitiative', done: false },
+        ],
+      },
+    });
+
+    expect(checklist.rows[1]).toMatchObject({
+      title: 'Create your first initiative',
+      action: { label: 'Create a Project' },
+      done: false,
+    });
+    expect(checklist.rows[1]?.action.href).toMatch(
+      /^https:\/\/docs\.github\.com\//u,
+    );
+    expect(checklist.progress).toBe('1 of 2 done');
+  });
+
   it('counts done items', () => {
     const checklist = new SetupChecklist({ report: finished });
 

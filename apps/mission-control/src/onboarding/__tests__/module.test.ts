@@ -25,6 +25,7 @@ afterEach(async () => {
 class FreshAccount {
   readonly fixture = new PasskeyIdentity();
   readonly connections = new InMemoryConnectionRepository();
+  initiativeStored = false;
   private app: ZodFastifyInstance | undefined;
 
   async start(): Promise<ZodFastifyInstance> {
@@ -38,6 +39,7 @@ class FreshAccount {
         new OnboardingModule({
           identity: this.fixture.identity,
           connections: this.connections,
+          initiatives: { anyInitiative: async () => this.initiativeStored },
         }),
       ],
     }).build();
@@ -78,7 +80,10 @@ describe('OnboardingModule', () => {
     const account = new FreshAccount();
     const browser = await account.fixture.firstPerson();
 
-    expect(await account.done(browser)).toEqual({ connectGitHub: false });
+    expect(await account.done(browser)).toEqual({
+      connectGitHub: false,
+      createInitiative: false,
+    });
   });
 
   it('leaves GitHub open while its only installation is suspended', async () => {
@@ -97,6 +102,20 @@ describe('OnboardingModule', () => {
     const browser = await account.fixture.firstPerson();
 
     await account.connectGitHub();
-    expect(await account.done(browser)).toEqual({ connectGitHub: true });
+    expect(await account.done(browser)).toEqual({
+      connectGitHub: true,
+      createInitiative: false,
+    });
+  });
+
+  it('ticks the first initiative off once a read stored one', async () => {
+    const account = new FreshAccount();
+    const browser = await account.fixture.firstPerson();
+
+    account.initiativeStored = true;
+
+    expect(await account.done(browser)).toMatchObject({
+      createInitiative: true,
+    });
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SetupChecklistReport } from '#src/onboarding/contracts/setup-checklist.ts';
 import {
   type ConnectionPresence,
+  type InitiativePresence,
   SourcedSetupChecklist,
 } from '#src/onboarding/services/setup-checklist/setup-checklist.ts';
 
@@ -18,32 +19,55 @@ class ConnectedProviders implements ConnectionPresence {
   }
 }
 
+class StoredInitiatives implements InitiativePresence {
+  private readonly stored: boolean;
+
+  constructor(props: { stored: boolean }) {
+    this.stored = props.stored;
+  }
+
+  async anyInitiative(): Promise<boolean> {
+    return this.stored;
+  }
+}
+
 class Checklist {
-  static report(props: {
+  static async done(props: {
     connected: readonly string[];
-  }): Promise<SetupChecklistReport> {
-    return new SourcedSetupChecklist({
+    initiative?: boolean;
+  }): Promise<Record<string, boolean>> {
+    const report: SetupChecklistReport = await new SourcedSetupChecklist({
       connections: new ConnectedProviders({ providers: props.connected }),
+      initiatives: new StoredInitiatives({ stored: props.initiative ?? false }),
     }).report();
+    return Object.fromEntries(report.items.map(({ id, done }) => [id, done]));
   }
 }
 
 describe('SourcedSetupChecklist', () => {
-  it('leaves GitHub open for a fresh account', async () => {
-    await expect(Checklist.report({ connected: [] })).resolves.toEqual({
-      items: [{ id: 'connectGitHub', done: false }],
+  it('leaves both items open for a fresh account', async () => {
+    await expect(Checklist.done({ connected: [] })).resolves.toEqual({
+      connectGitHub: false,
+      createInitiative: false,
     });
   });
 
   it('ticks off GitHub once any GitHub connection exists', async () => {
-    await expect(Checklist.report({ connected: ['github'] })).resolves.toEqual({
-      items: [{ id: 'connectGitHub', done: true }],
+    await expect(Checklist.done({ connected: ['github'] })).resolves.toEqual({
+      connectGitHub: true,
+      createInitiative: false,
     });
   });
 
   it('ignores connections to other providers', async () => {
-    await expect(Checklist.report({ connected: ['jira'] })).resolves.toEqual({
-      items: [{ id: 'connectGitHub', done: false }],
-    });
+    await expect(
+      Checklist.done({ connected: ['jira'] }),
+    ).resolves.toMatchObject({ connectGitHub: false });
+  });
+
+  it('ticks off the first initiative once one is stored', async () => {
+    await expect(
+      Checklist.done({ connected: ['github'], initiative: true }),
+    ).resolves.toEqual({ connectGitHub: true, createInitiative: true });
   });
 });

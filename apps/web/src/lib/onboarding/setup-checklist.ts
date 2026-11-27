@@ -1,5 +1,6 @@
 import type { SetupChecklistReport } from '#lib/api/mission-control.ts';
 import { connectGithubPath } from '#lib/auth/onboarding-route.ts';
+import { createProjectHelpUrl } from '#lib/objectives/objectives-view.ts';
 
 /** One row of the card, in the words home shows. */
 export interface SetupChecklistRow {
@@ -24,6 +25,14 @@ const copy: ReadonlyMap<string, RowCopy> = new Map([
       title: 'Connect GitHub',
       body: 'Choose which accounts Dash can read. Access is read-only.',
       action: { label: 'Connect GitHub', href: connectGithubPath },
+    },
+  ],
+  [
+    'createInitiative',
+    {
+      title: 'Create your first initiative',
+      body: 'Make a GitHub Project. Issues labelled epic become epics, and their sub-issues track progress.',
+      action: { label: 'Create a Project', href: createProjectHelpUrl },
     },
   ],
 ]);
