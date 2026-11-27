@@ -1,0 +1,236 @@
+import { expect, type Locator, type Page, test } from '@playwright/test';
+import { z } from 'zod';
+
+const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
+
+test.describe.configure({ mode: 'serial' });
+
+let page: Page;
+let missionControl = '';
+
+/** Drives the stub's GitHub and objectives state, and finds the objectives on home. */
+class Objectives {
+  static async scenario(name: string): Promise<void> {
+    await page.request.post(
+      `${missionControl}/objectives/__stub/scenario?name=${name}`,
+    );
+  }
+
+  static async connectGithub(): Promise<void> {
+    for (const stub of ['scenario?name=linked', 'feed?name=populated']) {
+      await page.request.post(
+        `${missionControl}/integrations/github/__stub/${stub}`,
+      );
+    }
+  }
+
+  static panel(): Locator {
+    return page.getByRole('region', { name: 'Objectives' });
+  }
+
+  static initiativeTitles(): Locator {
+    return Objectives.panel().getByRole('heading', { level: 3 });
+  }
+
+  static epics(initiative: string): Locator {
+    return page.getByRole('list', { name: `Epics in ${initiative}` });
+  }
+
+  static async openMenu(title: string): Promise<Locator> {
+    await page.getByRole('button', { name: `Change ${title}` }).click();
+    return page.getByRole('dialog');
+  }
+}
+
+test.beforeAll(async ({ browser, baseURL }, testInfo) => {
+  missionControl = projectSettingsSchema.parse(
+    testInfo.project.metadata,
+  ).missionControlUrl;
+  const context = await browser.newContext({ baseURL: baseURL ?? '' });
+  page = await context.newPage();
+  await page.request.post(`${missionControl}/api/auth/__stub/reset`);
+  await page.request.post(`${missionControl}/api/auth/__stub/sign-in`);
+});
+
+test('without GitHub, objectives point to Connect GitHub', async () => {
+  await page.goto('/');
+
+  await expect(Objectives.panel()).toContainText(
+    'Connect GitHub to see your objectives',
+  );
+  await expect(
+    Objectives.panel().getByRole('link', { name: 'Connect GitHub' }),
+  ).toHaveAttribute('href', '/setup/github');
+});
+
+test('while the first read runs, objectives say so', async () => {
+  await Objectives.connectGithub();
+  await Objectives.scenario('first-sync');
+  await page.goto('/');
+
+  await expect(Objectives.panel().getByRole('status')).toContainText(
+    'Reading your Projects for the first time',
+  );
+});
+
+test('with no initiatives, home explains how to make one', async () => {
+  await Objectives.scenario('empty');
+  await page.goto('/');
+
+  const panel = Objectives.panel();
+  await expect(panel).toContainText('No initiatives yet');
+  await expect(panel).toContainText('Project in a GitHub organisation');
+  await expect(panel).toContainText('Priority');
+  await expect(panel).toContainText('Target date');
+  await expect(panel).toContainText(
+    'Only Projects owned by an organisation can be read for now.',
+  );
+});
+
+test('when objectives fail, the rest of home still renders', async () => {
+  await Objectives.scenario('failing');
+  await page.goto('/');
+
+  await expect(Objectives.panel()).toContainText('Objectives didn’t load');
+  await expect(
+    page.getByRole('region', { name: 'GitHub', exact: true }),
+  ).toContainText('Review requests');
+});
+
+test('active initiatives lead home, in Mission Control’s order, with their epics', async () => {
+  await Objectives.scenario('populated');
+  await page.goto('/');
+
+  await expect(Objectives.initiativeTitles()).toHaveText([
+    /^Public launch/u,
+    /^Docs refresh/u,
+  ]);
+  const epics = Objectives.epics('Public launch');
+  await expect(epics.getByRole('listitem')).toHaveCount(3);
+  await expect(epics.getByRole('listitem').first()).toContainText(
+    'Sign-in with passkeys',
+  );
+  await expect(epics.getByRole('listitem').first()).toContainText(
+    '4 of 6 done',
+  );
+  await expect(epics).toContainText('Due after its initiative');
+  await expect(epics).toContainText('Next Rate-limit sign-in attempts');
+  await expect(epics).toContainText('grace closed “Hash recovery codes”');
+  await expect(Objectives.panel()).toContainText('No activity in 14 days');
+  await expect(
+    Objectives.panel().getByRole('link', { name: /^Public launch/u }),
+  ).toHaveAttribute('href', 'https://github.com/orgs/acme-labs/projects/1');
+  await expect(Objectives.panel()).not.toContainText('Private beta');
+});
+
+test('objectives sit above the GitHub panel', async () => {
+  const objectives = await Objectives.panel().boundingBox();
+  const github = await page
+    .getByRole('region', { name: 'GitHub', exact: true })
+    .boundingBox();
+
+  expect(objectives?.y ?? 0).toBeLessThan(github?.y ?? 0);
+});
+
+test('the filter shows done initiatives and keeps the choice in the URL', async () => {
+  await page.goto('/');
+  await page.getByRole('link', { name: /^Show done/u }).click();
+
+  await expect(page).toHaveURL(/\?show=done$/u);
+  await expect(Objectives.panel()).toContainText('Private beta');
+  await page.reload();
+  await expect(Objectives.panel()).toContainText('Private beta');
+
+  await page.getByRole('link', { name: /^Show done/u }).click();
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(Objectives.panel()).not.toContainText('Private beta');
+});
+
+test('parking an epic hides it until parked ones are shown, and unparking brings it back', async () => {
+  await page.goto('/');
+  const menu = await Objectives.openMenu('Status page');
+  await menu.getByRole('button', { name: 'Park' }).click();
+
+  await expect(Objectives.epics('Public launch')).not.toContainText(
+    'Status page',
+  );
+  await page.getByRole('link', { name: /^Show parked/u }).click();
+  const parked = Objectives.epics('Public launch')
+    .getByRole('listitem')
+    .filter({ hasText: 'Status page' });
+  await expect(parked).toContainText('Parked');
+
+  const again = await Objectives.openMenu('Status page');
+  await again.getByRole('button', { name: 'Unpark' }).click();
+  await expect(parked).not.toContainText('Parked');
+});
+
+test('Dash sets and clears what the tracker leaves empty, and hides what it owns', async () => {
+  await page.goto('/');
+  const menu = await Objectives.openMenu('Status page');
+  await menu.getByLabel('Progress (%)').fill('40');
+  await menu.getByRole('button', { name: 'Save' }).last().click();
+
+  const status = Objectives.epics('Public launch')
+    .getByRole('listitem')
+    .filter({ hasText: 'Status page' });
+  await expect(status).toContainText('40%');
+  const clearing = await Objectives.openMenu('Status page');
+  await clearing.getByRole('button', { name: 'Clear progress (%)' }).click();
+  await expect(status).toContainText('No progress yet');
+
+  const owned = await Objectives.openMenu('Sign-in with passkeys');
+  await expect(owned.getByLabel('Priority')).toHaveCount(0);
+  await expect(owned.getByLabel('Due date')).toHaveCount(0);
+  await expect(owned).toContainText(
+    'GitHub sets priority, due date and progress here.',
+  );
+  await page.keyboard.press('Escape');
+});
+
+test('a field the tracker took over since the page loaded is explained, not saved', async () => {
+  await page.goto('/');
+  await page.request.post(
+    `${missionControl}/objectives/__stub/claim?id=PVT_docs`,
+  );
+  const menu = await Objectives.openMenu('Docs refresh');
+  await menu.getByLabel('Priority').selectOption('P2');
+  await menu.getByRole('button', { name: 'Save' }).first().click();
+
+  await expect(menu.getByRole('alert')).toContainText(
+    'GitHub already sets this, so change it there.',
+  );
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(
+    Objectives.panel()
+      .getByRole('listitem')
+      .filter({ hasText: 'Docs refresh' })
+      .first(),
+  ).toContainText('P1');
+});
+
+test('home fits a phone and keeps Needs you clear of the last panel', async () => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(Objectives.panel()).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const pill = await page
+    .getByRole('button', { name: /^Needs you/u })
+    .boundingBox();
+  const last = await page
+    .getByRole('region', { name: 'GitHub', exact: true })
+    .boundingBox();
+  expect((last?.y ?? 0) + (last?.height ?? 0)).toBeLessThanOrEqual(
+    pill?.y ?? 0,
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+});

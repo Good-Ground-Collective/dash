@@ -2,6 +2,7 @@
   import { SetupChecklist } from '#lib/onboarding/setup-checklist.ts';
   import SetupChecklistCard from '#lib/onboarding-ui/SetupChecklistCard.svelte';
   import GithubHomePanel from '#lib/github-feed-ui/GithubHomePanel.svelte';
+  import ObjectivesPanel from '#lib/objectives-ui/ObjectivesPanel.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -17,6 +18,9 @@
   <h1 id="home-title">Home</h1>
   {#if checklist}
     <SetupChecklistCard {checklist} />
+  {/if}
+  {#if data.objectives !== null}
+    <ObjectivesPanel objectives={data.objectives} />
   {/if}
   {#if data.github !== null}
     <GithubHomePanel github={data.github} />

@@ -1,4 +1,24 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { z } from 'zod';
+
+export const credentialBodySchema = z.object({
+  response: z.object({ id: z.string() }),
+  name: z.string().optional(),
+});
+
+export interface StubPerson {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/** What `MissionControlStub` answers a `/api/auth` request with. */
+export interface StubReply {
+  status: number;
+  body: object | null;
+  cookie?: string;
+  headers?: Record<string, string>;
+}
 
 /** Reads what the stubs need from a raw Node request. */
 export class StubRequest {

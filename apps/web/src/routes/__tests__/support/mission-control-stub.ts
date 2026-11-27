@@ -1,38 +1,26 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
 import { GithubStub } from './github/github-stub.ts';
+import { ObjectivesStub } from './objectives/objectives-stub.ts';
 import { OnboardingStub } from './onboarding-stub.ts';
 import { PasskeysStub } from './passkeys-stub.ts';
 import { RecoveryCodesStub } from './recovery-codes-stub.ts';
 import { RecoveryStub } from './recovery-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
 import { SetupStub } from './setup-stub.ts';
-import { StubRequest } from './stub-request.ts';
+import {
+  credentialBodySchema,
+  type StubPerson,
+  type StubReply,
+  StubRequest,
+} from './stub-request.ts';
+import { StubSessions } from './stub-sessions.ts';
 import { WebAuthnOptions } from './webauthn-options.ts';
-
-const sessionCookie = 'better-auth.session_token';
-const credentialBodySchema = z.object({
-  response: z.object({ id: z.string() }),
-  name: z.string().optional(),
-});
-interface StubPerson {
-  id: string;
-  name: string;
-  email: string;
-}
-
-interface StubReply {
-  status: number;
-  body: object | null;
-  cookie?: string;
-  headers?: Record<string, string>;
-}
 
 /**
  * Stands in for Mission Control's `/api/auth` in the web e2e tests, which run without Postgres.
@@ -44,20 +32,24 @@ interface StubReply {
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
  * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`,
- * and `/onboarding/checklist` is `OnboardingStub`.
+ * `/onboarding/checklist` is `OnboardingStub`, and `/objectives` is `ObjectivesStub`.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
   private person: StubPerson | null = null;
   private readonly passkeys = new PasskeysStub();
-  private sessions = new Set<string>();
+  private readonly sessions = new StubSessions();
   private sessionStale = false;
   private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
   private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
+  private readonly objectives = new ObjectivesStub({
+    githubConnected: () => this.github.connected(),
+  });
   private readonly onboarding = new OnboardingStub({
     githubConnected: () => this.github.connected(),
+    anyInitiative: () => this.objectives.anyInitiative(),
   });
   private readonly recovery = new RecoveryStub({
     email: () => this.person?.email ?? null,
@@ -90,13 +82,17 @@ export class MissionControlStub {
     }
 
     const url = new URL(request.url ?? '/', 'http://localhost');
+    const signedIn = this.sessions.of(request) !== null;
     if (url.pathname.startsWith('/integrations/github/')) {
-      const signedIn = this.sessionOf(request) !== null;
       this.github.serve({ request, response, url, signedIn });
       return;
     }
+    if (url.pathname.startsWith('/objectives')) {
+      const body = await StubRequest.body(request);
+      this.objectives.serve({ body, response, url, signedIn });
+      return;
+    }
     if (url.pathname === '/onboarding/checklist') {
-      const signedIn = this.sessionOf(request) !== null;
       const reply = this.onboarding.checklist({ signedIn });
       response.writeHead(reply.status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(reply.body));
@@ -106,7 +102,7 @@ export class MissionControlStub {
       request.method === 'POST' ? await StubRequest.body(request) : '';
     const reply = this.route({
       path: url.pathname.replace(/^\/api\/auth/u, ''),
-      session: this.sessionOf(request),
+      session: this.sessions.of(request),
       body,
       context: url.searchParams.get('context'),
       attachment: url.searchParams.get('authenticatorAttachment'),
@@ -187,13 +183,14 @@ export class MissionControlStub {
     this.person = null;
     this.setup.reset();
     this.passkeys.reset();
-    this.sessions = new Set();
+    this.sessions.clear();
     this.sessionStale = false;
     this.appearance.reset();
     this.serviceAccounts.reset();
     this.recovery.reset();
     this.recoveryCodes.reset();
     this.github.reset();
+    this.objectives.reset();
     return { status: 200, body: { status: true } };
   }
 
@@ -252,7 +249,7 @@ export class MissionControlStub {
     let signedUp: StubPerson | null = null;
     if (props.session === null) {
       const recovery = this.recovery.complete();
-      if (recovery === 'spent') this.sessions = new Set();
+      if (recovery === 'spent') this.sessions.clear();
       signedUp = recovery === 'spent' ? this.person : this.setup.pending;
       if (recovery === 'rejected' || signedUp === null) {
         return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
@@ -277,31 +274,17 @@ export class MissionControlStub {
   }
 
   private signOut(session: string | null): StubReply {
-    if (session !== null) this.sessions.delete(session);
-    return {
-      status: 200,
-      body: { success: true },
-      cookie: `${sessionCookie}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    };
+    const cookie = this.sessions.end(session);
+    return { status: 200, body: { success: true }, cookie };
   }
 
   private newSession(): StubReply {
-    const token = randomBytes(16).toString('hex');
-    this.sessions.add(token);
+    const { token, cookie } = this.sessions.issue();
     return {
       status: 200,
       body: { session: { token }, user: this.person },
-      cookie: `${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax`,
+      cookie,
     };
-  }
-
-  private sessionOf(request: IncomingMessage): string | null {
-    const pair = (request.headers.cookie ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(`${sessionCookie}=`));
-    const token = pair?.slice(sessionCookie.length + 1) ?? '';
-    return this.sessions.has(token) ? token : null;
   }
 
   private fail(status: number, code: string): StubReply {
