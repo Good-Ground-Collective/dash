@@ -43,15 +43,13 @@ class ShellVisit {
   }
 }
 
-const loadEvent = ShellVisit.event.bind(ShellVisit);
-
 describe('ShellLoader', () => {
   it('skips Mission Control when the visitor has no session cookie', async () => {
     const counter = new CountingFetch({ response: () => Response.json(null) });
 
     await expect(
       shellLoader.load(
-        loadEvent({ fetch: counter.fetch, hasSessionCookie: false }),
+        ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: false }),
       ),
     ).resolves.toEqual({ viewer: null, appearance: lightCharacters });
     expect(counter.calls).toBe(0);
@@ -65,7 +63,7 @@ describe('ShellLoader', () => {
 
     await expect(
       shellLoader.load(
-        loadEvent({ fetch: counter.fetch, hasSessionCookie: true }),
+        ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
       ),
     ).resolves.toEqual({
       viewer: { ...viewer, theme: 'characters', colorMode: null },
@@ -89,7 +87,7 @@ describe('ShellLoader appearance', () => {
         }),
     });
     const cookies = new RecordingCookies({ values: { 'dash-mode': 'light' } });
-    const event = loadEvent({
+    const event = ShellVisit.event({
       fetch: counter.fetch,
       hasSessionCookie: true,
       cookies,
@@ -116,7 +114,7 @@ describe('ShellLoader failures', () => {
 
     await expect(
       shellLoader.load(
-        loadEvent({ fetch: counter.fetch, hasSessionCookie: true }),
+        ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
       ),
     ).resolves.toEqual({ viewer: null, appearance: lightCharacters });
     expect(counter.calls).toBe(1);

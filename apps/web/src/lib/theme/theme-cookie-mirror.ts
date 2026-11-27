@@ -35,6 +35,7 @@ export class ServerThemeCookieMirror implements ThemeCookieMirror {
       theme: props.saved.theme,
       mode: props.saved.colorMode ?? props.requested.mode,
     };
+
     this.write({
       cookies: props.cookies,
       name: CookieThemePreferenceReader.THEME_COOKIE,
@@ -47,6 +48,7 @@ export class ServerThemeCookieMirror implements ThemeCookieMirror {
         value: props.saved.colorMode,
       });
     }
+
     return preference;
   }
 
