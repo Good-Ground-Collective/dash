@@ -179,6 +179,31 @@ describe('SecondPasskeyFlow naming after a passkey check', () => {
   });
 });
 
+describe('SecondPasskeyFlow naming when the passkey check is dismissed', () => {
+  it('keeps the name waiting, quietly, without saving it', async () => {
+    const harness = new Harness({
+      ...adding,
+      [renamePath]: [Steps.failure(403, 'SESSION_NOT_FRESH')],
+      [signInOptionsPath]: [() => Response.json({ challenge: 'c' })],
+    });
+    const added = Steps.added(await harness.flow.add());
+    const waiting = Steps.added(await harness.flow.name(added, 'Phone'));
+    harness.ceremonies.failWith = new PasskeyAuthError({
+      code: 'ERROR_CEREMONY_ABORTED',
+      status: 0,
+    });
+
+    await expect(harness.flow.confirmAndName(waiting)).resolves.toEqual({
+      ...waiting,
+      error: null,
+    });
+    expect(waiting).toMatchObject({ confirming: 'Phone', named: false });
+    expect(
+      harness.requested.filter((path) => path === renamePath),
+    ).toHaveLength(1);
+  });
+});
+
 describe('SecondPasskeyFlow rows', () => {
   const laptop: Passkey = {
     id: 'p1',
