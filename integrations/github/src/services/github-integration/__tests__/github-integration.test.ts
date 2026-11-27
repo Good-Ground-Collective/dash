@@ -1,5 +1,6 @@
 import {
   Capability,
+  connectFlowCapability,
   customFieldsCapability,
   sourceControlCapability,
   taskTrackerCapability,
@@ -7,6 +8,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 
+import { appConfig } from '#src/__tests__/support/fake-github.ts';
 import { GithubIntegration } from '#src/services/github-integration/github-integration.ts';
 
 describe('GithubIntegration', () => {
@@ -27,6 +29,15 @@ describe('GithubIntegration', () => {
     expect(integration.capability(taskTrackerCapability)).toBeDefined();
     expect(integration.capability(sourceControlCapability)).toBeDefined();
     expect(integration.capability(customFieldsCapability)).toBeDefined();
+  });
+
+  it('offers the connect flow only when the App is configured', () => {
+    expect(integration.capability(connectFlowCapability)).toBeUndefined();
+    expect(
+      new GithubIntegration({ id: 'github', app: appConfig }).capability(
+        connectFlowCapability,
+      ),
+    ).toBeDefined();
   });
 
   it('offers nothing else', () => {

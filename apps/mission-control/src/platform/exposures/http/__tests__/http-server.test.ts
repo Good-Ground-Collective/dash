@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
+import { CapturedLog } from '#src/platform/exposures/http/__tests__/support/captured-log.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
 describe('HttpServer', () => {
@@ -60,23 +61,6 @@ describe('HttpServer', () => {
     },
   );
 });
-
-/** Points a built app's pino logger, and so every request logger, at an in-memory list of lines. */
-class CapturedLog {
-  readonly lines: string[] = [];
-
-  attach(app: ZodFastifyInstance): void {
-    const stream = Object.getOwnPropertySymbols(app.log).find(
-      (symbol) => symbol.description === 'pino.stream',
-    );
-    if (stream === undefined) {
-      throw new Error('Expected pino’s stream on the Fastify logger');
-    }
-    Object.defineProperty(app.log, stream, {
-      value: { write: (line: string) => this.lines.push(line) },
-    });
-  }
-}
 
 describe('HttpServer request logs', () => {
   let app: ZodFastifyInstance | undefined;

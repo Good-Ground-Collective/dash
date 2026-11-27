@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "dash-strip-types": "./strip-types.js"
+  },
   "exports": {
     "./eslint": "./eslint.config.js",
     "./stylelint": "./stylelint.config.js",

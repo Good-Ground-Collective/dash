@@ -34,6 +34,8 @@ run+=(
   --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0='*'
   --env KAMAL_REGISTRY_USERNAME --env KAMAL_REGISTRY_PASSWORD --env NODE_AUTH_TOKEN
   --env DASH_BETTER_AUTH_SECRET --env DASH_DATABASE_URL
+  --env DASH_GITHUB_APP_ID --env DASH_GITHUB_APP_SLUG --env DASH_GITHUB_APP_CLIENT_ID
+  --env DASH_GITHUB_APP_CLIENT_SECRET --env DASH_GITHUB_APP_PRIVATE_KEY --env DASH_GITHUB_WEBHOOK_SECRET
 )
 [[ $common == "$root"/* ]] || run+=(--volume "$common:$common")
 [[ -d $HOME/.ssh ]] && run+=(--volume "$HOME/.ssh:/root/.ssh:ro")

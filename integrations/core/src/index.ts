@@ -1,3 +1,5 @@
+export type * from '#src/contracts/connect-flow.ts';
+export * from '#src/contracts/connect-flow-records.ts';
 export * from '#src/contracts/custom-fields.ts';
 export * from '#src/contracts/external-record.ts';
 export type * from '#src/contracts/integration.ts';

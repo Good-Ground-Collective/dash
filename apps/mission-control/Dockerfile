@@ -13,6 +13,7 @@ COPY . .
 RUN --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN,required=true \
     echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$HOME/.npmrc" \
     && pnpm install --frozen-lockfile --prefer-offline --filter '@dash/mission-control...' \
+    && pnpm --filter '@dash/mission-control^...' run build \
     && pnpm --filter @dash/mission-control deploy --prod --legacy --prefer-offline /srv/mission-control \
     && rm "$HOME/.npmrc"
 
@@ -21,7 +22,9 @@ LABEL service="dash-mission-control" \
       org.opencontainers.image.source="https://github.com/Good-Ground-Collective/dash" \
       org.opencontainers.image.description="Dash Mission Control API" \
       org.opencontainers.image.licenses="MIT"
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
+# Workspace packages ship type-stripped JavaScript under node_modules, where Node won't strip
+# types itself. The dash-dist condition points their exports and #src imports at it.
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 NODE_OPTIONS=--conditions=dash-dist
 WORKDIR /app
 COPY --from=build /srv/mission-control/package.json ./package.json
 COPY --from=build /srv/mission-control/node_modules ./node_modules

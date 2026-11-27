@@ -15,3 +15,14 @@ export class DuplicateCapabilityError extends Error {
     super(`Capability '${props.capabilityName}' is already provided`);
   }
 }
+
+/** The provider refused a person's token or refresh token because it was revoked, expired or already spent. They must authorize again. */
+export class GrantRevokedError extends Error {
+  override name = 'GrantRevokedError';
+
+  constructor(props: { provider: string; cause?: unknown }) {
+    super(`${props.provider} no longer accepts this person's grant`, {
+      cause: props.cause,
+    });
+  }
+}
