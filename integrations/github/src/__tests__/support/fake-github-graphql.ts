@@ -28,6 +28,18 @@ const graphqlBodySchema = z.object({
   ),
 });
 
+const graphqlRequestBodySchema = z
+  .string()
+  .transform((text, context) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      context.addIssue({ code: 'custom', message: 'Expected a JSON body' });
+      return z.NEVER;
+    }
+  })
+  .pipe(graphqlBodySchema);
+
 /**
  * Stands in for api.github.com behind an injected `@octokit/request`: mints installation
  * tokens and answers GraphQL by operation name. Unrouted operations answer with an error.
@@ -112,9 +124,7 @@ export class FakeGithubGraphql {
       );
     }
 
-    const body = graphqlBodySchema.parse(
-      JSON.parse(z.string().parse(init.body)),
-    );
+    const body = graphqlRequestBodySchema.parse(init.body);
     const operation =
       /query (?<name>\w+)/u.exec(body.query)?.groups?.['name'] ?? '';
     const call: GraphqlCall = {

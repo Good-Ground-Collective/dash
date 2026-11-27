@@ -17,7 +17,8 @@ type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
 /**
  * Durable reconcile runs: every 15 minutes, and for one person straight after they connect.
  * Both enqueue one workflow per connection on a queue that reads two connections at a time,
- * so a burst of connections never fans out unbounded against GitHub.
+ * so a burst of connections never fans out unbounded against GitHub. A connection whose read
+ * is still queued or running is not enqueued again; the later run attaches to the earlier one.
  */
 export class GithubReconcileWorkflows implements WorkflowModule {
   private readonly reconcile: GithubReconcile;
@@ -67,7 +68,13 @@ export class GithubReconcileWorkflows implements WorkflowModule {
     );
     const enqueue = async (connectionIds: readonly string[]) => {
       for (const connectionId of connectionIds) {
-        await DBOS.startWorkflow(connection, { queueName })(connectionId);
+        await DBOS.startWorkflow(connection, {
+          queueName,
+          enqueueOptions: {
+            deduplicationID: `github-reconcile-${connectionId}`,
+          },
+          duplicationPolicy: 'return-existing',
+        })(connectionId);
       }
     };
 

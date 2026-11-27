@@ -25,7 +25,7 @@ import type { Database } from '#src/platform/services/database/database.ts';
 /** A GitHub connection a person made, how its reads went, and what the last good one found. */
 export interface ConnectionRecords {
   connectionId: string;
-  kind: 'owned' | 'guest';
+  kind: ConnectionKind;
   accountLogin: string;
   viewerLogin: string | null;
   lastSyncedAt: string | null;
