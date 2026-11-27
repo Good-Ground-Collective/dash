@@ -118,10 +118,15 @@ test('the step fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
-test('confirming opens home, and the saved codes work', async () => {
+test('confirming opens Connect GitHub, and the saved codes work', async () => {
   await CodesStep.savedBox().check();
   await page.getByRole('button', { name: 'Continue' }).click();
 
+  await expect(page).toHaveURL('/setup/github');
+  await expect(
+    page.getByRole('heading', { name: 'Connect GitHub' }),
+  ).toBeFocused();
+  await page.getByRole('link', { name: 'Skip for now' }).click();
   await expect(page).toHaveURL('/');
   await expect(
     page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
