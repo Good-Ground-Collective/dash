@@ -1,26 +1,15 @@
 import type { Installation, WebhookDelivery } from '@dash/integrations-core';
 
 import type { OwnedConnection } from '#src/connections/contracts/connections.ts';
-import type {
-  ConnectionRepository,
-  InstallRequest,
-} from '#src/connections/repositories/connections/connection-repository.ts';
+import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type {
   LinkedAccountRepository,
   StoredLinkedAccount,
 } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 
-export interface StoredInstallRequest {
-  userId: string;
-  provider: string;
-  accountExternalId: string;
-  requestedAt: string;
-}
-
 export class InMemoryConnectionRepository implements ConnectionRepository {
   readonly owned = new Map<string, OwnedConnection>();
-  readonly installRequests: StoredInstallRequest[] = [];
 
   async saveOwned(props: {
     provider: string;
@@ -65,29 +54,19 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     );
   }
 
-  async recordInstallRequest(
-    request: Omit<StoredInstallRequest, 'requestedAt'>,
-  ): Promise<void> {
-    this.installRequests.push({
-      ...request,
-      requestedAt: new Date().toISOString(),
-    });
-  }
-
-  async listInstallRequests(props: {
-    userId: string;
+  async connectionIdsFor(props: {
     provider: string;
-  }): Promise<InstallRequest[]> {
-    return this.installRequests
-      .filter(
-        (request) =>
-          request.userId === props.userId &&
-          request.provider === props.provider,
-      )
-      .map(({ accountExternalId, requestedAt }) => ({
-        accountExternalId,
-        requestedAt,
-      }));
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>> {
+    return new Map(
+      [...this.owned.values()]
+        .filter(
+          (connection) =>
+            connection.provider === props.provider &&
+            props.installationIds.includes(connection.installationId),
+        )
+        .map((connection) => [connection.installationId, connection.id]),
+    );
   }
 }
 

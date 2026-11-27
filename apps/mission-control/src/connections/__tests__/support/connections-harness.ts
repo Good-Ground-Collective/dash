@@ -17,7 +17,6 @@ import {
   InMemoryWebhookDeliveryRepository,
 } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import { ConnectionsModule } from '#src/connections/module.ts';
-import { SignedConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
@@ -144,17 +143,5 @@ export class ConnectionsHarness {
   /** The `state` query parameter of a URL the routes handed out. */
   static stateOf(url: string | undefined): string {
     return new URL(url ?? '').searchParams.get('state') ?? '';
-  }
-
-  /** A state as an install link for a chosen account carries it. Call with the clock frozen. */
-  static requestState(props: {
-    userId: string;
-    targetAccountId: string;
-  }): string {
-    return new SignedConnectState({ secret }).issue({
-      ...props,
-      provider: 'github',
-      returnTo: '/setup/github',
-    });
   }
 }

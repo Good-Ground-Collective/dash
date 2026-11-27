@@ -67,8 +67,15 @@ const installedStateSchema = z.object({
     .int()
     .nonnegative()
     .nullable()
-    .describe('Null while the installation is suspended.'),
+    .describe(
+      'Private repositories included. Null while the installation is suspended, where you are not an owner, or when it could not be read.',
+    ),
   suspended: z.boolean(),
+  incomplete: z
+    .boolean()
+    .describe(
+      'True when the provider failed to give your role or the repository count, as when it rate-limits the request. Those fields are then null, and loading again may fill them.',
+    ),
   settingsUrl: z
     .url()
     .describe(
@@ -80,11 +87,6 @@ const installedStateSchema = z.object({
     .describe(
       'The owned connection Dash recorded for it. Null when the app was installed without coming back through the setup URL.',
     ),
-});
-
-const requestedStateSchema = z.object({
-  state: z.literal('requested'),
-  requestedAt: timestampSchema,
 });
 
 const installableStateSchema = z.object({
@@ -101,7 +103,6 @@ export const connectableAccountSchema = z.object({
   account: userAccountSchema,
   install: z.discriminatedUnion('state', [
     installedStateSchema,
-    requestedStateSchema,
     installableStateSchema,
   ]),
 });
@@ -122,14 +123,13 @@ export const accountsResponseSchema = z.discriminatedUnion('status', [
     addAccountUrl: z
       .url()
       .describe(
-        'Opens the provider’s own account picker, which lists every account you can install the app on or request it for. Valid for ten minutes.',
+        'Opens the provider’s own account picker, which lists every account you can install the app on or request it for. A request made there isn’t listed: the provider doesn’t say which account it was for, so the account appears once an owner installs. Valid for ten minutes.',
       ),
     accounts: z.array(connectableAccountSchema),
   }),
 ]);
 
 export type InstalledState = z.infer<typeof installedStateSchema>;
-export type RequestedState = z.infer<typeof requestedStateSchema>;
 export type ConnectableAccount = z.infer<typeof connectableAccountSchema>;
 
 export const setupQuerySchema = z

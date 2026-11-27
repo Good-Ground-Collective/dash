@@ -6,7 +6,6 @@ import { ConnectionNotStoredError } from '#src/connections/errors.ts';
 import {
   connectionRepositoryTable,
   connectionTable,
-  installRequestTable,
 } from '#src/connections/repositories/connections/connections-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
@@ -26,21 +25,11 @@ export interface ConnectionRepository {
     provider: string;
     installationId: string;
   }): Promise<boolean>;
-  recordInstallRequest(props: {
-    userId: string;
+  /** The connection id for each of `installationIds` that Dash has a connection for. */
+  connectionIdsFor(props: {
     provider: string;
-    accountExternalId: string;
-  }): Promise<void>;
-  /** The accounts `userId` asked an owner to install the provider's app on, oldest first. */
-  listInstallRequests(props: {
-    userId: string;
-    provider: string;
-  }): Promise<InstallRequest[]>;
-}
-
-export interface InstallRequest {
-  accountExternalId: string;
-  requestedAt: string;
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>>;
 }
 
 export class DrizzleConnectionRepository implements ConnectionRepository {
@@ -160,45 +149,30 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
     return rows.length > 0;
   }
 
-  async recordInstallRequest(props: {
-    userId: string;
+  async connectionIdsFor(props: {
     provider: string;
-    accountExternalId: string;
-  }): Promise<void> {
-    await this.database.orm
-      .insert(installRequestTable)
-      .values(props)
-      .onConflictDoUpdate({
-        target: [
-          installRequestTable.userId,
-          installRequestTable.provider,
-          installRequestTable.accountExternalId,
-        ],
-        set: { requestedAt: new Date() },
-      });
-  }
-
-  async listInstallRequests(props: {
-    userId: string;
-    provider: string;
-  }): Promise<InstallRequest[]> {
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>> {
+    if (props.installationIds.length === 0) {
+      return new Map();
+    }
     const rows = await this.database.orm
       .select({
-        accountExternalId: installRequestTable.accountExternalId,
-        requestedAt: installRequestTable.requestedAt,
+        id: connectionTable.id,
+        installationId: connectionTable.installationId,
       })
-      .from(installRequestTable)
+      .from(connectionTable)
       .where(
         and(
-          eq(installRequestTable.userId, props.userId),
-          eq(installRequestTable.provider, props.provider),
+          eq(connectionTable.provider, props.provider),
+          inArray(connectionTable.installationId, [...props.installationIds]),
         ),
-      )
-      .orderBy(asc(installRequestTable.requestedAt));
-    return rows.map((row) => ({
-      accountExternalId: row.accountExternalId,
-      requestedAt: row.requestedAt.toISOString(),
-    }));
+      );
+    return new Map(
+      rows.flatMap(({ id, installationId }) =>
+        installationId === null ? [] : [[installationId, id] as const],
+      ),
+    );
   }
 
   private toOwned(props: {

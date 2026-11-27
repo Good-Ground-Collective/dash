@@ -3,12 +3,12 @@ import type { z } from 'zod';
 
 import {
   adaId,
+  baseUrl,
   ConnectionsHarness,
 } from '#src/connections/__tests__/support/connections-harness.ts';
 import {
   acmeInstallation,
   acmeUserInstallation,
-  globexProfile,
   octocatProfile,
 } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import {
@@ -55,21 +55,17 @@ class Accounts {
     return response.accounts;
   }
 
-  /** Comes back from the provider's install page after asking an owner to install on `targetAccountId`. */
-  static async request(props: {
-    harness: ConnectionsHarness;
-    targetAccountId: string;
-  }): Promise<void> {
-    const state = ConnectionsHarness.requestState({
-      userId: adaId,
-      targetAccountId: props.targetAccountId,
-    });
-    await (
-      await props.harness.start()
-    ).inject({
-      url: `/integrations/github/setup?setup_action=request&state=${state}`,
-      headers: ConnectionsHarness.cookie(adaId),
-    });
+  /** An installation of the app on an organisation called `login`. */
+  static organisation(props: { login: string; installationId: string }) {
+    return {
+      ...acmeUserInstallation,
+      externalId: props.installationId,
+      account: {
+        ...acmeUserInstallation.account,
+        externalId: `${props.installationId}00`,
+        login: props.login,
+      },
+    };
   }
 }
 
@@ -107,6 +103,7 @@ describe('AccountsRoutes linked', () => {
             repositorySelection: 'selected',
             repositoryCount: 1,
             suspended: false,
+            incomplete: false,
             settingsUrl: acmeInstallation.url,
             connectionId: null,
           },
@@ -115,28 +112,45 @@ describe('AccountsRoutes linked', () => {
     });
   });
 
-  it('names the account in an install link’s state, so a request records it', async () => {
+  it('passes on an installation the provider could only partly read', async () => {
     const harness = await Accounts.linked();
-    const [personal] = await Accounts.listed(harness);
-    const installUrl =
-      personal?.install.state === 'installable'
-        ? personal.install.installUrl
-        : undefined;
+    harness.flow.visible = [
+      {
+        ...acmeUserInstallation,
+        account: { ...acmeUserInstallation.account, role: null },
+        repositoryCount: null,
+        incomplete: true,
+      },
+    ];
 
-    await (
-      await harness.start()
-    ).inject({
-      url: `/integrations/github/setup?setup_action=request&state=${ConnectionsHarness.stateOf(installUrl)}`,
-      headers: ConnectionsHarness.cookie(adaId),
+    const listed = await Accounts.listed(harness);
+
+    expect(listed[1]).toMatchObject({
+      account: { login: 'acme', role: null },
+      install: { state: 'installed', repositoryCount: null, incomplete: true },
     });
-
-    expect(harness.connections.installRequests).toMatchObject([
-      { accountExternalId: '583231' },
-    ]);
   });
 });
 
 describe('AccountsRoutes installed accounts', () => {
+  it('puts the personal account first, then installed accounts by login', async () => {
+    const harness = await Accounts.linked();
+    harness.flow.visible = [
+      Accounts.organisation({ login: 'zeta', installationId: '51' }),
+      Accounts.organisation({ login: 'beta', installationId: '52' }),
+      Accounts.organisation({ login: 'mu', installationId: '53' }),
+    ];
+
+    const listed = await Accounts.listed(harness);
+
+    expect(listed.map(({ account }) => account.login)).toEqual([
+      'octocat',
+      'beta',
+      'mu',
+      'zeta',
+    ]);
+  });
+
   it('links an installation Dash recorded to its connection', async () => {
     const harness = await Accounts.linked();
     await (
@@ -175,38 +189,6 @@ describe('AccountsRoutes installed accounts', () => {
   });
 });
 
-describe('AccountsRoutes install requests', () => {
-  it('lists an account the person asked an owner to install on', async () => {
-    const harness = await Accounts.linked();
-    await Accounts.request({
-      harness,
-      targetAccountId: globexProfile.externalId,
-    });
-
-    await expect(Accounts.listed(harness)).resolves.toContainEqual({
-      account: { ...globexProfile, role: 'member' },
-      install: { state: 'requested', requestedAt: '2026-11-26T12:00:00.000Z' },
-    });
-  });
-
-  it('shows a requested account as installed once the owner installs it', async () => {
-    const harness = await Accounts.linked();
-    await Accounts.request({ harness, targetAccountId: '9919' });
-
-    await expect(Accounts.listed(harness)).resolves.toMatchObject([
-      { account: { login: 'octocat' } },
-      { account: { login: 'acme' }, install: { state: 'installed' } },
-    ]);
-  });
-
-  it('drops a request for an account that no longer exists', async () => {
-    const harness = await Accounts.linked();
-    await Accounts.request({ harness, targetAccountId: '404404' });
-
-    await expect(Accounts.listed(harness)).resolves.toHaveLength(2);
-  });
-});
-
 describe('AccountsRoutes without a usable grant', () => {
   it('needs a Dash session', async () => {
     const harness = await Accounts.fresh();
@@ -218,13 +200,17 @@ describe('AccountsRoutes without a usable grant', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('asks a person who hasn’t authorized to authorize', async () => {
+  it('asks a person who hasn’t authorized to authorize, back through the same callback as /connect', async () => {
     const harness = await Accounts.fresh();
 
-    await expect(Accounts.read(harness)).resolves.toEqual({
-      status: 'authorize',
-      authorizeUrl: expect.stringContaining('https://forge.test/authorize?'),
-    });
+    const response = await Accounts.read(harness);
+
+    expect(response.status).toBe('authorize');
+    const authorizeUrl =
+      response.status === 'authorize' ? response.authorizeUrl : '';
+    expect(new URL(authorizeUrl).searchParams.get('redirect_uri')).toBe(
+      `${baseUrl}/integrations/github/callback`,
+    );
   });
 
   it('asks to authorize again when the provider refuses the token', async () => {

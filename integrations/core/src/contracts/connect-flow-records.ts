@@ -28,7 +28,6 @@ export const installationSchema = externalRecordSchema.extend({
   suspended: z.boolean(),
 });
 
-/** An account with the picture the provider shows for it. */
 export const accountProfileSchema = connectedAccountSchema.extend({
   avatarUrl: z.url().nullable(),
 });
@@ -55,9 +54,14 @@ export const userInstallationSchema = externalRecordSchema.extend({
     .nonnegative()
     .nullable()
     .describe(
-      'How many repositories the installation covers. Null while it is suspended, when the app cannot read them.',
+      'How many repositories the installation covers, private ones included. Null while it is suspended, where the person is not an owner, or when it could not be read.',
     ),
   suspended: z.boolean(),
+  incomplete: z
+    .boolean()
+    .describe(
+      'True when the provider failed to give the role or the repository count, as when it rate-limits the request. Those fields are then null, and reading again may fill them.',
+    ),
 });
 
 /**

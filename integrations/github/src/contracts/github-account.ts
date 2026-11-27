@@ -19,9 +19,9 @@ export const githubAccountSchema = githubAccountObjectSchema.transform(
   }),
 );
 
-/** A user or organisation with its avatar. */
+/** Kept apart from `githubAccountSchema` because only the account list a person sees shows avatars; stored connections don't keep them. */
 export const githubProfileSchema = githubAccountObjectSchema
-  .extend({ avatar_url: z.url() })
+  .extend({ avatar_url: z.url().nullable() })
   .transform((account): AccountProfile => ({
     ...githubAccountSchema.parse(account),
     avatarUrl: account.avatar_url,

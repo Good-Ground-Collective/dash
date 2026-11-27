@@ -1,5 +1,4 @@
 import type {
-  AccountProfile,
   AuthorizedUser,
   ConnectFlow,
   Installation,
@@ -76,13 +75,6 @@ export class GithubConnectFlow implements ConnectFlow {
     accessToken: string;
   }): Promise<UserAccounts> {
     return this.accounts.list(props);
-  }
-
-  async getAccount(props: {
-    accessToken: string;
-    accountExternalId: string;
-  }): Promise<AccountProfile | null> {
-    return this.accounts.get(props);
   }
 
   async getInstallation(props: {

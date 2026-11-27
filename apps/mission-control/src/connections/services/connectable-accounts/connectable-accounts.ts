@@ -2,29 +2,23 @@ import {
   type ConnectFlow,
   GrantRevokedError,
   type UserAccount,
+  type UserAccounts,
 } from '@dash/integrations-core';
 
-import type {
-  InstalledState,
-  RequestedState,
-} from '#src/connections/contracts/connections.ts';
-import type {
-  ConnectionRepository,
-  InstallRequest,
-} from '#src/connections/repositories/connections/connection-repository.ts';
+import type { InstalledState } from '#src/connections/contracts/connections.ts';
+import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
 
 /** An entry before the routes add the links, which need a state issued per request. */
 export interface ListedAccount {
   account: UserAccount;
-  install: InstalledState | RequestedState | { state: 'installable' };
+  install: InstalledState | { state: 'installable' };
 }
 
 /**
- * The accounts a person can connect, as their own token shows them: their personal account,
- * every account the app is installed on that they can see, and the accounts they asked an
- * owner to install it on. A provider may hide accounts without the app; its own install page
- * covers those.
+ * The accounts a person can connect, as their own token shows them: their personal account
+ * and every account the app is installed on that they can see. A provider may hide accounts
+ * without the app; its own install page covers those.
  */
 export class ConnectableAccounts {
   private readonly owned: OwnedConnections;
@@ -47,11 +41,9 @@ export class ConnectableAccounts {
     if (grant === null) {
       return null;
     }
+
     try {
-      return await this.read({
-        userId: props.userId,
-        accessToken: grant.accessToken,
-      });
+      return await this.read({ accessToken: grant.accessToken });
     } catch (error) {
       if (error instanceof GrantRevokedError) {
         return null;
@@ -60,19 +52,14 @@ export class ConnectableAccounts {
     }
   }
 
-  private async read(props: {
-    userId: string;
-    accessToken: string;
-  }): Promise<ListedAccount[]> {
-    const provider = this.owned.provider;
-    const [listed, owned, requests] = await Promise.all([
-      this.flow.listUserAccounts({ accessToken: props.accessToken }),
-      this.connections.listOwned({ provider }),
-      this.connections.listInstallRequests({ userId: props.userId, provider }),
-    ]);
-    const connectionIds = new Map(
-      owned.map((connection) => [connection.installationId, connection.id]),
-    );
+  private async read(props: { accessToken: string }): Promise<ListedAccount[]> {
+    const listed = await this.flow.listUserAccounts(props);
+
+    const connectionIds = await this.connections.connectionIdsFor({
+      provider: this.owned.provider,
+      installationIds: listed.installations.map(({ externalId }) => externalId),
+    });
+
     const installed: ListedAccount[] = listed.installations.map(
       (installation) => ({
         account: installation.account,
@@ -82,64 +69,33 @@ export class ConnectableAccounts {
           repositorySelection: installation.repositorySelection,
           repositoryCount: installation.repositoryCount,
           suspended: installation.suspended,
+          incomplete: installation.incomplete,
           settingsUrl: installation.url,
           connectionId: connectionIds.get(installation.externalId) ?? null,
         },
       }),
     );
-    const covered = new Set([
-      listed.personal.externalId,
-      ...listed.installations.map(({ account }) => account.externalId),
-    ]);
-    const personal: ListedAccount[] = listed.installations.some(
-      ({ account }) => account.externalId === listed.personal.externalId,
-    )
-      ? []
-      : [{ account: listed.personal, install: { state: 'installable' } }];
-    const requested = await this.requested({
-      accessToken: props.accessToken,
-      requests: requests.filter(
-        ({ accountExternalId }) => !covered.has(accountExternalId),
-      ),
-    });
 
     return ConnectableAccounts.ordered([
-      ...personal,
+      ...ConnectableAccounts.personalToInstall(listed),
       ...installed,
-      ...requested,
     ]);
   }
 
-  /** Only a member who isn't an owner is offered a request, so a requested account's role is `member`. Accounts that no longer exist are dropped. */
-  private async requested(props: {
-    accessToken: string;
-    requests: readonly InstallRequest[];
-  }): Promise<ListedAccount[]> {
-    const entries = await Promise.all(
-      props.requests.map(async (request): Promise<ListedAccount | null> => {
-        const profile = await this.flow.getAccount({
-          accessToken: props.accessToken,
-          accountExternalId: request.accountExternalId,
-        });
-        return profile === null
-          ? null
-          : {
-              account: { ...profile, role: 'member' },
-              install: { state: 'requested', requestedAt: request.requestedAt },
-            };
-      }),
+  /** The personal account, offered for install until the app is installed on it. */
+  private static personalToInstall(listed: UserAccounts): ListedAccount[] {
+    const installed = listed.installations.some(
+      ({ account }) => account.externalId === listed.personal.externalId,
     );
-    return entries.filter((entry) => entry !== null);
+    return installed
+      ? []
+      : [{ account: listed.personal, install: { state: 'installable' } }];
   }
 
-  /** The personal account first, then installed accounts, then requests, each by login. */
+  /** The personal account first, then the rest by login. */
   private static ordered(entries: ListedAccount[]): ListedAccount[] {
-    const rank = (entry: ListedAccount) => {
-      if (entry.account.role === 'personal') {
-        return 0;
-      }
-      return entry.install.state === 'requested' ? 2 : 1;
-    };
+    const rank = (entry: ListedAccount) =>
+      entry.account.role === 'personal' ? 0 : 1;
     return entries.toSorted(
       (left, right) =>
         rank(left) - rank(right) ||

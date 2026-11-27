@@ -76,21 +76,12 @@ export const acmeUserInstallation: UserInstallation = {
   repositorySelection: 'selected',
   repositoryCount: 1,
   suspended: false,
-};
-
-export const globexProfile: AccountProfile = {
-  provider: 'github',
-  externalId: '7070',
-  url: 'https://github.com/globex',
-  login: 'globex',
-  kind: 'organization',
-  avatarUrl: 'https://avatars.forge.test/u/7070',
+  incomplete: false,
 };
 
 /**
  * A provider in memory. Code `good` authorizes octocat with `access-1`, which can manage
- * installation 42. Its token sees octocat and the `visible` installations, and `profiles`
- * are the accounts it can look up by id. Tokens in `revoked` are refused, and so is every refresh once
+ * installation 42. Its token sees octocat and the `visible` installations. Tokens in `revoked` are refused, and so is every refresh once
  * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`, and its event is
  * `x-event`: `installation` (the default) or `pull_request`. Its
  * installation is the body's `installation.id`, read only after the signature checks out.
@@ -112,9 +103,6 @@ export class FakeConnectFlow implements ConnectFlow {
     refreshTokenExpiresAt: '2027-05-27T12:00:00.000Z',
   };
   visible: UserInstallation[] = [acmeUserInstallation];
-  readonly profiles = new Map<string, AccountProfile>([
-    [globexProfile.externalId, globexProfile],
-  ]);
   readonly manageable = new Map<string, readonly string[]>([
     ['access-1', ['42']],
     ['access-2', ['42']],
@@ -155,26 +143,22 @@ export class FakeConnectFlow implements ConnectFlow {
   async listUserInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]> {
-    this.refuseRevoked(props);
+    if (this.revoked.has(props.accessToken)) {
+      throw new GrantRevokedError({ provider: 'github' });
+    }
     return this.manageable.get(props.accessToken) ?? [];
   }
 
   async listUserAccounts(props: {
     accessToken: string;
   }): Promise<UserAccounts> {
-    this.refuseRevoked(props);
+    if (this.revoked.has(props.accessToken)) {
+      throw new GrantRevokedError({ provider: 'github' });
+    }
     return {
       personal: { ...octocatProfile, role: 'personal' },
       installations: this.visible,
     };
-  }
-
-  async getAccount(props: {
-    accessToken: string;
-    accountExternalId: string;
-  }): Promise<AccountProfile | null> {
-    this.refuseRevoked(props);
-    return this.profiles.get(props.accountExternalId) ?? null;
   }
 
   async getInstallation(props: {
@@ -207,11 +191,5 @@ export class FakeConnectFlow implements ConnectFlow {
       installationId: body.success ? String(body.data.installation.id) : null,
       installationLifecycle: event === 'installation',
     };
-  }
-
-  private refuseRevoked(props: { accessToken: string }): void {
-    if (this.revoked.has(props.accessToken)) {
-      throw new GrantRevokedError({ provider: 'github' });
-    }
   }
 }

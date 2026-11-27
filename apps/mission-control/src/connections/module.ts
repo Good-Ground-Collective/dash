@@ -12,6 +12,7 @@ import { WebhookRoutes } from '#src/connections/exposures/webhook-routes/webhook
 import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type { LinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
+import { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
 import { ConnectableAccounts } from '#src/connections/services/connectable-accounts/connectable-accounts.ts';
 import {
   type ConnectState,
@@ -90,17 +91,20 @@ export class ConnectionsModule implements HttpModule {
     state: ConnectState;
   }): ProviderRoutes[] {
     const { module, flow, owned, state } = props;
+    const paths = new ConnectPaths({
+      provider: owned.provider,
+      baseUrl: module.baseUrl,
+    });
     return [
       new ConnectRoutes({
         connections: owned,
         flow,
         identity: module.identity,
         state,
-        baseUrl: module.baseUrl,
+        paths,
         webOrigin: module.webOrigin,
       }),
       new AccountsRoutes({
-        provider: owned.provider,
         accounts: new ConnectableAccounts({
           owned,
           flow,
@@ -109,7 +113,7 @@ export class ConnectionsModule implements HttpModule {
         flow,
         identity: module.identity,
         state,
-        baseUrl: module.baseUrl,
+        paths,
       }),
       new WebhookRoutes({
         provider: owned.provider,

@@ -2,7 +2,6 @@ import {
   type AccountProfile,
   type AccountRole,
   GrantRevokedError,
-  type UserAccount,
   type UserAccounts,
   type UserInstallation,
 } from '@dash/integrations-core';
@@ -14,15 +13,23 @@ import type { GithubInstallations } from '#src/services/github-installations/git
 
 const pageSize = 100;
 
-/** An enterprise installation's account has no login or type, so it isn't an account Dash can show. */
-const userInstallationsSchema = z
+/** Installations are read a few at a time, so a person in many organisations doesn't send GitHub the burst its secondary rate limit answers with 403. */
+const concurrency = 5;
+
+/** An enterprise has a slug and no login, so it isn't an account Dash can show. Any other account that fails to parse still fails the listing. */
+const installationAccountSchema = z.union([
+  githubProfileSchema,
+  z.object({ slug: z.string().min(1) }).transform(() => null),
+]);
+
+const installationPageSchema = z
   .object({
     total_count: z.number(),
     installations: z.array(
       z
         .object({
           id: z.number(),
-          account: githubProfileSchema.nullable().catch(null),
+          account: installationAccountSchema,
           repository_selection: z.enum(['all', 'selected']),
           html_url: z.url(),
           suspended_at: z.string().nullable(),
@@ -41,8 +48,21 @@ const userInstallationsSchema = z
     installations: page.installations,
   }));
 
+/** The setup callback's ownership check needs only the ids, so it doesn't depend on the fields the list shows. */
+const installationIdPageSchema = z
+  .object({
+    total_count: z.number(),
+    installations: z.array(
+      z.object({ id: z.number() }).transform(({ id }) => String(id)),
+    ),
+  })
+  .transform((page) => ({
+    totalCount: page.total_count,
+    installations: page.installations,
+  }));
+
 type ListedInstallation = z.output<
-  typeof userInstallationsSchema
+  typeof installationPageSchema
 >['installations'][number];
 
 type AccountInstallation = ListedInstallation & { account: AccountProfile };
@@ -63,6 +83,25 @@ const membershipSchema = z
 /** How `@octokit/request` reports an HTTP error. */
 const statusSchema = z.object({ status: z.number() });
 
+/** GitHub answers a primary or secondary rate limit with 403 and one of these headers, which a refused permission lacks. */
+const rateLimitedSchema = z
+  .object({
+    status: z.literal(403),
+    response: z.object({
+      headers: z.object({
+        'x-ratelimit-remaining': z.string().optional(),
+        'retry-after': z.string().optional(),
+      }),
+    }),
+  })
+  .refine(
+    ({ response: { headers } }) =>
+      headers['x-ratelimit-remaining'] === '0' ||
+      headers['retry-after'] !== undefined,
+  );
+
+type Settled<T> = { failed: false; value: T } | { failed: true; value: null };
+
 /**
  * The accounts a person's user token can see. A GitHub App user token only reaches accounts
  * where the App is installed, so `/user/installations` is the whole list of organisations it
@@ -82,23 +121,23 @@ export class GithubUserAccounts {
 
   async list(props: { accessToken: string }): Promise<UserAccounts> {
     const [personal, listed] = await GithubUserAccounts.asUser(async () =>
-      Promise.all([this.profile(props), this.readInstallations(props)]),
+      Promise.all([
+        this.profile(props),
+        this.readPages({ ...props, schema: installationPageSchema }),
+      ]),
     );
+
+    const shown = listed.flatMap(({ account, ...installation }) =>
+      account === null ? [] : [{ ...installation, account }],
+    );
+
     return {
       personal: { ...personal, role: 'personal' },
-      installations: await Promise.all(
-        listed.flatMap(({ account, ...installation }) =>
-          account === null
-            ? []
-            : [
-                this.describe({
-                  ...props,
-                  personal,
-                  installation: { ...installation, account },
-                }),
-              ],
-        ),
-      ),
+      installations: await GithubUserAccounts.inBatches({
+        items: shown,
+        work: async (installation) =>
+          this.toUserInstallation({ ...props, personal, installation }),
+      }),
     };
   }
 
@@ -106,29 +145,8 @@ export class GithubUserAccounts {
     accessToken: string;
   }): Promise<readonly string[]> {
     return GithubUserAccounts.asUser(async () =>
-      (await this.readInstallations(props)).map(({ id }) => id),
+      this.readPages({ ...props, schema: installationIdPageSchema }),
     );
-  }
-
-  /** `GET /user/{account_id}` answers for organisations as well as users. */
-  async get(props: {
-    accessToken: string;
-    accountExternalId: string;
-  }): Promise<AccountProfile | null> {
-    return GithubUserAccounts.asUser(async () => {
-      try {
-        const { data } = await this.request('GET /user/{account_id}', {
-          headers: GithubUserAccounts.bearer(props),
-          account_id: Number(props.accountExternalId),
-        });
-        return githubProfileSchema.parse(data);
-      } catch (error) {
-        if (statusSchema.safeParse(error).data?.status === 404) {
-          return null;
-        }
-        throw error;
-      }
-    });
   }
 
   private async profile(props: {
@@ -140,30 +158,48 @@ export class GithubUserAccounts {
     return githubProfileSchema.parse(data);
   }
 
-  private async describe(props: {
+  /** A role or count that fails to load, other than a refused grant, leaves the installation listed and marked `incomplete`. */
+  private async toUserInstallation(props: {
     accessToken: string;
     personal: AccountProfile;
     installation: AccountInstallation;
   }): Promise<UserInstallation> {
     const { installation } = props;
-    const [role, repositoryCount] = await Promise.all([
+    const role = await GithubUserAccounts.settle(async () =>
       this.roleIn(props),
-      installation.suspended
-        ? null
-        : this.installations.countRepositories({
-            installationId: installation.id,
-          }),
-    ]);
-    const account: UserAccount = { ...installation.account, role };
+    );
+    const repositoryCount = role.failed
+      ? role
+      : await GithubUserAccounts.settle(async () =>
+          this.countFor({ installation, role: role.value }),
+        );
+
     return {
       provider: 'github',
       externalId: installation.id,
       url: installation.htmlUrl,
-      account,
+      account: { ...installation.account, role: role.value },
       repositorySelection: installation.repositorySelection,
-      repositoryCount,
+      repositoryCount: repositoryCount.value,
       suspended: installation.suspended,
+      incomplete: role.failed || repositoryCount.failed,
     };
+  }
+
+  /** The count includes private repositories, so only an owner, or the person on their own account, sees it. A suspended installation can't be read. */
+  private async countFor(props: {
+    installation: AccountInstallation;
+    role: AccountRole | null;
+  }): Promise<number | null> {
+    if (
+      props.installation.suspended ||
+      (props.role !== 'owner' && props.role !== 'personal')
+    ) {
+      return null;
+    }
+    return this.installations.countRepositories({
+      installationId: props.installation.id,
+    });
   }
 
   /** The App's `members: read` lets the user token read its own membership where the App is installed. GitHub answers 403 or 404 when it won't say. */
@@ -178,6 +214,7 @@ export class GithubUserAccounts {
         ? 'personal'
         : null;
     }
+
     return GithubUserAccounts.asUser(async () => {
       try {
         const { data } = await this.request(
@@ -187,7 +224,10 @@ export class GithubUserAccounts {
         return membershipSchema.parse(data);
       } catch (error) {
         const status = statusSchema.safeParse(error).data?.status;
-        if (status === 403 || status === 404) {
+        const refused =
+          status === 404 ||
+          (status === 403 && !rateLimitedSchema.safeParse(error).success);
+        if (refused) {
           return null;
         }
         throw error;
@@ -195,24 +235,50 @@ export class GithubUserAccounts {
     });
   }
 
-  private async readInstallations(props: {
+  private async readPages<T>(props: {
     accessToken: string;
-  }): Promise<ListedInstallation[]> {
-    const installations: ListedInstallation[] = [];
+    schema: z.ZodType<{ totalCount: number; installations: T[] }>;
+  }): Promise<T[]> {
+    const installations: T[] = [];
     for (let page = 1; ; page += 1) {
       const { data } = await this.request('GET /user/installations', {
         headers: GithubUserAccounts.bearer(props),
         per_page: pageSize,
         page,
       });
-      const parsed = userInstallationsSchema.parse(data);
+      const parsed = props.schema.parse(data);
       installations.push(...parsed.installations);
+
       if (
         parsed.installations.length < pageSize ||
         installations.length >= parsed.totalCount
       ) {
         return installations;
       }
+    }
+  }
+
+  private static async inBatches<T, R>(props: {
+    items: readonly T[];
+    work: (item: T) => Promise<R>;
+  }): Promise<R[]> {
+    const results: R[] = [];
+    for (let start = 0; start < props.items.length; start += concurrency) {
+      const batch = props.items.slice(start, start + concurrency);
+      results.push(...(await Promise.all(batch.map(props.work))));
+    }
+    return results;
+  }
+
+  /** A refused grant still ends the listing: the person must authorize again. */
+  private static async settle<T>(work: () => Promise<T>): Promise<Settled<T>> {
+    try {
+      return { failed: false, value: await work() };
+    } catch (error) {
+      if (error instanceof GrantRevokedError) {
+        throw error;
+      }
+      return { failed: true, value: null };
     }
   }
 
