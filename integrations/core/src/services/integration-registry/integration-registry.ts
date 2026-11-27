@@ -31,6 +31,7 @@ export class InMemoryIntegrationRegistry implements IntegrationRegistry {
       providerIdSchema.parse(integration.provider);
       seen.add(integration.id);
     }
+
     this.integrations = Object.freeze([...props.integrations]);
   }
 

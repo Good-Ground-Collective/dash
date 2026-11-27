@@ -12,6 +12,7 @@ import type {
  */
 export interface SourceControl {
   listRepositories(): Promise<readonly Repository[]>;
+  /** Providers parse `query` with `pullRequestQuerySchema`, so an absent state means open pull requests. */
   listPullRequests(query: PullRequestQuery): Promise<readonly PullRequest[]>;
   /** Submitted reviews only: a pending review is a private draft, so providers leave it out. */
   listReviews(query: { pullRequestId: string }): Promise<readonly Review[]>;
