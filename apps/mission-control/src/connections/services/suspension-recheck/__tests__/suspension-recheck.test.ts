@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   acmeInstallation,
@@ -143,6 +143,18 @@ describe('DbosSuspensionRecheck recheck', () => {
       recheck.recheck({ provider: 'github', installationId: '42' }),
     ).rejects.toThrow(ProviderUnavailableError);
     expect(await Stored.find('42')).toMatchObject({ suspended: true });
+  });
+
+  it('fails with the outage even when moving the connection back fails too', async () => {
+    await Stored.save({ installationId: '42', suspended: true });
+    flow.unavailableReads = 1;
+    vi.spyOn(connections, 'touchSuspended').mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
+
+    await expect(
+      recheck.recheck({ provider: 'github', installationId: '42' }),
+    ).rejects.toThrow(ProviderUnavailableError);
   });
 
   it('leaves alone a provider without a connect flow', async () => {

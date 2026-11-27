@@ -66,7 +66,7 @@ export class DbosSuspensionRecheck
     try {
       return await this.askProvider(installation);
     } catch (error) {
-      await this.connections.touchSuspended(installation);
+      await Promise.allSettled([this.connections.touchSuspended(installation)]);
       throw error;
     }
   }
