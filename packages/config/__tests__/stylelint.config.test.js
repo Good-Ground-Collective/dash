@@ -29,6 +29,11 @@ describe('stylelint config: raw colours and font stacks', () => {
       'a { font-family: Inter, sans-serif; }',
       'declaration-property-value-allowed-list',
     ],
+    [
+      'a literal family beside a token in the font shorthand',
+      'a { font: 1rem Inter, var(--font-body); }',
+      'declaration-property-value-allowed-list',
+    ],
   ])('rejects %s in a stylesheet', async (_label, code, rule) => {
     expect(await Lint.rules({ file: 'lib/thing.css', code })).toContain(rule);
   });
@@ -39,7 +44,11 @@ describe('stylelint config: raw colours and font stacks', () => {
       '  color: var(--ink);',
       '  background: transparent;',
       '  border-color: currentcolor;',
-      '  font-family: var(--font-body);',
+      '  font-family: var(--font-h1);',
+      '}',
+      '',
+      'b {',
+      '  font: 600 1rem/1.2 var(--font-body);',
       '}',
       '',
       'button {',
@@ -51,7 +60,8 @@ describe('stylelint config: raw colours and font stacks', () => {
   });
 
   it('exempts theme files', async () => {
-    const code = 'a { --ink: #1b1a18; --font-body: "Geist", sans-serif; }';
+    const code =
+      'a { --ink: #1b1a18; --paper: white; --hue: oklch(70% 0.1 30deg); --font-body: "Geist", sans-serif; }';
 
     expect(
       await Lint.rules({ file: 'lib/theme/themes/characters.css', code }),
@@ -80,7 +90,54 @@ describe('stylelint config: Svelte components', () => {
     ['a named colour', '<p style:color="white">x</p>'],
     ['a quoted hex in braces', "<p style:background={'#000'}>x</p>"],
     ['a literal font', '<p style:font-family="Inter">x</p>'],
+    [
+      'a named colour in a ternary',
+      "<p style:color={dark ? 'white' : 'var(--ink)'}>x</p>",
+    ],
+    [
+      'a named colour in a border shorthand',
+      '<p style:border-top="1px solid white">x</p>',
+    ],
   ])('rejects %s in a style directive', async (_label, code) => {
+    expect(await Lint.rules({ file: 'lib/Thing.svelte', code })).toEqual([
+      'dash/style-directive-tokens',
+    ]);
+  });
+
+  it.each([
+    ['a radius', '<p style:border-radius="4px">x</p>'],
+    ['a border width', '<p style:border-width="1px">x</p>'],
+    ['a composite border', '<p style:border="1px solid var(--line)">x</p>'],
+    ['none', '<p style:outline="none">x</p>'],
+    ['lowercase currentcolor', '<p style:border-color="currentcolor">x</p>'],
+    [
+      'an SVG stroke of currentColor',
+      '<path stroke="currentColor" fill="none" />',
+    ],
+  ])('allows %s', async (_label, code) => {
+    expect(await Lint.rules({ file: 'lib/Thing.svelte', code })).toEqual([]);
+  });
+
+  it('rejects a hex SVG fill', async () => {
+    expect(
+      await Lint.rules({
+        file: 'lib/Thing.svelte',
+        code: '<path fill="#fff" />',
+      }),
+    ).toEqual(['dash/style-directive-tokens']);
+  });
+
+  it('reports a directive once in a component with several stylesheets', async () => {
+    const code = [
+      '<p style="margin: 0" style:color="white">x</p>',
+      '<style>',
+      '  p {',
+      '    color: var(--ink);',
+      '  }',
+      '</style>',
+      '',
+    ].join('\n');
+
     expect(await Lint.rules({ file: 'lib/Thing.svelte', code })).toEqual([
       'dash/style-directive-tokens',
     ]);

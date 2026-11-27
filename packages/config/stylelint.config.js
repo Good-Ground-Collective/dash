@@ -17,7 +17,7 @@ const colourFunctions = [
 ];
 
 /** A component names a token, never a literal stack. */
-const fontFamilyValues = ['/^var\\(--font-[a-z-]+\\)$/', 'inherit'];
+const fontFamilyValues = ['/^var\\(--font-[\\w-]+\\)$/', 'inherit'];
 
 export default {
   extends: [fileURLToPath(import.meta.resolve('stylelint-config-standard'))],
@@ -28,7 +28,7 @@ export default {
     'function-disallowed-list': colourFunctions,
     'declaration-property-value-allowed-list': {
       'font-family': fontFamilyValues,
-      font: ['inherit', '/var\\(--font-[a-z-]+\\)/'],
+      font: ['inherit', '/^(?:[^,]*\\s)?var\\(--font-[\\w-]+\\)$/'],
     },
     'dash/style-directive-tokens': true,
   },
