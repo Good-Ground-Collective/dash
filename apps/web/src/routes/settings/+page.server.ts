@@ -1,12 +1,12 @@
 import { API_BASE_URL } from '$app/env/public';
 import {
-  type AuthPageLoader,
-  MissionControlAuthPageLoader,
-} from '#lib/server/auth-page-loader.ts';
+  MissionControlSettingsLoader,
+  type SettingsLoader,
+} from '#lib/server/settings-loader.ts';
 import type { PageServerLoad } from './$types';
 
-const authPageLoader: AuthPageLoader = new MissionControlAuthPageLoader({
+const settingsLoader: SettingsLoader = new MissionControlSettingsLoader({
   apiBaseUrl: API_BASE_URL,
 });
 
-export const load: PageServerLoad = authPageLoader.settings;
+export const load: PageServerLoad = settingsLoader.load;

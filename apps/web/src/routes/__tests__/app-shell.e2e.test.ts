@@ -14,7 +14,7 @@ test.describe('app shell', () => {
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
-    for (const label of ['Objectives', 'Agents', 'GitHub', 'Benches']) {
+    for (const label of ['Objectives', 'Agents', 'Benches']) {
       await expect(nav.locator('li', { hasText: label })).toHaveText(
         `${label} (not built yet)`,
       );
@@ -68,4 +68,14 @@ test.describe('app shell', () => {
     await page.getByRole('button', { name: /Needs you/u }).click();
     await expect(page.getByText('Nothing needs you right now.')).toBeVisible();
   });
+});
+
+test('links the feed page from the primary nav', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary' })
+      .getByRole('link', { name: 'GitHub' }),
+  ).toHaveAttribute('href', '/github');
 });

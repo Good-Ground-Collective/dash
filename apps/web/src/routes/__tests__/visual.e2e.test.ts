@@ -7,6 +7,7 @@ const themes = ['characters'] as const;
 const modes = ['light', 'dark'] as const;
 const screens = [
   { name: 'home', path: '/' },
+  { name: 'github', path: '/github' },
   { name: 'settings', path: '/settings' },
   { name: 'service-accounts', path: '/settings/service-accounts' },
 ] as const;
@@ -62,6 +63,11 @@ for (const theme of themes) {
               scopes: ['heartbeat:write'],
             },
           },
+        );
+      }
+      for (const stub of ['scenario?name=linked', 'feed?name=populated']) {
+        await page.request.post(
+          `${missionControl}/integrations/github/__stub/${stub}`,
         );
       }
       await page.request.post(`${missionControl}/api/auth/appearance/update`, {

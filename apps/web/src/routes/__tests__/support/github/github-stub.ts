@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { GithubFeedStub } from './github-feed-stub.ts';
 
 const scenarioSchema = z.enum(['authorize', 'linked', 'failing']);
 const returnToSchema = z.string().regex(/^\/(?:[\w-]+(?:\/[\w-]+)*)?$/u);
@@ -34,12 +35,13 @@ const avatarHues = ['#c2410c', '#0f766e', '#4338ca', '#be123c', '#a16207'];
  * connect round trip. Authorizing, installing and the account picker each redirect straight back
  * to the web app with the `connect=` result Mission Control's callbacks send. Avatars are small
  * SVGs served here, so the page never calls GitHub. `POST /__stub/scenario?name=…` picks
- * whether the person has authorized yet, or whether listing fails.
+ * whether the person has authorized yet, or whether listing fails. `/feed` is `GithubFeedStub`.
  */
 export class GithubStub {
   private readonly webOrigin: () => string;
   private scenario: Scenario = 'authorize';
   private accounts: StubAccount[] = GithubStub.sampleAccounts();
+  private readonly feed = new GithubFeedStub();
 
   constructor(props: {
     /** The web app the round trips send the person back to. */
@@ -51,6 +53,7 @@ export class GithubStub {
   reset(): void {
     this.scenario = 'authorize';
     this.accounts = GithubStub.sampleAccounts();
+    this.feed.reset();
   }
 
   /** Whether Dash would hold a GitHub connection: authorized, with an installation that isn't suspended. */
@@ -97,6 +100,13 @@ export class GithubStub {
       back('connect=installed');
     } else if (page === '/__stub/pick') {
       back('connect=requested');
+    } else if (page === '/__stub/feed') {
+      this.feed.choose(url.searchParams.get('name'));
+      response.writeHead(204).end();
+    } else if (page === '/feed') {
+      const reply = this.feed.feed({ signedIn: props.signedIn });
+      response.writeHead(reply.status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(reply.body));
     } else if (page === '/accounts') {
       const reply = this.list({ origin, signedIn: props.signedIn, returnTo });
       response.writeHead(reply.status, { 'content-type': 'application/json' });

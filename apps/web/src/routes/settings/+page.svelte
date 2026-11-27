@@ -10,6 +10,8 @@
   import RecoveryCodesPanel from '#lib/auth-ui/RecoveryCodesPanel.svelte';
   import RemovePasskeyDialog from '#lib/auth-ui/RemovePasskeyDialog.svelte';
   import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
+  import AccountPanels from '#lib/auth-ui/AccountPanels.svelte';
+  import GithubConnectionsPanel from '#lib/connections-ui/GithubConnectionsPanel.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -183,21 +185,9 @@
 
   <AppearanceSettings />
 
-  <section class="panel account" aria-labelledby="service-accounts-title">
-    <div>
-      <h2 id="service-accounts-title">Service accounts</h2>
-      <p class="muted">API keys your benches and agents report with.</p>
-    </div>
-    <a class="auth-button quiet" href="/settings/service-accounts">Manage</a>
-  </section>
+  <GithubConnectionsPanel github={data.github} />
 
-  <section class="panel account" aria-labelledby="account-title">
-    <div>
-      <h2 id="account-title">Account</h2>
-      <p class="muted">Signed in as {data.viewer.name} · {data.viewer.email}</p>
-    </div>
-    <button class="auth-button quiet" onclick={signOut}>Sign out</button>
-  </section>
+  <AccountPanels viewer={data.viewer} onSignOut={signOut} />
 </section>
 
 <style>
@@ -296,16 +286,5 @@
 
   .add .auth-field {
     flex: 1 1 16rem;
-  }
-
-  .account a {
-    text-decoration: none;
-  }
-
-  .account {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
   }
 </style>
