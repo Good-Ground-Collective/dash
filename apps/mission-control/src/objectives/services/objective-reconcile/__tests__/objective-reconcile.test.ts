@@ -104,3 +104,17 @@ describe('TrackedObjectiveReconcile', () => {
     ).toEqual([]);
   });
 });
+
+describe('TrackedObjectiveReconcile reinstated installations', () => {
+  it('finds the connection of a reinstated installation only for a provider it reads', async () => {
+    const { reconcile } = new Reconciling();
+
+    expect(
+      await Promise.all([
+        reconcile.connectionIdOf({ provider: 'github', installationId: '42' }),
+        reconcile.connectionIdOf({ provider: 'github', installationId: '7' }),
+        reconcile.connectionIdOf({ provider: 'jira', installationId: '42' }),
+      ]),
+    ).toEqual([ownedId, null, null]);
+  });
+});
