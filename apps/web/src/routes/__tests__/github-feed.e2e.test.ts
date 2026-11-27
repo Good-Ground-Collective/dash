@@ -16,8 +16,8 @@ class Feed {
     );
   }
 
-  static panel(): ReturnType<Page['getByRole']> {
-    return page.getByRole('region', { name: 'GitHub', exact: true });
+  static needsYou(): ReturnType<Page['getByRole']> {
+    return page.getByRole('region', { name: 'Needs you', exact: true });
   }
 
   static group(name: string): ReturnType<Page['getByRole']> {
@@ -59,7 +59,9 @@ test('while the first read runs, both say so', async () => {
   await Feed.scenario('first-sync');
 
   await page.goto('/');
-  await expect(Feed.panel()).toContainText('Reading GitHub for the first time');
+  await expect(Feed.needsYou()).toContainText(
+    'Reading GitHub for the first time',
+  );
   await page.goto('/github');
   await expect(page.getByRole('status')).toContainText(
     'Reading GitHub for the first time',
@@ -85,32 +87,44 @@ test('a connected account with nothing to do shows each group’s empty state', 
   );
 });
 
-test('home shows a few rows per group, each opening GitHub', async () => {
+test('home lists what needs you and what merged since yesterday, each opening GitHub', async () => {
   await Feed.scenario('populated');
   await page.goto('/');
 
-  const reviews = Feed.group('Review requests');
-  await expect(reviews.getByRole('listitem')).toHaveCount(3);
-  await expect(
-    reviews.getByRole('link', { name: /Rate-limit the public search/u }),
-  ).toHaveAttribute('href', 'https://github.com/acme-labs/api/pull/412');
-  await expect(
-    reviews.getByRole('link', { name: /Rate-limit the public search/u }),
-  ).toHaveAttribute('target', '_blank');
-  await expect(
-    reviews.getByRole('link', { name: /View all 4/u }),
-  ).toHaveAttribute('href', '/github');
-
-  const mine = Feed.group('My pull requests');
-  await expect(mine).toContainText('Approved');
-  await expect(mine).toContainText('Checks pass');
-  await expect(mine).toContainText('Changes requested');
-  await expect(mine).toContainText('2 checks failing');
-  await expect(mine).toContainText('Conflicts');
-  await expect(Feed.group('Failed runs')).toContainText('Timed out');
-  await expect(Feed.group('Assigned issues')).toContainText(
-    'Dark mode flickers on first load',
+  const needsYou = Feed.needsYou();
+  const review = needsYou.getByRole('link', {
+    name: /Rate-limit the public search/u,
+  });
+  await expect(review).toHaveAttribute(
+    'href',
+    'https://github.com/acme-labs/api/pull/412',
   );
+  await expect(review).toHaveAttribute('target', '_blank');
+  await expect(review).toContainText('Review');
+  const failing = needsYou.getByRole('link', {
+    name: /Show sync freshness on the dashboard/u,
+  });
+  await expect(failing).toContainText('2 checks failing');
+  await expect(needsYou).not.toContainText('Retry webhooks with backoff');
+  await expect(needsYou).not.toContainText('Cache the objectives read');
+
+  const since = page.getByRole('region', { name: 'Since yesterday' });
+  await expect(since.getByRole('listitem')).toHaveCount(1);
+  await expect(
+    since.getByRole('link', { name: /Cache the objectives read/u }),
+  ).toHaveAttribute('href', 'https://github.com/acme-labs/api/pull/409');
+  await expect(since).toContainText('Merged');
+});
+
+test('Needs you says so when nothing waits on you', async () => {
+  await Feed.scenario('empty');
+  await page.goto('/');
+
+  await expect(Feed.needsYou()).toContainText('Nothing needs you');
+  await expect(
+    page.getByRole('region', { name: 'Since yesterday' }),
+  ).toContainText('Nothing merged in the last 24 hours');
+  await Feed.scenario('populated');
 });
 
 test('the GitHub page lists every row with freshness and the last error', async () => {
@@ -239,9 +253,9 @@ test('when the feed fails, home still renders with an inline error', async () =>
   await Feed.scenario('failing');
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(
-    Feed.panel()
+    Feed.needsYou()
       .getByRole('status')
       .filter({ hasText: 'GitHub activity didn’t load' }),
   ).toBeVisible();

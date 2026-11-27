@@ -25,7 +25,7 @@ class Objectives {
   }
 
   static panel(): Locator {
-    return page.getByRole('region', { name: 'Objectives' });
+    return page.getByRole('region', { name: 'Today’s focus' });
   }
 
   static initiativeTitles(): Locator {
@@ -34,6 +34,15 @@ class Objectives {
 
   static epics(initiative: string): Locator {
     return page.getByRole('list', { name: `Epics in ${initiative}` });
+  }
+
+  /** The epic's summary row, the one button whose text is the epic's title. */
+  static epicToggle(title: string): Locator {
+    return Objectives.panel().getByRole('button').filter({ hasText: title });
+  }
+
+  static async expand(title: string): Promise<void> {
+    await Objectives.epicToggle(title).click();
   }
 
   static async openMenu(title: string): Promise<Locator> {
@@ -93,8 +102,8 @@ test('when objectives fail, the rest of home still renders', async () => {
 
   await expect(Objectives.panel()).toContainText('Objectives didn’t load');
   await expect(
-    page.getByRole('region', { name: 'GitHub', exact: true }),
-  ).toContainText('Review requests');
+    page.getByRole('region', { name: 'Needs you', exact: true }),
+  ).toContainText('Rate-limit the public search endpoint');
 });
 
 test('active initiatives lead home, in Mission Control’s order, with their epics', async () => {
@@ -113,6 +122,8 @@ test('active initiatives lead home, in Mission Control’s order, with their epi
   await expect(epics.getByRole('listitem').first()).toContainText(
     '4 of 6 done',
   );
+  await Objectives.expand('Sign-in with passkeys');
+  await Objectives.expand('Billing page');
   await expect(epics).toContainText('Due after its initiative');
   await expect(epics).toContainText('Next Rate-limit sign-in attempts');
   await expect(epics).toContainText('grace closed “Hash recovery codes”');
@@ -123,13 +134,13 @@ test('active initiatives lead home, in Mission Control’s order, with their epi
   await expect(Objectives.panel()).not.toContainText('Private beta');
 });
 
-test('objectives sit above the GitHub panel', async () => {
+test('Today’s focus sits below Needs you', async () => {
   const objectives = await Objectives.panel().boundingBox();
-  const github = await page
-    .getByRole('region', { name: 'GitHub', exact: true })
+  const needsYou = await page
+    .getByRole('region', { name: 'Needs you', exact: true })
     .boundingBox();
 
-  expect(objectives?.y ?? 0).toBeLessThan(github?.y ?? 0);
+  expect(needsYou?.y ?? 0).toBeLessThan(objectives?.y ?? 0);
 });
 
 test('the filter shows done initiatives and keeps the choice in the URL', async () => {
@@ -227,7 +238,7 @@ test('home fits a phone and keeps Needs you clear of the last panel', async () =
     .getByRole('button', { name: /^Needs you/u })
     .boundingBox();
   const last = await page
-    .getByRole('region', { name: 'GitHub', exact: true })
+    .getByRole('region', { name: 'Since yesterday', exact: true })
     .boundingBox();
   expect((last?.y ?? 0) + (last?.height ?? 0)).toBeLessThanOrEqual(
     pill?.y ?? 0,
