@@ -30,6 +30,7 @@ export interface ObjectiveOverlays {
 /**
  * Dash's own fields beside the tracker. Parking is always Dash's; priority, due date and
  * manual progress only while the tracker has none, so the tracker stays the source of truth.
+ * Clearing one of them is always allowed, so a value set before the tracker had its own can go.
  */
 export class TrackedObjectiveOverlays implements ObjectiveOverlays {
   private readonly reader: Pick<ObjectiveRecordReader, 'recordsFor'>;
@@ -57,13 +58,13 @@ export class TrackedObjectiveOverlays implements ObjectiveOverlays {
     }
 
     const { changes } = props;
-    if (changes.priority !== undefined && found.priority !== null) {
+    if ((changes.priority ?? null) !== null && found.priority !== null) {
       throw new TrackerOwnsFieldError({ field: 'priority' });
     }
-    if (changes.dueDate !== undefined && found.dueDate !== null) {
+    if ((changes.dueDate ?? null) !== null && found.dueDate !== null) {
       throw new TrackerOwnsFieldError({ field: 'dueDate' });
     }
-    if (changes.manualProgress !== undefined && found.linked > 0) {
+    if ((changes.manualProgress ?? null) !== null && found.linked > 0) {
       throw new TrackerOwnsFieldError({ field: 'manualProgress' });
     }
     return this.overlays.save(props);

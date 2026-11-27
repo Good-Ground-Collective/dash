@@ -237,6 +237,18 @@ describe('PATCH /objectives/:id/overlay validation', () => {
     expect(due.json()).toMatchObject({ code: 'TRACKER_OWNS_FIELD' });
   });
 
+  it('clears Dash’s value of a field the tracker now sets', async () => {
+    const harness = await Served.synced();
+
+    const due = await Served.patch(harness, 'PVT_launch', { dueDate: null });
+    const progress = await Served.patch(harness, 'E1', {
+      manualProgress: null,
+    });
+
+    expect([due.statusCode, progress.statusCode]).toEqual([200, 200]);
+    expect(due.json()).toMatchObject({ id: 'PVT_launch', dueDate: null });
+  });
+
   it('answers 404 for an id outside the person’s connections', async () => {
     const response = await Served.patch(await Served.synced(), 'PVT_other', {
       parked: true,
