@@ -310,6 +310,9 @@ func (j *AgentHeartbeatV1Payload) UnmarshalJSON(value []byte) error {
 	if utf8.RuneCountInString(string(plain.SessionID)) > 256 {
 		return fmt.Errorf("field %s length: must be <= %d", "sessionId", 256)
 	}
+	if plain.Summary != nil && utf8.RuneCountInString(string(*plain.Summary)) < 1 {
+		return fmt.Errorf("field %s length: must be >= %d", "summary", 1)
+	}
 	if plain.Summary != nil && utf8.RuneCountInString(string(*plain.Summary)) > 500 {
 		return fmt.Errorf("field %s length: must be <= %d", "summary", 500)
 	}

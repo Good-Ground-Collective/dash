@@ -86,25 +86,60 @@ describe('agentHeartbeat constraints', () => {
       agentHeartbeat.schema.safeParse(withHarness('Claude Code')).success,
     ).toBe(false);
   });
+});
 
-  it('rejects a summary over 500 characters and a question over 2,000', () => {
+describe('agentHeartbeat length limits', () => {
+  it.each([
+    {
+      field: 'summary',
+      limit: 500,
+      payload: (text: string) => ({ summary: text }),
+    },
+    {
+      field: 'question.text',
+      limit: 2000,
+      payload: (text: string) => ({ question: { text } }),
+    },
+    {
+      field: 'question.options',
+      limit: 200,
+      payload: (text: string) => ({
+        question: { text: 'Which?', options: [text] },
+      }),
+    },
+    {
+      field: 'error.message',
+      limit: 2000,
+      payload: (text: string) => ({ error: { kind: 'api', message: text } }),
+    },
+  ])(
+    'accepts $field at $limit characters and rejects one more',
+    ({ limit, payload }) => {
+      const withText = (length: number) => ({
+        ...heartbeat,
+        payload: { ...heartbeat.payload, ...payload('x'.repeat(length)) },
+      });
+
+      expect(agentHeartbeat.schema.safeParse(withText(limit)).success).toBe(
+        true,
+      );
+      expect(agentHeartbeat.schema.safeParse(withText(limit + 1)).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it('rejects an empty summary', () => {
     expect(
       agentHeartbeat.schema.safeParse({
         ...heartbeat,
-        payload: { ...heartbeat.payload, summary: 'x'.repeat(501) },
-      }).success,
-    ).toBe(false);
-    expect(
-      agentHeartbeat.schema.safeParse({
-        ...heartbeat,
-        payload: {
-          ...heartbeat.payload,
-          question: { text: 'x'.repeat(2001) },
-        },
+        payload: { ...heartbeat.payload, summary: '' },
       }).success,
     ).toBe(false);
   });
+});
 
+describe('agentHeartbeat seq', () => {
   it('rejects a negative or fractional seq', () => {
     for (const seq of [-1, 1.5]) {
       expect(

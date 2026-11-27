@@ -119,6 +119,7 @@
         "summary": {
           "description": "The agent's last assistant message, trimmed to fit.",
           "maxLength": 500,
+          "minLength": 1,
           "type": "string"
         },
         "taskId": {

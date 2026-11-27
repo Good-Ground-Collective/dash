@@ -67,6 +67,7 @@ export const agentHeartbeat = new MessageDefinition({
       .describe('Exactly one status; the package README defines each.'),
     summary: z
       .string()
+      .min(1)
       .max(500)
       .optional()
       .describe("The agent's last assistant message, trimmed to fit."),

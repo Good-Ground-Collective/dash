@@ -115,11 +115,11 @@ A2A's `canceled` has no heartbeat status: a session someone interrupts sends its
 | `question.options` | 10 options, 200 characters each |
 | `error.message`    | 2,000 characters                |
 
-Hooks trim to fit, keeping the start and ending with `…`. The schema rejects anything longer, so a writer that forgets to trim fails loudly instead of storing a very long message.
+Limits count UTF-16 code units, which is what Zod's `.max()` measures. JSON Schema and the Go structs count code points, which is never more, so text within a limit passes all three. A writer in any language must trim by UTF-16 length; trimming by characters can leave emoji-heavy text over the limit for TypeScript readers. Hooks trim to fit, keeping the start and ending with `…`. The schema rejects anything longer, so a writer that forgets to trim fails loudly instead of storing a very long message.
 
 ### The `seq` rule
 
-`seq` keeps increasing for the whole life of a `sessionId`, including after `claude --resume`, which keeps the session ID. A hook persists the last `seq` per session and continues from there, so a resumed session never reuses a number. Mission Control drops a heartbeat whose `(sessionId, seq)` it has already stored. Subagents share their parent's `sessionId`, so the parent and its subagents draw from one `seq` counter. The schema checks only that `seq` is a non-negative integer.
+`seq` keeps increasing for the whole life of a `sessionId`, including after `claude --resume`, which keeps the session ID. A hook persists the last `seq` per session and continues from there, so a resumed session never reuses a number. Mission Control drops a heartbeat whose `(sessionId, seq)` it has already stored. Subagents share their parent's `sessionId`, so the parent and its subagents draw from one `seq` counter. Hooks run as separate processes, and a single agent's parallel tool calls fire hooks at the same moment too, so a writer must increment the counter atomically, for example under a lock file; a plain read-then-write can hand two heartbeats the same `seq`, and the second is dropped as a duplicate. The schema checks only that `seq` is a non-negative integer.
 
 ## Adding a message
 
