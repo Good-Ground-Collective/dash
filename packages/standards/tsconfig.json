@@ -1,7 +1,8 @@
 {
   "extends": "@dash/config/tsconfig/base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "customConditions": ["source"]
   },
   "include": ["src", "vitest.config.ts"]
 }

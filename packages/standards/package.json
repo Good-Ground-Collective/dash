@@ -1,12 +1,25 @@
 {
-  "name": "@dash/standards",
+  "name": "@good-ground-collective/agentic-communication-standards",
   "version": "0.0.0",
-  "private": true,
+  "description": "Zod schemas for the messages that pass between Dash's components, with a shared envelope and versioning rules",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Good-Ground-Collective/dash.git",
+    "directory": "packages/standards"
+  },
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    }
+  },
+  "imports": {
+    "#src/*.js": {
+      "source": "./src/*.ts",
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
     }
   },
   "files": [
@@ -26,5 +39,8 @@
     "eslint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }
