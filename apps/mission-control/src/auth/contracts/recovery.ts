@@ -69,7 +69,7 @@ export const recoveryLinkSchema = z.object({
   url: z
     .url()
     .describe(
-      "The web app's `/recover/passkey` page, with the enrolment in the fragment so it stays out of server logs.",
+      "The web app's `/recover/passkey` page, with the enrolment in the fragment, which browsers never send to the web server. The registration call then sends it to Mission Control as `?context=`, and Mission Control logs request paths without their query strings.",
     ),
   expiresAt: z.date(),
 });

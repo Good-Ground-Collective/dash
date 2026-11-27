@@ -1,3 +1,4 @@
+import type { AuthContext } from 'better-auth';
 import { describe, expect, it } from 'vitest';
 
 import { RecoveryPerson } from '#src/auth/__tests__/support/recovery-person.ts';
@@ -150,5 +151,41 @@ describe('StoredRecoveryCodes regenerating', () => {
     ).rejects.toMatchObject({
       body: { code: 'RECOVERY_CODE_SET_NOT_PENDING' },
     });
+  });
+});
+
+describe('StoredRecoveryCodes confirming against a concurrent generate', () => {
+  it('answers 409 and changes nothing when fewer than ten codes activate', async () => {
+    const person = new RecoveryPerson();
+    const browser = await person.signedIn();
+    await person.savedCodes(browser);
+    const { setId } = await person.generate(browser);
+    const context = await person.fixture.identity.auth.$context;
+    const before = structuredClone(person.fixture.tables.recoveryCode);
+    const generateReplacedOneRow: AuthContext = {
+      ...context,
+      adapter: {
+        ...context.adapter,
+        transaction: async (run) =>
+          context.adapter.transaction(async (adapter) =>
+            run({
+              ...adapter,
+              updateMany: async (query) =>
+                (await adapter.updateMany(query)) - 1,
+            }),
+          ),
+      },
+    };
+
+    await expect(
+      person.fixture.identity.recovery.codes.confirm({
+        context: generateReplacedOneRow,
+        userId: person.fixture.tables.user[0]?.id ?? '',
+        setId,
+      }),
+    ).rejects.toMatchObject({
+      body: { code: 'RECOVERY_CODE_SET_NOT_PENDING' },
+    });
+    expect(person.fixture.tables.recoveryCode).toEqual(before);
   });
 });

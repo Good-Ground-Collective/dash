@@ -35,7 +35,6 @@ import {
 } from '#src/auth/services/recovery-codes/recovery-codes.ts';
 import {
   defaultRecoveryThrottleSettings,
-  type RecoveryThrottle,
   WindowRecoveryThrottle,
 } from '#src/auth/services/recovery-throttle/recovery-throttle.ts';
 
@@ -76,28 +75,26 @@ export interface Recovery extends PasskeyEnrolmentSource {
 /**
  * Ways back in after losing every passkey, both ending in a new one. A recovery code, or a link
  * from the break-glass command, becomes an enrolment that passkey registration spends: in the
- * registration transaction it marks the code used and signs the person in. Redeeming answers
- * the same way for an unknown email as for a wrong or used code, and is throttled per email and
- * overall.
+ * registration transaction it marks the code used, signs the person out everywhere else and
+ * signs them in. Redeeming answers the same way for an unknown email as for a wrong or used
+ * code, and is throttled per email and overall.
  */
 export class CodeRecovery implements Recovery {
   readonly plugin: BetterAuthPlugin;
   readonly codes: RecoveryCodes = new StoredRecoveryCodes();
   private readonly webOrigin: string;
   private readonly freshSession: FreshSession;
-  private readonly throttle: RecoveryThrottle;
+  private readonly throttle = new WindowRecoveryThrottle(
+    defaultRecoveryThrottleSettings,
+  );
 
   constructor(props: {
     /** Where the break-glass link points: its `/recover/passkey` page. */
     webOrigin: string;
     freshSession: FreshSession;
-    throttle?: RecoveryThrottle | undefined;
   }) {
     this.webOrigin = props.webOrigin;
     this.freshSession = props.freshSession;
-    this.throttle =
-      props.throttle ??
-      new WindowRecoveryThrottle(defaultRecoveryThrottleSettings);
     this.plugin = {
       id: 'recovery',
       schema: this.codes.schema,
@@ -110,7 +107,12 @@ export class CodeRecovery implements Recovery {
     input: RecoveryRedeem;
   }): Promise<RecoveryEnrolment> {
     const input = recoveryRedeemSchema.parse(props.input);
-    this.throttle.attempt({ email: input.email });
+    this.throttle.attempt({
+      email: input.email,
+      warn: (message) => {
+        props.context.logger.warn(message);
+      },
+    });
 
     const person = await this.findPerson({
       adapter: props.context.adapter,
@@ -190,6 +192,7 @@ export class CodeRecovery implements Recovery {
     return { id: person.id, name: person.email, displayName: person.name };
   }
 
+  /** Spends the code, if any, and deletes the person's sessions, since whoever has the lost passkeys may be signed in. The passkey plugin creates the new session afterwards in the same transaction. */
   async complete(props: {
     context: AuthContext;
     enrolment: string;
@@ -207,16 +210,21 @@ export class CodeRecovery implements Recovery {
     }
 
     const grant = this.parseGrant(consumed.value);
+    const adapter = await getCurrentAdapter(props.context.adapter);
     if (
       grant.method === 'code' &&
       !(await this.codes.spend({
-        adapter: await getCurrentAdapter(props.context.adapter),
+        adapter,
         codeId: grant.codeId,
         userId: grant.userId,
       }))
     ) {
       throw this.spent();
     }
+    await adapter.deleteMany({
+      model: 'session',
+      where: [{ field: 'userId', value: grant.userId }],
+    });
     return grant.userId;
   }
 

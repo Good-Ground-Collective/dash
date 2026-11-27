@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RecoveryPerson } from '#src/auth/__tests__/support/recovery-person.ts';
 import { recoveryEnrolmentSchema } from '#src/auth/contracts/recovery.ts';
@@ -74,7 +74,7 @@ describe('CodeRecovery spending codes', () => {
     expect(person.fixture.tables.passkey).toHaveLength(2);
   });
 
-  it('spends a code once even when it was redeemed twice before either registered', async () => {
+  it('refuses a second ceremony for a code another one already spent', async () => {
     const person = new RecoveryPerson();
     const [code = ''] = await person.savedCodes(await person.signedIn());
     const first = person.fixture.browser();
@@ -85,21 +85,17 @@ describe('CodeRecovery spending codes', () => {
     const secondEnrolment = recoveryEnrolmentSchema.parse(
       await (await person.redeem(second, { code })).json(),
     );
-
-    const won = await first.registerPasskey({
+    await first.registerPasskey({
       context: firstEnrolment.enrolment,
       createSession: true,
     });
-    const lost = await second.registerPasskey({
+
+    const late = await second.registerPasskey({
       context: secondEnrolment.enrolment,
       createSession: true,
     });
 
-    expect(won.status).toBe(200);
-    expect(lost.status).toBe(401);
-    expect(await lost.json()).toMatchObject({
-      code: 'PASSKEY_ENROLMENT_REJECTED',
-    });
+    expect(late.status).toBe(401);
     expect(person.fixture.tables.passkey).toHaveLength(2);
   });
 });
@@ -218,6 +214,31 @@ describe('CodeRecovery rate limit', () => {
       code: 'RECOVERY_RATE_LIMITED',
     });
     expect(unknown.status).toBe(429);
+  });
+
+  it('lets a hundred attempts across emails through, then refuses everyone and warns once without the email', async () => {
+    const person = new RecoveryPerson();
+    const [code = ''] = await person.savedCodes(await person.signedIn());
+    const context = await person.fixture.identity.auth.$context;
+    const warn = vi.spyOn(context.logger, 'warn').mockReturnValue();
+    const browser = person.fixture.browser();
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const response = await person.redeem(browser, {
+        code: 'aaaa-aaaa',
+        email: `guess-${attempt}@example.com`,
+      });
+      statuses.push(response.status);
+    }
+
+    const owner = await person.redeem(browser, { code });
+    await person.redeem(browser, { code });
+
+    expect(new Set(statuses)).toEqual(new Set([401]));
+    expect(owner.status).toBe(429);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('example.com');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(code);
   });
 });
 

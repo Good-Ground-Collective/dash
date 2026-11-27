@@ -21,7 +21,6 @@ import {
   CodeRecovery,
   type Recovery,
 } from '#src/auth/services/recovery/recovery.ts';
-import type { RecoveryThrottle } from '#src/auth/services/recovery-throttle/recovery-throttle.ts';
 import { type Setup, TokenSetup } from '#src/auth/services/setup/setup.ts';
 import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts';
 
@@ -112,8 +111,6 @@ export class BetterAuthIdentity implements Identity {
       storage: AuthStorage;
       /** Further plugins, such as API keys and the service-account endpoints. */
       plugins?: readonly BetterAuthPlugin[];
-      /** Limits recovery-code attempts. Unset uses the default windows. */
-      recoveryThrottle?: RecoveryThrottle;
     } & IdentitySettings,
   ) {
     const settings = identitySettingsSchema.parse(props);
@@ -123,7 +120,6 @@ export class BetterAuthIdentity implements Identity {
       freshSession: new MaxAgeFreshSession({
         maxAgeSeconds: freshSessionSeconds,
       }),
-      throttle: props.recoveryThrottle,
     });
     const passkeys = new WebAuthnPasskeys({
       guard: this.guard,

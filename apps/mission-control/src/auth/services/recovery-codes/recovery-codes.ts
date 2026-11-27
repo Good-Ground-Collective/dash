@@ -33,7 +33,7 @@ export interface RecoveryCodes {
     context: AuthContext;
     userId: string;
   }): Promise<RecoveryCodeSet>;
-  /** Makes a pending set the person's codes and deletes every other set, so old codes stop working. */
+  /** Makes a pending set the person's codes and deletes every other set, so old codes stop working. It activates first and checks that all ten did, so a set a concurrent generate replaced answers 409 and changes nothing. */
   confirm(props: {
     context: AuthContext;
     userId: string;
@@ -145,15 +145,16 @@ export class StoredRecoveryCodes implements RecoveryCodes {
     setId: string;
   }): Promise<RecoveryCodeStatus> {
     await props.context.adapter.transaction(async (adapter) => {
-      const waiting = await adapter.count({
+      const activated = await adapter.updateMany({
         model: 'recoveryCode',
         where: [
           { field: 'userId', value: props.userId },
           { field: 'setId', value: props.setId },
           { field: 'state', value: pending },
         ],
+        update: { state: active },
       });
-      if (waiting !== recoveryCodesPerSet) {
+      if (activated !== recoveryCodesPerSet) {
         throw new RecoveryCodeSetNotPendingError();
       }
 
@@ -163,14 +164,6 @@ export class StoredRecoveryCodes implements RecoveryCodes {
           { field: 'userId', value: props.userId },
           { field: 'setId', operator: 'ne', value: props.setId },
         ],
-      });
-      await adapter.updateMany({
-        model: 'recoveryCode',
-        where: [
-          { field: 'userId', value: props.userId },
-          { field: 'setId', value: props.setId },
-        ],
-        update: { state: active },
       });
     });
     return this.status(props);
