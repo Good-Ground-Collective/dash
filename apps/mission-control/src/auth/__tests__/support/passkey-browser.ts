@@ -68,12 +68,18 @@ export class PasskeyBrowser {
   }
 
   /** The first half of registration: the ceremony options, which also bind the enrolment `context` to this browser's challenge. */
-  async registrationOptions(props: { context?: string }): Promise<Response> {
-    const query =
-      props.context === undefined
-        ? ''
-        : `?${new URLSearchParams({ context: props.context }).toString()}`;
-    return this.get(`/passkey/generate-register-options${query}`);
+  async registrationOptions(props: {
+    context?: string;
+    /** Better Auth's `authenticatorAttachment` query, as the web sends for a passkey on another device. */
+    authenticatorAttachment?: 'platform' | 'cross-platform';
+  }): Promise<Response> {
+    const query = new URLSearchParams();
+    if (props.context !== undefined) query.set('context', props.context);
+    if (props.authenticatorAttachment !== undefined) {
+      query.set('authenticatorAttachment', props.authenticatorAttachment);
+    }
+    const search = query.size === 0 ? '' : `?${query.toString()}`;
+    return this.get(`/passkey/generate-register-options${search}`);
   }
 
   /** The second half: answers `options` with this browser's authenticator. */

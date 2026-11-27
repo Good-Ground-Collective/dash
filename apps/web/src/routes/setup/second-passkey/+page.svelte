@@ -124,17 +124,15 @@
     {announcement}
   </p>
 
-  {#if current.step === 'added'}
-    {#if !current.named}
-      <PasskeyNameForm
-        bind:this={nameForm}
-        label="Name this passkey"
-        placeholder="Like “Phone”"
-        bind:value={name}
-        {busy}
-        onSave={saveName}
-      />
-    {/if}
+  {#if current.step === 'added' && !current.named}
+    <PasskeyNameForm
+      bind:this={nameForm}
+      label="Name this passkey"
+      placeholder="Like “Phone”"
+      bind:value={name}
+      {busy}
+      onSave={saveName}
+    />
   {/if}
 
   {#if current.error}
