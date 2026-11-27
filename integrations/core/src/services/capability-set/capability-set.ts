@@ -35,7 +35,7 @@ export class CapabilitySet implements Capabilities {
   }
 
   get<T extends object>(capability: Capability<T>): T | undefined {
-    // SAFETY: `with` is the only writer and stores each implementation under its own capability's name.
+    // SAFETY: `with` is the only writer, and each capability name belongs to exactly one interface (keys are declared once, in capabilities.ts).
     return this.implementations.get(capability.name) as T | undefined;
   }
 

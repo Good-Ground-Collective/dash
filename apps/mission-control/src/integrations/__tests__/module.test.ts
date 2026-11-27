@@ -60,7 +60,9 @@ describe('provider import boundary', () => {
         source:
           "import type { GithubIntegration } from '@dash/integrations-github';\n\nexport type Wired = GithubIntegration;\n",
       }),
-    ).resolves.toHaveLength(1);
+    ).resolves.toEqual([
+      expect.stringContaining('Depend on @dash/integrations-core'),
+    ]);
   });
 
   it('fails a dynamic provider import', async () => {
