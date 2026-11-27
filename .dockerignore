@@ -12,7 +12,7 @@
 **/.env.*
 **/.svelte-kit
 **/.turbo
-**/build
+apps/*/build
 **/dist
 **/test-results
 **/playwright-report
