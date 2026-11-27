@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
+import {
+  MissionControlEndpoint,
+  missionControlBaseUrlSchema,
+} from '#lib/api/mission-control-endpoint.ts';
 import {
   colorModeSchema,
   themeNameSchema,
@@ -9,7 +12,7 @@ import {
   serviceAccountListSchema,
 } from '#lib/api/service-account-contracts.ts';
 
-export const missionControlBaseUrlSchema = z.url({ protocol: /^https?$/u });
+export { missionControlBaseUrlSchema };
 
 export const viewerSchema = z.object({
   id: z.string(),

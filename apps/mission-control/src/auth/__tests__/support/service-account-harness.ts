@@ -67,6 +67,7 @@ export class ServiceAccountHarness {
     const context = await this.auth.identity.auth.$context;
     const token = crypto.randomUUID();
     const now = new Date();
+
     this.tables.session.push({
       id: crypto.randomUUID(),
       token,
@@ -74,6 +75,7 @@ export class ServiceAccountHarness {
       createdAt: now,
       expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
     });
+
     const signature = await makeSignature(token, secret);
     return `${context.authCookies.sessionToken.name}=${token}.${signature}`;
   }
