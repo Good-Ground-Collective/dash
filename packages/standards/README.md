@@ -69,6 +69,58 @@ One difference to know about: go-jsonschema reads `emittedAt` as a `time.Time`, 
 
 Inside this repository, a Go consumer such as the bench daemon uses the module through a `replace` directive or a `go.work` file, so it needs no tags. If a consumer outside the repository appears, the module needs tags of the form `packages/standards/go/vX.Y.Z`, because it lives in a subfolder, and a major version of 2 or higher needs a `/v2` suffix on the module path. The publishing pipeline will add those tags when that happens; nothing creates them yet.
 
+## Agent heartbeats
+
+`agent.heartbeat` (`agentHeartbeat`) is what a harness hook sends each time an agent's state changes. Mission Control keeps the latest one per session, raises the ones that need you and notices the ones that go quiet. Token and cost figures are not part of it; they come from OpenTelemetry.
+
+| Field       | Required | What it holds                                                                                                      |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `sessionId` | yes      | The harness session. A subagent carries its parent's session ID                                                    |
+| `seq`       | yes      | A non-negative integer that increases within the session (see below)                                               |
+| `harness`   | yes      | An open enum: `claude-code` (in `knownHarnesses`) or any lowercase dotted or dashed name, up to 64 characters      |
+| `status`    | yes      | Exactly one of the statuses below                                                                                  |
+| `agentId`   | no       | Set only for a subagent, so it rolls up under the parent session                                                   |
+| `agent`     | no       | `{ type?, model? }`: the agent type, such as a subagent name, and the model it runs on                             |
+| `summary`   | no       | The last assistant message, trimmed                                                                                |
+| `question`  | no       | `{ text, options?: [{ label, description? }] }`, copied verbatim from the harness. Set when `status` is `question` |
+| `error`     | no       | `{ kind, message }`. Set when `status` is `error`                                                                  |
+| `workspace` | no       | `{ directory?, repository?, branch? }`: where the agent is working                                                 |
+| `machine`   | no       | The hostname the agent runs on                                                                                     |
+| `taskId`    | no       | The task the session serves. A session serves one task; a task can span sessions                                   |
+
+The envelope's `emittedAt` is the heartbeat's timestamp. Ticket and pull request links aren't in v1; the board joins those from GitHub.
+
+### Statuses
+
+The statuses don't overlap, so a hook picks exactly one. The A2A column is the nearest [A2A task state](https://a2a-protocol.org/latest/specification/), for anything that bridges heartbeats to A2A.
+
+| Status     | Meaning                                                                                                                      | When a hook emits it                                                                  | A2A              |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------- |
+| `working`  | The agent is making progress on its own                                                                                      | A prompt is submitted, or a tool call starts or finishes                              | `working`        |
+| `waiting`  | The agent is waiting on something external that isn't you, such as CI, a deploy or a subprocess, and will continue by itself | A tool call is waiting on a background process or an outside system                   | `working`        |
+| `question` | The agent needs input from you. This raises a Needs you item and a push notification                                         | An AskUserQuestion `PreToolUse`, a permission prompt or an idle prompt `Notification` | `input-required` |
+| `blocked`  | The agent can't proceed without outside action, and isn't asking a specific question                                         | The agent stops and reports that something outside it has to change first             | `input-required` |
+| `complete` | The turn or task finished successfully                                                                                       | `Stop`, or `SubagentStop` for a subagent                                              | `completed`      |
+| `failed`   | The agent finished without achieving the task                                                                                | `Stop` or `SubagentStop` when the harness can tell the task wasn't done               | `failed`         |
+| `error`    | The harness or the hook hit an error, such as a crash or an API failure. Carries `error`                                     | A model API error, a harness crash or a hook that fails                               | `failed`         |
+
+A2A's `canceled` has no heartbeat status: a session someone interrupts sends its next heartbeat when it resumes, and one that never resumes goes stale and then lost.
+
+### Length limits
+
+| Field              | Limit                                                 |
+| ------------------ | ----------------------------------------------------- |
+| `summary`          | 500 characters                                        |
+| `question.text`    | 2,000 characters                                      |
+| `question.options` | 10 options; `label` 200 characters, `description` 500 |
+| `error.message`    | 2,000 characters                                      |
+
+Limits count UTF-16 code units, which is what Zod's `.max()` measures. JSON Schema and the Go structs count code points, which is never more, so text within a limit passes all three. A writer in any language must trim by UTF-16 length; trimming by characters can leave emoji-heavy text over the limit for TypeScript readers. Hooks trim to fit, keeping the start and ending with `…`. The schema rejects anything longer, so a writer that forgets to trim fails loudly instead of storing a very long message.
+
+### The `seq` rule
+
+`seq` keeps increasing for the whole life of a `sessionId`, including after `claude --resume`, which keeps the session ID. A hook persists the last `seq` per session and continues from there, so a resumed session never reuses a number. Mission Control drops a heartbeat whose `(sessionId, seq)` it has already stored. Subagents share their parent's `sessionId`, so the parent and its subagents draw from one `seq` counter. Hooks run as separate processes, and a single agent's parallel tool calls fire hooks at the same moment too, so a writer must increment the counter atomically, for example under a lock file; a plain read-then-write can hand two heartbeats the same `seq`, and the second is dropped as a duplicate. The schema checks only that `seq` is a non-negative integer.
+
 ## Adding a message
 
 1. Create `src/messages/<area>.ts` and construct a `MessageDefinition` with the kind, the starting version (`1.0`) and a `z.object` payload. `src/messages/example.ts` is the model.

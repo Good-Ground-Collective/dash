@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "emittedAt": {
+      "description": "When the sender emitted the message, in UTC.",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "type": "string"
+    },
+    "id": {
+      "description": "Unique per message, so receivers can drop duplicates.",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "type": "string"
+    },
+    "kind": { "const": "agent.heartbeat", "type": "string" },
+    "payload": {
+      "properties": {
+        "agent": {
+          "description": "What kind of agent this is.",
+          "properties": {
+            "model": {
+              "description": "The model the agent runs on.",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": {
+              "description": "The agent type, such as a subagent name.",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "agentId": {
+          "description": "Set only for a subagent, so readers can roll it up under its parent session.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "error": {
+          "description": "What failed. Set when `status` is `error`.",
+          "properties": {
+            "kind": {
+              "description": "A short machine-readable category, such as `api`.",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "message": {
+              "description": "What went wrong, trimmed to fit.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": ["kind", "message"],
+          "type": "object"
+        },
+        "harness": {
+          "description": "The harness that sent the heartbeat. An open enum: a known value such as `claude-code`, or any lowercase dotted or dashed name.",
+          "examples": ["claude-code"],
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9]*([.-][a-z0-9]+)*$",
+          "type": "string"
+        },
+        "machine": {
+          "description": "The hostname the agent runs on.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "question": {
+          "description": "What the agent is asking. Set when `status` is `question`.",
+          "properties": {
+            "options": {
+              "description": "The answers offered, if the question has any.",
+              "items": {
+                "properties": {
+                  "description": {
+                    "description": "The harness's explanation of the answer, if any.",
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "label": {
+                    "description": "The answer as the harness shows it.",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["label"],
+                "type": "object"
+              },
+              "maxItems": 10,
+              "type": "array"
+            },
+            "text": {
+              "description": "The question, copied verbatim and trimmed to fit.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": ["text"],
+          "type": "object"
+        },
+        "seq": {
+          "description": "Increases within a session for its whole life, including after a resume. Readers drop a repeated (sessionId, seq).",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "description": "The harness session. A subagent carries its parent's session ID.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "description": "Exactly one status; the package README defines each.",
+          "enum": [
+            "working",
+            "waiting",
+            "question",
+            "blocked",
+            "complete",
+            "failed",
+            "error"
+          ],
+          "type": "string"
+        },
+        "summary": {
+          "description": "The agent's last assistant message, trimmed to fit.",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "taskId": {
+          "description": "The task this session serves. A task can span several sessions.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Where the agent is working, when the harness can tell.",
+          "properties": {
+            "branch": {
+              "description": "The checked-out branch.",
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "directory": {
+              "description": "The working directory.",
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            },
+            "repository": {
+              "description": "The repository, such as `owner/name`.",
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": ["sessionId", "seq", "harness", "status"],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "description": "The `<major>.<minor>` version of this message kind. Readers accept any `1.x`.",
+      "pattern": "^1\\.(0|[1-9]\\d*)$",
+      "type": "string"
+    }
+  },
+  "required": ["schemaVersion", "kind", "id", "emittedAt", "payload"],
+  "type": "object"
+}
