@@ -295,7 +295,7 @@ jobs:
         run: echo "version=$(git tag --points-at HEAD --list 'v*' --sort=-v:refname | head -n 1)" >> "$GITHUB_OUTPUT"
 
   release-standards:
-    needs: verify
+    needs: [verify, standards-go]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
