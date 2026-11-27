@@ -6,6 +6,7 @@ import {
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
+import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
 import { AccountsRoutes } from '#src/connections/exposures/accounts-routes/accounts-routes.ts';
 import { ConnectRoutes } from '#src/connections/exposures/connect-routes/connect-routes.ts';
 import { WebhookRoutes } from '#src/connections/exposures/webhook-routes/webhook-routes.ts';
@@ -32,6 +33,7 @@ interface ConnectionsModuleProps {
   secret: string;
   baseUrl: string;
   webOrigin: string;
+  listener?: ConnectListener | undefined;
 }
 
 type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
@@ -103,6 +105,7 @@ export class ConnectionsModule implements HttpModule {
         state,
         paths,
         webOrigin: module.webOrigin,
+        listener: module.listener,
       }),
       new AccountsRoutes({
         accounts: new ConnectableAccounts({

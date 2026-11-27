@@ -1,3 +1,5 @@
+export type * from '#src/contracts/activity-feed.ts';
+export * from '#src/contracts/activity-feed-records.ts';
 export type * from '#src/contracts/connect-flow.ts';
 export * from '#src/contracts/connect-flow-records.ts';
 export * from '#src/contracts/custom-fields.ts';

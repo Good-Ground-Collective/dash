@@ -6,6 +6,7 @@ import {
   webOrigin,
 } from '#src/connections/__tests__/support/connections-harness.ts';
 import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
+import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
 import { CapturedLog } from '#src/platform/exposures/http/__tests__/support/captured-log.ts';
 
 const running: ConnectionsHarness[] = [];
@@ -219,5 +220,58 @@ describe('ConnectionsModule callback logs', () => {
     expect(log.text()).toContain('"url":"/integrations/github/callback"');
     expect(log.text()).not.toContain(state);
     expect(log.text()).not.toContain('code=');
+  });
+});
+
+class RecordingListener implements ConnectListener {
+  readonly told: { provider: string; userId: string }[] = [];
+  failure: Error | null = null;
+
+  async connected(props: { provider: string; userId: string }): Promise<void> {
+    this.told.push(props);
+    if (this.failure !== null) {
+      throw this.failure;
+    }
+  }
+}
+
+describe('ConnectionsModule connect listener', () => {
+  it('is told once the person links their account and again once they install', async () => {
+    const listener = new RecordingListener();
+    const harness = new ConnectionsHarness({ listener });
+    running.push(harness);
+    await harness.link({ userId: adaId });
+
+    await (
+      await harness.start()
+    ).inject({
+      url: '/integrations/github/setup?installation_id=42&setup_action=install',
+      headers: ConnectionsHarness.cookie(adaId),
+    });
+
+    expect(listener.told).toEqual([
+      { provider: 'github', userId: adaId },
+      { provider: 'github', userId: adaId },
+    ]);
+  });
+
+  it('still finishes the install when the listener fails', async () => {
+    const listener = new RecordingListener();
+    const harness = new ConnectionsHarness({ listener });
+    running.push(harness);
+    await harness.link({ userId: adaId });
+    listener.failure = new Error('queue unavailable');
+
+    const response = await (
+      await harness.start()
+    ).inject({
+      url: '/integrations/github/setup?installation_id=42&setup_action=install',
+      headers: ConnectionsHarness.cookie(adaId),
+    });
+
+    expect(Served.query(response.headers.location)).toMatchObject({
+      connect: 'installed',
+    });
+    expect(harness.connections.owned.size).toBe(1);
   });
 });

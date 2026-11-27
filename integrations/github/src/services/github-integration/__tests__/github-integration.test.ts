@@ -1,4 +1,5 @@
 import {
+  activityFeedCapability,
   Capability,
   connectFlowCapability,
   customFieldsCapability,
@@ -31,13 +32,13 @@ describe('GithubIntegration', () => {
     expect(integration.capability(customFieldsCapability)).toBeDefined();
   });
 
-  it('offers the connect flow only when the App is configured', () => {
+  it('offers the connect flow and activity feed only when the App is configured', () => {
+    const withApp = new GithubIntegration({ id: 'github', app: appConfig });
+
     expect(integration.capability(connectFlowCapability)).toBeUndefined();
-    expect(
-      new GithubIntegration({ id: 'github', app: appConfig }).capability(
-        connectFlowCapability,
-      ),
-    ).toBeDefined();
+    expect(integration.capability(activityFeedCapability)).toBeUndefined();
+    expect(withApp.capability(connectFlowCapability)).toBeDefined();
+    expect(withApp.capability(activityFeedCapability)).toBeDefined();
   });
 
   it('offers nothing else', () => {

@@ -10,6 +10,7 @@ import {
 import { vi } from 'vitest';
 
 import type { PrincipalSession } from '#src/auth/services/identity/identity.ts';
+import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
 import { FakeConnectFlow } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import {
   InMemoryConnectionRepository,
@@ -60,7 +61,11 @@ export class ConnectionsHarness {
   private readonly logLevel: 'info' | 'silent';
 
   constructor(
-    props: { offerFlow?: boolean; logLevel?: 'info' | 'silent' } = {},
+    props: {
+      offerFlow?: boolean;
+      logLevel?: 'info' | 'silent';
+      listener?: ConnectListener;
+    } = {},
   ) {
     this.logLevel = props.logLevel ?? 'silent';
     this.module = new ConnectionsModule({
@@ -86,6 +91,7 @@ export class ConnectionsHarness {
       secret,
       baseUrl,
       webOrigin,
+      listener: props.listener,
     });
   }
 
