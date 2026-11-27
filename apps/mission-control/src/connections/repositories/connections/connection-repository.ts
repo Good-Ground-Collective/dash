@@ -25,7 +25,7 @@ export interface ConnectionRepository {
     provider: string;
     installationId: string;
   }): Promise<boolean>;
-  /** The connection id for each of `installationIds` that Dash has a connection for. */
+  /** The owned connection id for each of `installationIds` that Dash has recorded. */
   connectionIdsFor(props: {
     provider: string;
     installationIds: readonly string[];
@@ -165,6 +165,7 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
       .where(
         and(
           eq(connectionTable.provider, props.provider),
+          eq(connectionTable.kind, 'owned'),
           inArray(connectionTable.installationId, [...props.installationIds]),
         ),
       );

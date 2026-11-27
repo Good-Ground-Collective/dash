@@ -83,10 +83,11 @@ const membershipSchema = z
 /** How `@octokit/request` reports an HTTP error. */
 const statusSchema = z.object({ status: z.number() });
 
-/** GitHub answers a primary or secondary rate limit with 403 and one of these headers, which a refused permission lacks. */
+/** GitHub answers a rate limit with 403. A primary limit sends `x-ratelimit-remaining: 0` and a secondary one may send `retry-after`, but either may come with only its message, which a refused permission never carries. */
 const rateLimitedSchema = z
   .object({
     status: z.literal(403),
+    message: z.string(),
     response: z.object({
       headers: z.object({
         'x-ratelimit-remaining': z.string().optional(),
@@ -95,9 +96,10 @@ const rateLimitedSchema = z
     }),
   })
   .refine(
-    ({ response: { headers } }) =>
+    ({ message, response: { headers } }) =>
       headers['x-ratelimit-remaining'] === '0' ||
-      headers['retry-after'] !== undefined,
+      headers['retry-after'] !== undefined ||
+      /rate limit/iu.test(message),
   );
 
 type Settled<T> = { failed: false; value: T } | { failed: true; value: null };

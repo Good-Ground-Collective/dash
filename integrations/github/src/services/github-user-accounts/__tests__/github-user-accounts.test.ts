@@ -174,7 +174,7 @@ describe('GithubConnectFlow listUserAccounts roles', () => {
 });
 
 describe('GithubConnectFlow listUserAccounts partial failures', () => {
-  it.each([{ 'x-ratelimit-remaining': '0' }, { 'retry-after': '60' }])(
+  it.each([{ 'x-ratelimit-remaining': '0' }, { 'retry-after': '60' }, {}])(
     'marks an installation incomplete when the membership read is rate-limited (%o)',
     async (headers) => {
       const github = Accounts.github({
