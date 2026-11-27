@@ -12,10 +12,7 @@ import {
 import { request as octokitRequest } from '@octokit/request';
 import { z } from 'zod';
 
-import {
-  type GithubAppConfig,
-  githubAppConfigSchema,
-} from '#src/contracts/github-app-config.ts';
+import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
 import { GithubActivityFeed } from '#src/services/github-activity-feed/github-activity-feed.ts';
 import { GithubConnectFlow } from '#src/services/github-connect-flow/github-connect-flow.ts';
 import { GithubProjectFields } from '#src/services/github-project-fields/github-project-fields.ts';
@@ -50,14 +47,13 @@ export class GithubIntegration implements Integration {
       this.capabilities = capabilities;
       return;
     }
-    const config = githubAppConfigSchema.parse(props.app);
     this.capabilities = capabilities
       .with(connectFlowCapability, new GithubConnectFlow({ config: props.app }))
       .with(
         activityFeedCapability,
         new GithubActivityFeed({
-          appId: config.appId,
-          privateKey: config.privateKey,
+          appId: props.app.appId,
+          privateKey: props.app.privateKey,
           request: octokitRequest.defaults({
             headers: { 'user-agent': 'dash-mission-control' },
           }),

@@ -121,11 +121,19 @@ export const githubPullRequestNodeSchema = z.object({
   number: z.int().positive(),
   title: z.string(),
   url: z.url(),
-  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+  state: z
+    .enum(['OPEN', 'CLOSED', 'MERGED'])
+    .transform((value) => value.toLowerCase())
+    .pipe(z.enum(['open', 'closed', 'merged'])),
   isDraft: z.boolean(),
-  mergeable: z.enum(['MERGEABLE', 'CONFLICTING', 'UNKNOWN']),
+  mergeable: z
+    .enum(['MERGEABLE', 'CONFLICTING', 'UNKNOWN'])
+    .transform((value) => value.toLowerCase())
+    .pipe(z.enum(['mergeable', 'conflicting', 'unknown'])),
   reviewDecision: z
     .enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'])
+    .transform((value) => value.toLowerCase())
+    .pipe(z.enum(['approved', 'changes_requested', 'review_required']))
     .nullable(),
   updatedAt: z.iso.datetime({ offset: true }),
   headRefName: z.string().min(1),

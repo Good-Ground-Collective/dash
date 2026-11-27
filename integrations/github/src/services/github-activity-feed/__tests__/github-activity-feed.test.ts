@@ -288,3 +288,9 @@ describe('GithubActivityFeed default branches', () => {
     expect(activity.truncated).toBe(true);
   });
 });
+
+describe('GithubActivityFeed props', () => {
+  it.each([{ appId: '' }, { privateKey: '' }])('refuses %o', (credentials) => {
+    expect(() => new FakeGithubGraphql().feed(credentials)).toThrow(ZodError);
+  });
+});
