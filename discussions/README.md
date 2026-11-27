@@ -22,5 +22,5 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 | ✓ | 05 Stack: concluded in #5 → #32–#34 (pnpm/Turbo, SvelteKit 3 + Fastify on two origins, Drizzle, DBOS, SSE for realtime, preflight) | |
 | ✓ | 06 Hosting + 10 IaC: concluded in #6 and #10 → #42 (Linode boxes rebuilt with OpenTofu, self-hosted Postgres with pgBackRest, Kamal deploys, release pipeline) | |
 | ✓ | 11 Objectives: concluded in #22 → #52–#55 (initiative → epic → ticket as a read-only lens over GitHub Projects and sub-issues, Jira later; providers behind `integrations/core` interfaces) | |
-| 4 | [03 Design: onboarding flow](./03-design-onboarding.md) | Needs 01, 02 and 04. The first real design iteration. |
+| ✓ | 03 Onboarding: concluded in #3 → epic #70 with #71–#77 (bootstrap only, required recovery codes, skippable GitHub connect for your account and every org, a setup checklist on the empty home) | |
 | later | [07 Communication standards](./07-communication-standards.md) → [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
