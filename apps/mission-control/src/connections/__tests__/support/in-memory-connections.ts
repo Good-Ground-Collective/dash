@@ -1,6 +1,7 @@
 import type { Installation, WebhookDelivery } from '@dash/integrations-core';
 
 import type { OwnedConnection } from '#src/connections/contracts/connections.ts';
+import type { DispatchedDelivery } from '#src/connections/contracts/webhook-events.ts';
 import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type {
   LinkedAccountRepository,
@@ -75,6 +76,38 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
         .map((connection) => [connection.installationId, connection.id]),
     );
   }
+
+  async refreshOwned(props: {
+    provider: string;
+    installation: Installation;
+  }): Promise<boolean> {
+    const key = `${props.provider}:${props.installation.externalId}`;
+    const existing = this.owned.get(key);
+    if (existing === undefined) {
+      return false;
+    }
+    await this.saveOwned({ ...props, connectedBy: existing.id });
+    return true;
+  }
+
+  async setSuspended(props: {
+    provider: string;
+    installationId: string;
+    suspended: boolean;
+  }): Promise<void> {
+    const key = `${props.provider}:${props.installationId}`;
+    const existing = this.owned.get(key);
+    if (existing !== undefined) {
+      this.owned.set(key, { ...existing, suspended: props.suspended });
+    }
+  }
+
+  async removeInstallation(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void> {
+    this.owned.delete(`${props.provider}:${props.installationId}`);
+  }
 }
 
 export class InMemoryLinkedAccountRepository implements LinkedAccountRepository {
@@ -104,21 +137,75 @@ export class InMemoryLinkedAccountRepository implements LinkedAccountRepository 
   }
 }
 
+export interface StoredDelivery extends WebhookDelivery {
+  provider: string;
+  dispatchPending: boolean;
+  receivedAt: Date;
+}
+
 export class InMemoryWebhookDeliveryRepository implements WebhookDeliveryRepository {
-  readonly deliveries: (WebhookDelivery & { provider: string })[] = [];
+  readonly deliveries: StoredDelivery[] = [];
 
   async record(props: {
     provider: string;
     delivery: WebhookDelivery;
+    dispatchPending: boolean;
   }): Promise<{ duplicate: boolean }> {
-    const duplicate = this.deliveries.some(
-      (stored) =>
-        stored.provider === props.provider &&
-        stored.deliveryId === props.delivery.deliveryId,
-    );
-    if (!duplicate) {
-      this.deliveries.push({ ...props.delivery, provider: props.provider });
+    const duplicate = this.find(props.provider, props.delivery.deliveryId);
+    if (duplicate === undefined) {
+      this.deliveries.push({
+        ...props.delivery,
+        provider: props.provider,
+        dispatchPending: props.dispatchPending,
+        receivedAt: new Date(),
+      });
     }
-    return { duplicate };
+    return { duplicate: duplicate !== undefined };
+  }
+
+  async markDispatched(props: {
+    provider: string;
+    deliveryId: string;
+  }): Promise<void> {
+    const stored = this.find(props.provider, props.deliveryId);
+    if (stored !== undefined) {
+      stored.dispatchPending = false;
+    }
+  }
+
+  async pendingDispatch(props: {
+    receivedBefore: Date;
+    limit: number;
+  }): Promise<DispatchedDelivery[]> {
+    return this.deliveries
+      .filter(
+        (stored) =>
+          stored.dispatchPending && stored.receivedAt < props.receivedBefore,
+      )
+      .slice(0, props.limit)
+      .map((stored) => ({
+        provider: stored.provider,
+        deliveryId: stored.deliveryId,
+        event: stored.event,
+        action: stored.action,
+        installationId: stored.installationId,
+        installationChange: stored.installationChange,
+      }));
+  }
+
+  async deleteReceivedBefore(props: { cutoff: Date }): Promise<number> {
+    const kept = this.deliveries.filter(
+      (stored) => stored.receivedAt >= props.cutoff,
+    );
+    const deleted = this.deliveries.length - kept.length;
+    this.deliveries.splice(0, this.deliveries.length, ...kept);
+    return deleted;
+  }
+
+  private find(provider: string, deliveryId: string) {
+    return this.deliveries.find(
+      (stored) =>
+        stored.provider === provider && stored.deliveryId === deliveryId,
+    );
   }
 }

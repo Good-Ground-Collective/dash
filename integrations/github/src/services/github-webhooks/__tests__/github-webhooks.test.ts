@@ -17,8 +17,11 @@ describe('GithubWebhooks', () => {
     await expect(webhooks.verify({ headers, body })).resolves.toEqual({
       deliveryId: 'delivery-1',
       event: 'installation',
+      action: 'created',
       installationId: '42',
       installationLifecycle: true,
+      installationChange: null,
+      payload: { action: 'created', installation: { id: 42 } },
     });
   });
 
@@ -71,6 +74,29 @@ describe('GithubWebhooks lifecycle events', () => {
     await expect(
       webhooks.verify({ headers: activity, body }),
     ).resolves.toMatchObject({ installationLifecycle: false });
+  });
+});
+
+describe('GithubWebhooks installation changes', () => {
+  it.each([
+    ['installation', 'deleted', 'removed'],
+    ['installation', 'suspend', 'suspended'],
+    ['installation', 'unsuspend', 'unsuspended'],
+    ['installation_repositories', 'added', 'repositoriesChanged'],
+    ['installation_repositories', 'removed', 'repositoriesChanged'],
+    ['installation', 'new_permissions_accepted', null],
+    ['pull_request', 'opened', null],
+  ])('reads %s %s as %s', async (event, action, change) => {
+    const changed = JSON.stringify({ action, installation: { id: 42 } });
+    const signed = {
+      ...headers,
+      'x-github-event': event,
+      'x-hub-signature-256': FakeGithub.sign(changed),
+    };
+
+    await expect(
+      webhooks.verify({ headers: signed, body: Buffer.from(changed) }),
+    ).resolves.toMatchObject({ action, installationChange: change });
   });
 });
 

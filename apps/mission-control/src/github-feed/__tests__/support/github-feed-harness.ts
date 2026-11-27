@@ -8,12 +8,17 @@ import {
 } from '@dash/integrations-core';
 
 import type { PrincipalSession } from '#src/auth/services/identity/identity.ts';
-import { InMemoryLinkedAccountRepository } from '#src/connections/__tests__/support/in-memory-connections.ts';
+import {
+  InMemoryConnectionRepository,
+  InMemoryLinkedAccountRepository,
+} from '#src/connections/__tests__/support/in-memory-connections.ts';
+import { InMemoryWebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
 import {
   FakeActivityFeed,
   fixedNow,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
+import { InMemorySyncRequestRepository } from '#src/github-feed/__tests__/support/in-memory-sync-requests.ts';
 import { GithubFeedModule } from '#src/github-feed/module.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
@@ -44,6 +49,7 @@ export class GithubFeedHarness {
   readonly feed = new FakeActivityFeed();
   readonly records = new InMemoryGithubRecords();
   readonly linkedAccounts = new InMemoryLinkedAccountRepository();
+  readonly webhookEvents = new InMemoryWebhookEventRegistry();
   readonly module: GithubFeedModule;
   private app: ZodFastifyInstance | undefined;
 
@@ -65,6 +71,9 @@ export class GithubFeedHarness {
       linkedAccounts: this.linkedAccounts,
       reader: this.records,
       writer: this.records,
+      connections: new InMemoryConnectionRepository(),
+      syncRequests: new InMemorySyncRequestRepository(),
+      webhookEvents: this.webhookEvents,
     });
   }
 

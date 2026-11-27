@@ -14,6 +14,7 @@ import type { ConnectionRepository } from '#src/connections/repositories/connect
 import type { LinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 import { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
+import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
 import { ConnectableAccounts } from '#src/connections/services/connectable-accounts/connectable-accounts.ts';
 import {
   type ConnectState,
@@ -21,7 +22,14 @@ import {
 } from '#src/connections/services/connect-state/connect-state.ts';
 import { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
 import { AesGcmTokenCipher } from '#src/connections/services/token-cipher/token-cipher.ts';
+import {
+  DbosWebhookDispatch,
+  type WebhookDispatch,
+} from '#src/connections/services/webhook-dispatch/webhook-dispatch.ts';
+import type { WebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
+import { DbosWebhookRetention } from '#src/connections/services/webhook-retention/webhook-retention.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
+import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
 
 interface ConnectionsModuleProps {
   registry: IntegrationRegistry;
@@ -29,6 +37,8 @@ interface ConnectionsModuleProps {
   connections: ConnectionRepository;
   linkedAccounts: LinkedAccountRepository;
   deliveries: WebhookDeliveryRepository;
+  /** Where modules register the webhook events they act on. */
+  webhookEvents: WebhookEventRegistry;
   /** Mission Control's auth secret. Keys for the connect state and the token cipher are derived from it. */
   secret: string;
   baseUrl: string;
@@ -41,13 +51,14 @@ type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
 /**
  * `owned` connections: for every registered integration that offers a connect flow, the
  * install and OAuth callbacks, the connectable accounts and the webhook endpoint under
- * `/integrations/<provider>`.
+ * `/integrations/<provider>`, and the workflows that process and prune stored deliveries.
  * Provider-neutral: it reaches providers only through `connectFlowCapability`.
  */
-export class ConnectionsModule implements HttpModule {
+export class ConnectionsModule implements HttpModule, WorkflowModule {
   readonly plugin: FastifyPluginAsyncZod;
   /** Each provider's owned connections, by provider id. */
   readonly owned: ReadonlyMap<string, OwnedConnections>;
+  private readonly workflows: readonly WorkflowModule[];
 
   constructor(props: ConnectionsModuleProps) {
     const cipher = new AesGcmTokenCipher({ secret: props.secret });
@@ -56,10 +67,26 @@ export class ConnectionsModule implements HttpModule {
     });
     const owned = new Map<string, OwnedConnections>();
     const routes: ProviderRoutes[] = [];
+    const offered = props.registry.offering(connectFlowCapability);
+    const dispatch = new DbosWebhookDispatch({
+      registry: props.webhookEvents,
+      deliveries: props.deliveries,
+      changes: new OwnedInstallationChanges({
+        flows: new Map(
+          offered.map(({ integration, implementation }) => [
+            integration.provider,
+            implementation,
+          ]),
+        ),
+        connections: props.connections,
+      }),
+    });
+    this.workflows = [
+      dispatch,
+      new DbosWebhookRetention({ deliveries: props.deliveries }),
+    ];
 
-    for (const { integration, implementation: flow } of props.registry.offering(
-      connectFlowCapability,
-    )) {
+    for (const { integration, implementation: flow } of offered) {
       const connections = new OwnedConnections({
         provider: integration.provider,
         flow,
@@ -74,6 +101,7 @@ export class ConnectionsModule implements HttpModule {
           flow,
           owned: connections,
           state,
+          dispatch,
         }),
       );
     }
@@ -86,11 +114,24 @@ export class ConnectionsModule implements HttpModule {
     };
   }
 
+  registerWorkflows(): void {
+    for (const workflows of this.workflows) {
+      workflows.registerWorkflows();
+    }
+  }
+
+  async activate(): Promise<void> {
+    for (const workflows of this.workflows) {
+      await workflows.activate();
+    }
+  }
+
   private static routesFor(props: {
     module: ConnectionsModuleProps;
     flow: ConnectFlow;
     owned: OwnedConnections;
     state: ConnectState;
+    dispatch: WebhookDispatch;
   }): ProviderRoutes[] {
     const { module, flow, owned, state } = props;
     const paths = new ConnectPaths({
@@ -123,6 +164,7 @@ export class ConnectionsModule implements HttpModule {
         flow,
         connections: module.connections,
         deliveries: module.deliveries,
+        dispatch: props.dispatch,
       }),
     ];
   }

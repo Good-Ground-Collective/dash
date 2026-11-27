@@ -18,6 +18,7 @@ import {
   InMemoryWebhookDeliveryRepository,
 } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import { ConnectionsModule } from '#src/connections/module.ts';
+import { InMemoryWebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
@@ -55,6 +56,7 @@ export class ConnectionsHarness {
   readonly connections = new InMemoryConnectionRepository();
   readonly linkedAccounts = new InMemoryLinkedAccountRepository();
   readonly deliveries = new InMemoryWebhookDeliveryRepository();
+  readonly webhookEvents = new InMemoryWebhookEventRegistry();
   readonly module: ConnectionsModule;
   private app: ZodFastifyInstance | undefined;
 
@@ -88,6 +90,7 @@ export class ConnectionsHarness {
       connections: this.connections,
       linkedAccounts: this.linkedAccounts,
       deliveries: this.deliveries,
+      webhookEvents: this.webhookEvents,
       secret,
       baseUrl,
       webOrigin,

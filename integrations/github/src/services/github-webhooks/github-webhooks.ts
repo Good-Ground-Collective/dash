@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import type { WebhookDelivery, WebhookHeaders } from '@dash/integrations-core';
+import {
+  type InstallationChange,
+  type WebhookDelivery,
+  type WebhookHeaders,
+  webhookPayloadSchema,
+} from '@dash/integrations-core';
 import { z } from 'zod';
 
 /** A repeated header arrives as an array, which no genuine delivery sends. */
@@ -22,6 +27,27 @@ const lifecycleEvents: ReadonlySet<string> = new Set([
   'installation_repositories',
 ]);
 
+/** Keyed by `<event>.<action>`. Other installation events leave a recorded connection as it is. */
+const installationChanges: ReadonlyMap<string, InstallationChange> = new Map([
+  ['installation.deleted', 'removed'],
+  ['installation.suspend', 'suspended'],
+  ['installation.unsuspend', 'unsuspended'],
+  ['installation_repositories.added', 'repositoriesChanged'],
+  ['installation_repositories.removed', 'repositoriesChanged'],
+]);
+
+/** The fields Dash reads. A malformed one reads as absent rather than failing the delivery. */
+const webhookFieldsSchema = z
+  .object({
+    action: z.string().min(1).optional().catch(undefined),
+    installation: z.object({ id: z.number() }).optional().catch(undefined),
+  })
+  .transform((fields) => ({
+    action: fields.action ?? null,
+    installationId:
+      fields.installation === undefined ? null : String(fields.installation.id),
+  }));
+
 const webhookBodySchema = z
   .string()
   .transform((text, context) => {
@@ -32,7 +58,11 @@ const webhookBodySchema = z
       return z.NEVER;
     }
   })
-  .pipe(z.object({ installation: z.object({ id: z.number() }).optional() }));
+  .pipe(webhookPayloadSchema)
+  .transform((payload) => ({
+    ...webhookFieldsSchema.parse(payload),
+    payload,
+  }));
 
 /** Checks `X-Hub-Signature-256`, GitHub's HMAC-SHA256 of the body bytes under the webhook secret, before reading the body. */
 export class GithubWebhooks {
@@ -57,15 +87,19 @@ export class GithubWebhooks {
     const body = webhookBodySchema.safeParse(
       Buffer.from(props.body).toString('utf8'),
     );
-    const installationId = body.success
-      ? body.data.installation?.id
-      : undefined;
+    const { event } = headers.data;
+    const { action, installationId, payload } = body.success
+      ? body.data
+      : { action: null, installationId: null, payload: null };
     return {
       deliveryId: headers.data.deliveryId,
-      event: headers.data.event,
-      installationId:
-        installationId === undefined ? null : String(installationId),
-      installationLifecycle: lifecycleEvents.has(headers.data.event),
+      event,
+      action,
+      installationId,
+      installationLifecycle: lifecycleEvents.has(event),
+      installationChange:
+        installationChanges.get(`${event}.${action ?? ''}`) ?? null,
+      payload,
     };
   }
 

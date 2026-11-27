@@ -2,9 +2,11 @@ import type { ConnectFlow } from '@dash/integrations-core';
 import { z } from 'zod';
 
 import { webhookAcknowledgementSchema } from '#src/connections/contracts/connections.ts';
+import { dispatchedDeliverySchema } from '#src/connections/contracts/webhook-events.ts';
 import { WebhookSignatureRejectedError } from '#src/connections/errors.ts';
 import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
+import type { WebhookDispatch } from '#src/connections/services/webhook-dispatch/webhook-dispatch.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
 /**
@@ -25,25 +27,28 @@ const rawBodySchema = z.instanceof(Buffer).catch(Buffer.alloc(0));
  * is public and any account can install it. Events about an installation itself are stored
  * whatever the installation: they can arrive before the setup callback records it, they are
  * the only news that an owner approved a requested install, and there is one per install or
- * repository change, not per piece of activity. Processing the events belongs to the feed,
- * so nothing else happens here yet.
+ * repository change, not per piece of activity. A delivery some module handles is stored as
+ * pending and its processing started before the answer; the request never waits for it.
  */
 export class WebhookRoutes {
   private readonly provider: string;
   private readonly flow: ConnectFlow;
   private readonly connections: ConnectionRepository;
   private readonly deliveries: WebhookDeliveryRepository;
+  private readonly dispatch: WebhookDispatch;
 
   constructor(props: {
     provider: string;
     flow: ConnectFlow;
     connections: ConnectionRepository;
     deliveries: WebhookDeliveryRepository;
+    dispatch: WebhookDispatch;
   }) {
     this.provider = props.provider;
     this.flow = props.flow;
     this.connections = props.connections;
     this.deliveries = props.deliveries;
+    this.dispatch = props.dispatch;
   }
 
   /** Registers the route in its own scope, whose only body parser keeps the bytes as a `Buffer`. */
@@ -89,10 +94,19 @@ export class WebhookRoutes {
             .code(202)
             .send({ deliveryId: delivery.deliveryId, status: 'ignored' });
         }
+        const dispatched = dispatchedDeliverySchema.parse({
+          ...delivery,
+          provider: this.provider,
+        });
+        const handled = this.dispatch.handles(dispatched);
         const { duplicate } = await this.deliveries.record({
           provider: this.provider,
           delivery,
+          dispatchPending: handled,
         });
+        if (handled) {
+          await this.dispatch.start(dispatched);
+        }
         return reply.code(202).send({
           deliveryId: delivery.deliveryId,
           status: duplicate ? 'duplicate' : 'recorded',

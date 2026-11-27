@@ -62,8 +62,13 @@ describe('ConnectionsModule webhooks', () => {
         provider: 'github',
         deliveryId: 'delivery-1',
         event: 'installation',
+        action: 'created',
         installationId: '42',
         installationLifecycle: true,
+        installationChange: null,
+        payload: { action: 'created', installation: { id: 42 } },
+        dispatchPending: false,
+        receivedAt: expect.any(Date),
       },
     ]);
   });
