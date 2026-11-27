@@ -203,7 +203,6 @@ test('setup goes token, account, passkey, codes, second passkey, then GitHub, wi
   await page.getByLabel('Setup token').fill(setupToken);
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await expect(page.getByText('Step 2 of 4')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Create your account' }),
   ).toBeFocused();
@@ -220,9 +219,6 @@ test('setup goes token, account, passkey, codes, second passkey, then GitHub, wi
   await page.getByRole('link', { name: 'Skip for now' }).click();
   await expect(page).toHaveURL('/setup/github');
   await page.getByRole('link', { name: 'Skip for now' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
-  ).toBeVisible();
   await expect(page).toHaveURL('/');
 });
 

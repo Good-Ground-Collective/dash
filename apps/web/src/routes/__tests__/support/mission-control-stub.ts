@@ -43,7 +43,6 @@ interface StubReply {
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
  * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`.
- * Registration options carry the `authenticatorAttachment` the page asks for, as Better Auth's do.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -247,10 +246,7 @@ export class MissionControlStub {
         return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
       }
     }
-    const passkey = this.passkeys.add({
-      credentialId: input.response.id,
-      name: input.name ?? null,
-    });
+    const passkey = this.passkeys.add(input);
     if (signedUp === null) return { status: 200, body: passkey };
 
     if (this.setup.pending !== null) this.recoveryCodes.markUnconfirmed();

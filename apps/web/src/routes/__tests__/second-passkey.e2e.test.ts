@@ -133,7 +133,7 @@ test('a declined prompt puts focus back on the add button', async () => {
   });
 });
 
-test('adds a passkey on another device, names it, and continues home', async () => {
+test('adds a passkey on another device, names it, and continues to GitHub', async () => {
   await expect(page.getByRole('status')).toBeEmpty();
   const asked = page.waitForRequest((request) =>
     request.url().includes('/passkey/generate-register-options'),
@@ -162,7 +162,10 @@ test('adds a passkey on another device, names it, and continues home', async () 
   await expect(next).toBeFocused();
   await expect(page.getByRole('link', { name: 'Skip for now' })).toHaveCount(0);
   await next.click();
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/setup/github');
+  await expect(
+    page.getByRole('heading', { name: 'Connect GitHub' }),
+  ).toBeFocused();
 
   await page.goto('/settings');
   await expect(
@@ -170,9 +173,9 @@ test('adds a passkey on another device, names it, and continues home', async () 
   ).toBeVisible();
 });
 
-test('Skip for now goes home without adding one', async () => {
+test('Skip for now goes to GitHub without adding one', async () => {
   await page.goto('/setup/second-passkey');
   await page.getByRole('link', { name: 'Skip for now' }).click();
 
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/setup/github');
 });

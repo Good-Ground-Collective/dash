@@ -5,13 +5,13 @@ import {
 } from '#lib/auth/onboarding-route.ts';
 
 describe('OnboardingRoute', () => {
-  it('leads from the codes step to the second passkey only during setup', () => {
+  it('leads from the codes step to the second passkey only during setup, otherwise to GitHub', () => {
     const during = new URL(onboardingRecoveryCodesPath, 'https://dash.test');
     const later = new URL('/setup/recovery-codes', 'https://dash.test');
 
     expect(OnboardingRoute.afterRecoveryCodes(during)).toBe(
       '/setup/second-passkey',
     );
-    expect(OnboardingRoute.afterRecoveryCodes(later)).toBe('/');
+    expect(OnboardingRoute.afterRecoveryCodes(later)).toBe('/setup/github');
   });
 });

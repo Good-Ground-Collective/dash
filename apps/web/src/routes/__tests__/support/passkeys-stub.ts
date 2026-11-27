@@ -32,11 +32,15 @@ export class PasskeysStub {
     this.passkeys = [];
   }
 
-  add(props: { credentialId: string; name: string | null }): StubPasskey {
+  /** Stores the passkey a verify-registration body describes. */
+  add(props: {
+    response: { id: string };
+    name?: string | undefined;
+  }): StubPasskey {
     const passkey: StubPasskey = {
       id: randomUUID(),
-      credentialId: props.credentialId,
-      name: props.name,
+      credentialId: props.response.id,
+      name: props.name ?? null,
       createdAt: new Date().toISOString(),
       deviceType: 'multiDevice',
       backedUp: true,

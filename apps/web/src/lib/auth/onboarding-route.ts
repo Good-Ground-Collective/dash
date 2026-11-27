@@ -5,19 +5,24 @@ export const onboardingRecoveryCodesPath = `/setup/recovery-codes?${onboardingPa
 
 export const secondPasskeyPath = '/setup/second-passkey';
 
-/** Where Continue and Skip lead from the second passkey step: home, the next place a newly set-up person goes. */
-export const afterSecondPasskeyPath = '/';
+/** The Connect GitHub step, which follows the codes step and the second passkey step. */
+export const connectGithubPath = '/setup/github';
+
+/** Where Continue and Skip lead from the second passkey step. */
+export const afterSecondPasskeyPath = connectGithubPath;
 
 /**
  * Where first-run setup goes after the account exists. Only setup marks the codes step as part
- * of onboarding, so a person the codes gate sends there later goes home after saving and never
- * meets the optional steps.
+ * of onboarding, so a person the codes gate sends there later skips the second passkey step and
+ * goes straight to Connect GitHub.
  */
 export class OnboardingRoute {
-  /** Where Continue leads once codes are saved: the second passkey step during setup, otherwise home. */
+  /** Where Continue leads once codes are saved: the second passkey step during setup, otherwise Connect GitHub. */
   static afterRecoveryCodes(url: {
     searchParams: Pick<URLSearchParams, 'has'>;
   }): string {
-    return url.searchParams.has(onboardingParam) ? secondPasskeyPath : '/';
+    return url.searchParams.has(onboardingParam)
+      ? secondPasskeyPath
+      : connectGithubPath;
   }
 }
