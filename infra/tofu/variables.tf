@@ -24,6 +24,12 @@ variable "admin_ssh_public_keys" {
   ]
 }
 
+variable "deploy_ssh_public_keys" {
+  description = "SSH public keys CI deploys with. Added to the admin user on dash-app only, usable only from tailnet addresses."
+  type        = list(string)
+  default     = []
+}
+
 variable "tailscale_auth_key" {
   description = "Pre-authorized Tailscale auth key tagged tag:dash. Only used at first boot; set TF_VAR_tailscale_auth_key."
   type        = string

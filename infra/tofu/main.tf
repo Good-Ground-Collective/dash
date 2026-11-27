@@ -73,10 +73,11 @@ resource "linode_instance" "host" {
 
   metadata {
     user_data = sensitive(base64encode(templatefile("${path.module}/templates/host.yaml.tftpl", {
-      hostname           = each.value.label
-      admin_username     = var.admin_username
-      ssh_public_keys    = var.admin_ssh_public_keys
-      tailscale_auth_key = var.tailscale_auth_key
+      hostname               = each.value.label
+      admin_username         = var.admin_username
+      ssh_public_keys        = var.admin_ssh_public_keys
+      deploy_ssh_public_keys = each.key == "app" ? var.deploy_ssh_public_keys : []
+      tailscale_auth_key     = var.tailscale_auth_key
     })))
   }
 
