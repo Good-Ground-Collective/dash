@@ -41,8 +41,9 @@ export class TrackerGithub {
   /**
    * Acme's open Project 1 (target date 2026-12-31) and closed Project 2. Project 1 holds epic
    * 10 (Priority `P2 - Soon`, Target date 2026-12-15, two tickets), epic 20 (only a `p3`
-   * label), an issue labelled `bug`, an issue the App can't see and a draft. Project 2 holds
-   * epic 20 again, with Priority P1. `reversed` has GitHub list Project 2 first.
+   * label, Target date 2027-01-31), an issue labelled `bug`, an issue the App can't see and a
+   * draft. Project 2 holds epic 20 again, with Priority P1 and Target date 2026-12-20.
+   * `reversed` has GitHub list Project 2 first.
    */
   static organisation(props: { reversed?: boolean } = {}): FakeGithubGraphql {
     const nodes = [
@@ -64,7 +65,13 @@ export class TrackerGithub {
             nodes:
               variables['projectId'] === 'PVT_1'
                 ? TrackerGithub.firstProjectItems()
-                : [epicItem({ number: 20, priority: 'P1' })],
+                : [
+                    epicItem({
+                      number: 20,
+                      priority: 'P1',
+                      targetDate: '2026-12-20',
+                    }),
+                  ],
           }),
       });
   }
@@ -81,7 +88,11 @@ export class TrackerGithub {
           ticket({ number: 11, state: 'CLOSED' }),
         ],
       }),
-      epicItem({ number: 20, labels: ['Epic', 'p3'] }),
+      epicItem({
+        number: 20,
+        targetDate: '2027-01-31',
+        labels: ['Epic', 'p3'],
+      }),
       epicItem({ number: 30, labels: ['bug'] }),
       { priority: null, targetDate: null, content: null },
       {

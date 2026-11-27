@@ -154,3 +154,36 @@ describe.skipIf(databaseUrl === null)(
     });
   },
 );
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleObjectiveRecordWriter attempts',
+  () => {
+    it('drops a failure from a read older than the stored one', async () => {
+      await Stored.replace(records, later);
+      await Stored.database.writer.recordFailure({
+        connectionId: ownedId,
+        error: 'Reading the tracker failed.',
+        attemptedAt: fixedNow,
+      });
+
+      expect(await Stored.owned()).toMatchObject({
+        lastError: null,
+        lastSyncedAt: later.toISOString(),
+      });
+    });
+
+    it('keeps a newer read’s failure when an older read finishes after it', async () => {
+      await Stored.database.writer.recordFailure({
+        connectionId: ownedId,
+        error: 'Reading the tracker failed.',
+        attemptedAt: later,
+      });
+      await Stored.replace(records, fixedNow);
+
+      expect(await Stored.owned()).toMatchObject({
+        lastError: 'Reading the tracker failed.',
+        lastSyncedAt: fixedNow.toISOString(),
+      });
+    });
+  },
+);
