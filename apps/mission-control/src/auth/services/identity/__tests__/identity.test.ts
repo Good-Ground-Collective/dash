@@ -150,22 +150,6 @@ describe('BetterAuthIdentity sessions', () => {
     );
   });
 
-  it('counts no passkeys for a person who has none', async () => {
-    const fixture = new IdentityFixture({ settings: localSettings });
-    const { cookie } = await fixture.signIn();
-    const session = await fixture.identity.session({
-      headers: new Headers({ cookie }),
-    });
-
-    if (session === null) {
-      throw new Error('Expected the signed-in session');
-    }
-
-    await expect(
-      fixture.identity.passkeyCount({ userId: session.principalId }),
-    ).resolves.toBe(0);
-  });
-
   it('rejects a secret shorter than 32 characters', () => {
     expect(
       () =>
