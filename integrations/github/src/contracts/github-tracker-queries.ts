@@ -13,7 +13,7 @@ query DashProjects($login: String!, $first: Int!) {
       pageInfo { hasNextPage }
       nodes {
         id number title url closed updatedAt
-        statusUpdates(first: 1) { nodes { targetDate } }
+        statusUpdates(first: 1, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { targetDate } }
       }
     }
   }
