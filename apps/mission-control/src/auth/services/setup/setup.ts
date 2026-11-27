@@ -31,10 +31,7 @@ import type {
   PasskeyEnrolmentSource,
   PasskeyEnrolmentUser,
 } from '#src/auth/services/passkeys/passkeys.ts';
-import {
-  type SetupThrottle,
-  WindowSetupThrottle,
-} from '#src/auth/services/setup/setup-throttle.ts';
+import { SetupThrottle } from '#src/auth/services/setup/setup-throttle.ts';
 
 const enrolmentPrefix = 'setup-enrolment:';
 const enrolmentLifetimeMilliseconds = 10 * 60 * 1000;
@@ -58,14 +55,14 @@ export interface Setup extends PasskeyEnrolmentSource {
  * it's the current one without spending it. Beginning setup trades the token
  * for a short-lived enrolment, which the passkey registration then spends: in one transaction it
  * deletes the token, creates the person and stores the passkey. Every step refuses once anyone
- * has signed up. Check and begin share one throttle that ignores the client address.
+ * has signed up. Check and begin share one throttle that ignores the client address; it counts
+ * only while setup is open, so a closed instance always answers `SETUP_CLOSED`.
  */
 export class TokenSetup implements Setup {
   readonly plugin: BetterAuthPlugin;
-  private readonly throttle: SetupThrottle;
+  private readonly throttle = new SetupThrottle();
 
-  constructor(props: { throttle?: SetupThrottle } = {}) {
-    this.throttle = props.throttle ?? new WindowSetupThrottle();
+  constructor() {
     this.plugin = {
       id: 'setup',
       schema: {
@@ -220,9 +217,10 @@ export class TokenSetup implements Setup {
     context: AuthContext;
     input: SetupCheck;
   }): Promise<SetupChecked> {
-    this.throttle.attempt();
     const input = setupCheckSchema.parse(props.input);
-    await this.assertOpen({
+    await this.assertNotClosed(props.context.adapter);
+    this.throttle.attempt({ logger: props.context.logger });
+    await this.assertTokenStored({
       adapter: props.context.adapter,
       tokenHash: this.hash(input.token),
     });
@@ -233,10 +231,11 @@ export class TokenSetup implements Setup {
     context: AuthContext;
     input: SetupBegin;
   }): Promise<SetupEnrolment> {
-    this.throttle.attempt();
     const input = setupBeginSchema.parse(props.input);
     const tokenHash = this.hash(input.token);
-    await this.assertOpen({ adapter: props.context.adapter, tokenHash });
+    await this.assertNotClosed(props.context.adapter);
+    this.throttle.attempt({ logger: props.context.logger });
+    await this.assertTokenStored({ adapter: props.context.adapter, tokenHash });
 
     const grant: SetupGrant = {
       tokenHash,
@@ -262,10 +261,20 @@ export class TokenSetup implements Setup {
     adapter: DBTransactionAdapter;
     tokenHash: string;
   }): Promise<void> {
-    if ((await this.countPeople(props.adapter)) > 0) {
+    await this.assertNotClosed(props.adapter);
+    await this.assertTokenStored(props);
+  }
+
+  private async assertNotClosed(adapter: DBTransactionAdapter): Promise<void> {
+    if ((await this.countPeople(adapter)) > 0) {
       throw new SetupClosedError();
     }
+  }
 
+  private async assertTokenStored(props: {
+    adapter: DBTransactionAdapter;
+    tokenHash: string;
+  }): Promise<void> {
     const stored = await props.adapter.findOne<StoredSetupToken>({
       model: 'setupToken',
       where: [{ field: 'tokenHash', value: props.tokenHash }],

@@ -1,32 +1,45 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SetupRateLimitedError } from '#src/auth/errors.ts';
-import { WindowSetupThrottle } from '#src/auth/services/setup/setup-throttle.ts';
+import { SetupThrottle } from '#src/auth/services/setup/setup-throttle.ts';
 
-/** A hand-moved clock, and a throttle of two attempts a minute on it. */
-class Clock {
-  milliseconds = 0;
-  readonly now = (): number => this.milliseconds;
+/** A throttle with its first minute spent, and the warnings it logged. */
+class SpentThrottle {
+  readonly warnings: string[] = [];
+  readonly logger = {
+    warn: (message: string): void => {
+      this.warnings.push(message);
+    },
+  };
+  readonly throttle = new SetupThrottle();
 
-  throttle(): WindowSetupThrottle {
-    return new WindowSetupThrottle({
-      windowSeconds: 60,
-      max: 2,
-      now: this.now,
-    });
+  constructor() {
+    for (let attempts = 0; attempts < 60; attempts += 1) {
+      this.throttle.attempt({ logger: this.logger });
+    }
+  }
+
+  attempt(): void {
+    this.throttle.attempt({ logger: this.logger });
   }
 }
 
-describe('WindowSetupThrottle', () => {
-  it('allows attempts up to the limit, then refuses with the seconds left', () => {
-    const clock = new Clock();
-    const throttle = clock.throttle();
-    throttle.attempt();
-    throttle.attempt();
-    clock.milliseconds = 20_000;
+describe('SetupThrottle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('allows sixty attempts a minute, then refuses with the seconds left', () => {
+    const spent = new SpentThrottle();
+    vi.setSystemTime(20_000);
 
     expect(() => {
-      throttle.attempt();
+      spent.attempt();
     }).toThrow(
       expect.objectContaining({
         name: 'SetupRateLimitedError',
@@ -35,18 +48,27 @@ describe('WindowSetupThrottle', () => {
     );
   });
 
-  it('opens again once the window has passed', () => {
-    const clock = new Clock();
-    const throttle = clock.throttle();
-    throttle.attempt();
-    throttle.attempt();
-    expect(() => {
-      throttle.attempt();
-    }).toThrow(SetupRateLimitedError);
-    clock.milliseconds = 60_000;
+  it('warns once per window when it trips, naming no token or address', () => {
+    const spent = new SpentThrottle();
 
     expect(() => {
-      throttle.attempt();
+      spent.attempt();
+    }).toThrow(SetupRateLimitedError);
+    expect(() => {
+      spent.attempt();
+    }).toThrow(SetupRateLimitedError);
+
+    expect(spent.warnings).toEqual([
+      'Setup token attempts hit 60 a minute; refusing until the window resets.',
+    ]);
+  });
+
+  it('opens again once the window has passed', () => {
+    const spent = new SpentThrottle();
+    vi.setSystemTime(60_000);
+
+    expect(() => {
+      spent.attempt();
     }).not.toThrow();
   });
 });

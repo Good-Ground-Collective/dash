@@ -99,6 +99,45 @@ describe('TokenSetup token check', () => {
   });
 });
 
+/** Posts wrong setup tokens through Dash's Better Auth, each claiming its own forwarded address. */
+class SetupCaller {
+  readonly fixture = new PasskeyIdentity();
+
+  async attempt(props: {
+    path: string;
+    forwardedFor: string;
+  }): Promise<Response> {
+    return this.fixture.identity.handle(
+      new Request(`http://localhost:3000/api/auth${props.path}`, {
+        method: 'POST',
+        headers: {
+          origin: passkeyWebOrigin,
+          'content-type': 'application/json',
+          'x-forwarded-for': props.forwardedFor,
+        },
+        body: JSON.stringify({
+          token: 'guess',
+          name: 'Ada Lovelace',
+          email: 'ada@example.com',
+        }),
+      }),
+    );
+  }
+
+  /** Alternates check and begin until the shared minute's sixty attempts are used. */
+  async spendBudget(): Promise<number[]> {
+    const statuses = [];
+    for (let attempts = 0; attempts < 60; attempts += 1) {
+      const response = await this.attempt({
+        path: attempts % 2 === 0 ? '/setup/check' : '/setup/begin',
+        forwardedFor: `203.0.113.${attempts}`,
+      });
+      statuses.push(response.status);
+    }
+    return statuses;
+  }
+}
+
 describe('TokenSetup rate limit', () => {
   it('runs Better Auth with its rate limiter pinned on, whatever NODE_ENV is', async () => {
     const context = await new PasskeyIdentity().identity.auth.$context;
@@ -107,45 +146,35 @@ describe('TokenSetup rate limit', () => {
   });
 
   it('shares one budget between check and begin, whatever address the caller claims', async () => {
-    const fixture = new PasskeyIdentity();
-    await fixture.issueToken();
-    const attempt = async (props: {
-      path: string;
-      forwardedFor: string;
-    }): Promise<Response> =>
-      fixture.identity.handle(
-        new Request(`http://localhost:3000/api/auth${props.path}`, {
-          method: 'POST',
-          headers: {
-            origin: passkeyWebOrigin,
-            'content-type': 'application/json',
-            'x-forwarded-for': props.forwardedFor,
-          },
-          body: JSON.stringify({
-            token: 'guess',
-            name: 'Ada Lovelace',
-            email: 'ada@example.com',
-          }),
-        }),
-      );
+    const caller = new SetupCaller();
+    await caller.fixture.issueToken();
 
-    const statuses = [];
-    for (let attempts = 0; attempts < 10; attempts += 1) {
-      const response = await attempt({
-        path: attempts % 2 === 0 ? '/setup/check' : '/setup/begin',
-        forwardedFor: `203.0.113.${attempts}`,
-      });
-      statuses.push(response.status);
-    }
-    const refused = await attempt({
+    const statuses = await caller.spendBudget();
+    const refused = await caller.attempt({
       path: '/setup/check',
       forwardedFor: '198.51.100.1',
     });
 
-    expect(statuses).toEqual(Array.from({ length: 10 }, () => 401));
+    expect(statuses).toEqual(Array.from({ length: 60 }, () => 401));
     expect(refused.status).toBe(429);
     expect(await refused.json()).toMatchObject({ code: 'SETUP_RATE_LIMITED' });
     expect(refused.headers.get('retry-after')).toMatch(/^\d+$/u);
+  });
+
+  it('answers SETUP_CLOSED, not 429, once setup has closed', async () => {
+    const caller = new SetupCaller();
+    const token = await caller.fixture.issueToken();
+    await caller.spendBudget();
+    const context = await caller.fixture.identity.auth.$context;
+    await context.internalAdapter.createUser(
+      { name: 'Grace', email: 'grace@example.com' },
+      { method: 'test' },
+    );
+
+    const response = await caller.fixture.browser().checkSetup({ token });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'SETUP_CLOSED' });
   });
 });
 
