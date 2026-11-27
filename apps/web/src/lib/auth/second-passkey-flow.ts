@@ -6,12 +6,18 @@ import type { PasskeyWording } from '#lib/auth/passkey-wording.ts';
 /**
  * Where the second passkey step is. `offer` waits for the person to add one or skip. `reauth`
  * waits for a passkey sign-in, since adding needs a fresh one. `added` holds the new passkey
- * until the person names it or moves on.
+ * until the person names it or moves on; `confirming` is a name waiting on that same sign-in.
  */
 export type SecondPasskeyStep =
   | { step: 'offer'; error: string | null }
   | { step: 'reauth'; error: string | null }
-  | { step: 'added'; passkey: Passkey; named: boolean; error: string | null };
+  | {
+      step: 'added';
+      passkey: Passkey;
+      named: boolean;
+      confirming: string | null;
+      error: string | null;
+    };
 
 export type AddedStep = Extract<SecondPasskeyStep, { step: 'added' }>;
 
@@ -38,7 +44,13 @@ export class SecondPasskeyFlow {
   async add(): Promise<SecondPasskeyStep> {
     try {
       const passkey = await this.auth.addPasskey({ onAnotherDevice: true });
-      return { step: 'added', passkey, named: false, error: null };
+      return {
+        step: 'added',
+        passkey,
+        named: false,
+        confirming: null,
+        error: null,
+      };
     } catch (cause) {
       if (SecondPasskeyFlow.isStale(cause)) {
         return { step: 'reauth', error: null };
@@ -57,7 +69,7 @@ export class SecondPasskeyFlow {
     return this.add();
   }
 
-  /** Names the passkey just added, as Rename in settings does. */
+  /** Names the passkey just added, as Rename in settings does. A session too old to rename asks for a passkey sign-in, keeping the name. */
   async name(added: AddedStep, name: string): Promise<SecondPasskeyStep> {
     const trimmed = name.trim();
     if (trimmed === '') {
@@ -69,11 +81,27 @@ export class SecondPasskeyFlow {
         ...added,
         passkey: { ...added.passkey, name: trimmed },
         named: true,
+        confirming: null,
         error: null,
       };
     } catch (cause) {
+      if (SecondPasskeyFlow.isStale(cause)) {
+        return { ...added, confirming: trimmed, error: null };
+      }
       return { ...added, error: this.wording.explain(cause) };
     }
+  }
+
+  /** Signs in with a passkey, then saves the name that was waiting. A dismissed prompt keeps waiting without an error. */
+  async confirmAndName(added: AddedStep): Promise<SecondPasskeyStep> {
+    const waiting = added.confirming;
+    if (waiting === null) return added;
+    try {
+      await this.auth.signIn({ autofill: false });
+    } catch (cause) {
+      return { ...added, error: this.explain(cause) };
+    }
+    return this.name({ ...added, confirming: null }, waiting);
   }
 
   private explain(cause: unknown): string | null {

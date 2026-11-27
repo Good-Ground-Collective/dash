@@ -56,8 +56,9 @@
     now = new Date();
     await tick();
     if (current.step === 'offer') addButton?.focus();
-    else if (current.step === 'reauth') confirmButton?.focus();
-    else if (current.named) continueLink?.focus();
+    else if (current.step === 'reauth' || current.confirming !== null) {
+      confirmButton?.focus();
+    } else if (current.named) continueLink?.focus();
     else nameForm?.focus();
   };
 
@@ -65,6 +66,12 @@
     const added = current;
     if (added.step !== 'added') return;
     await advance(async () => flow.name(added, chosen));
+  };
+
+  const confirmName = async (): Promise<void> => {
+    const added = current;
+    if (added.step !== 'added') return;
+    await advance(async () => flow.confirmAndName(added));
   };
 
   /** Focuses the title so the step is announced, then refreshes the clock so "Added 3 minutes ago" stays true while the person stays. */
@@ -124,7 +131,20 @@
     {announcement}
   </p>
 
-  {#if current.step === 'added' && !current.named}
+  {#if current.step === 'added' && current.confirming !== null}
+    <div class="auth-notice" role="alert">
+      Confirm it’s you. Naming a passkey needs a sign-in from the last 15
+      minutes.
+    </div>
+    <button
+      class="auth-button quiet"
+      bind:this={confirmButton}
+      disabled={busy}
+      onclick={confirmName}
+    >
+      Confirm with a passkey
+    </button>
+  {:else if current.step === 'added' && !current.named}
     <PasskeyNameForm
       bind:this={nameForm}
       label="Name this passkey"
