@@ -203,8 +203,15 @@ jobs:
     steps:
       - name: Check deploy is current and configured
         id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          latest=$(git ls-remote --tags --refs "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          set -o pipefail
+          latest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' | sed 's|^refs/tags/||' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n 1)
+          if [[ -z $latest ]]; then
+            echo "::error title=Deploy blocked::Could not find any release tags, so cannot tell whether $VERSION is current."
+            exit 1
+          fi
           if [[ $latest != "$VERSION" ]]; then
             echo "::notice title=Deploy skipped::$VERSION is not the newest release, $latest is. Deploying it would roll production back; re-run the run for $latest instead."
           elif [[ $READY != true ]]; then
