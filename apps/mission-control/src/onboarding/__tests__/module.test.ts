@@ -74,7 +74,7 @@ class FreshAccount {
 }
 
 describe('OnboardingModule', () => {
-  it('shows a fresh account GitHub open', async () => {
+  it('leaves GitHub open on a fresh account', async () => {
     const account = new FreshAccount();
     const browser = await account.fixture.firstPerson();
 

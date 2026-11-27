@@ -19,7 +19,7 @@ class ConnectedProviders implements ConnectionPresence {
 }
 
 class Checklist {
-  static for(props: {
+  static report(props: {
     connected: readonly string[];
   }): Promise<SetupChecklistReport> {
     return new SourcedSetupChecklist({
@@ -30,19 +30,19 @@ class Checklist {
 
 describe('SourcedSetupChecklist', () => {
   it('leaves GitHub open for a fresh account', async () => {
-    await expect(Checklist.for({ connected: [] })).resolves.toEqual({
+    await expect(Checklist.report({ connected: [] })).resolves.toEqual({
       items: [{ id: 'connectGitHub', done: false }],
     });
   });
 
   it('ticks off GitHub once any GitHub connection exists', async () => {
-    await expect(Checklist.for({ connected: ['github'] })).resolves.toEqual({
+    await expect(Checklist.report({ connected: ['github'] })).resolves.toEqual({
       items: [{ id: 'connectGitHub', done: true }],
     });
   });
 
   it('ignores connections to other providers', async () => {
-    await expect(Checklist.for({ connected: ['jira'] })).resolves.toEqual({
+    await expect(Checklist.report({ connected: ['jira'] })).resolves.toEqual({
       items: [{ id: 'connectGitHub', done: false }],
     });
   });
