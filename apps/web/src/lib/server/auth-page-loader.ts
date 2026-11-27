@@ -5,6 +5,7 @@ import {
   missionControlBaseUrlSchema,
   type Passkey,
   type PasskeyReads,
+  recoveryCodeStatusSchema,
   type ServiceAccountReads,
   type Viewer,
   viewerSchema,
@@ -18,7 +19,10 @@ export const authPageLoaderPropsSchema = z.object({
 export type AuthPageLoaderProps = z.input<typeof authPageLoaderPropsSchema>;
 
 /** The root layout's data, which every page load can read through `parent()`. */
-export const shellDataSchema = z.object({ viewer: viewerSchema.nullable() });
+export const shellDataSchema = z.object({
+  viewer: viewerSchema.nullable(),
+  recoveryCodes: recoveryCodeStatusSchema.nullable().catch(null),
+});
 
 export type AuthPageLoadEvent = Pick<ServerLoadEvent, 'fetch' | 'parent'>;
 
@@ -49,6 +53,8 @@ export interface AuthPageLoader {
   readonly signIn: (event: AuthPageLoadEvent) => Promise<SignInPageData>;
   /** `/recover`. The break-glass page has no load: its enrolment is in the fragment, which a redirect would carry along. */
   readonly recover: (event: AuthPageLoadEvent) => Promise<void>;
+  /** `/setup/recovery-codes`, for a signed-in person whose codes aren't confirmed yet. */
+  readonly recoveryCodes: (event: AuthPageLoadEvent) => Promise<void>;
   readonly settings: (event: AuthPageLoadEvent) => Promise<SettingsPageData>;
   readonly serviceAccounts: (
     event: AuthPageLoadEvent,
@@ -76,6 +82,12 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
 
   readonly recover = async (event: AuthPageLoadEvent): Promise<void> => {
     if ((await this.viewer(event)) !== null) redirect(303, '/');
+  };
+
+  readonly recoveryCodes = async (event: AuthPageLoadEvent): Promise<void> => {
+    const shell = shellDataSchema.parse(await event.parent());
+    if (shell.viewer === null) redirect(303, '/sign-in');
+    if (shell.recoveryCodes?.confirmed === true) redirect(303, '/');
   };
 
   readonly settings = async (

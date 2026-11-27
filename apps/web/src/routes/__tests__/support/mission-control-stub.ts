@@ -6,6 +6,7 @@ import {
 } from 'node:http';
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
+import { RecoveryCodesStub } from './recovery-codes-stub.ts';
 import { RecoveryStub } from './recovery-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
 import { SetupStub } from './setup-stub.ts';
@@ -49,9 +50,11 @@ interface StubReply {
  * It speaks the same paths and error codes but trusts every WebAuthn response: the real checks
  * are Mission Control's own tests. `POST /__stub/reset` forgets everyone,
  * `POST /__stub/sign-in` signs a person straight in, and `POST /__stub/age-session` makes
- * service account changes answer `SESSION_NOT_FRESH` until the next passkey sign-in.
+ * service account changes and new recovery codes answer `SESSION_NOT_FRESH` until the next
+ * passkey sign-in.
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
- * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`).
+ * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
+ * `/recovery-codes` answers as `RecoveryCodesStub` describes.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -65,6 +68,11 @@ export class MissionControlStub {
   private readonly recovery = new RecoveryStub({
     email: () => this.person?.email ?? null,
     webOrigin: () => this.webOrigin,
+  });
+  private readonly recoveryCodes = new RecoveryCodesStub({
+    activate: (codes) => this.recovery.activate(codes),
+    remaining: () => this.recovery.remaining(),
+    stale: () => this.sessionStale,
   });
 
   constructor(props: { webOrigin: string }) {
@@ -156,6 +164,8 @@ export class MissionControlStub {
     if (props.session === null) {
       return this.fail(401, 'UNAUTHORIZED');
     }
+    const codes = this.recoveryCodes.route(props);
+    if (codes !== null) return codes;
     switch (props.path) {
       case '/passkey/list-user-passkeys':
         return { status: 200, body: this.passkeys };
@@ -183,16 +193,20 @@ export class MissionControlStub {
     this.appearance.reset();
     this.serviceAccounts.reset();
     this.recovery.reset();
+    this.recoveryCodes.reset();
     return { status: 200, body: { status: true } };
   }
 
   /** Signs a person in without a passkey, for suites that test pages behind sign-in. */
   private signInDirectly(): StubReply {
-    this.person ??= {
-      id: randomUUID(),
-      name: 'Ada Lovelace',
-      email: 'ada@example.com',
-    };
+    if (this.person === null) {
+      this.person = {
+        id: randomUUID(),
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+      };
+      this.recoveryCodes.seed();
+    }
     return this.newSession();
   }
 
@@ -253,6 +267,7 @@ export class MissionControlStub {
     this.passkeys.push(passkey);
     if (signedUp === null) return { status: 200, body: passkey };
 
+    if (this.setup.pending !== null) this.recoveryCodes.require();
     this.person = signedUp;
     this.setup.reset();
     return { ...this.newSession(), body: passkey };

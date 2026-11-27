@@ -196,7 +196,7 @@ test('a token begin rejects sends you back to step 1', async () => {
   await expect(page.getByLabel('Setup token')).toBeFocused();
 });
 
-test('setup goes token, then account, then passkey, without the token in the URL', async () => {
+test('setup goes token, account, passkey, then codes, without the token in the URL', async () => {
   const { page } = device;
   await page.goto('/setup');
 
@@ -218,6 +218,9 @@ test('setup goes token, then account, then passkey, without the token in the URL
   await page.getByLabel('Email').fill('ada@example.com');
   await page.getByRole('button', { name: 'Register passkey' }).click();
 
+  await expect(page).toHaveURL('/setup/recovery-codes');
+  await page.getByLabel('I’ve saved these codes somewhere safe').check();
+  await page.getByRole('button', { name: 'Continue' }).click();
   await expect(
     page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
   ).toBeVisible();

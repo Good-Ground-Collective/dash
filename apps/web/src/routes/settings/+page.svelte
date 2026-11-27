@@ -6,6 +6,7 @@
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
+  import RecoveryCodesPanel from '#lib/auth-ui/RecoveryCodesPanel.svelte';
   import RemovePasskeyDialog from '#lib/auth-ui/RemovePasskeyDialog.svelte';
   import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
   import type { PageProps } from './$types';
@@ -193,6 +194,8 @@
       </button>
     </form>
   </section>
+
+  <RecoveryCodesPanel status={data.recoveryCodes} />
 
   <AppearanceSettings />
 

@@ -84,12 +84,23 @@ export class RecoveryStub {
     return 'spent';
   }
 
-  /** `POST /__stub/recovery-codes {codes}`: the person's confirmed codes. */
-  private issue(body: string): RecoveryReply {
-    const { codes } = issueSchema.parse(JSON.parse(body || '{}'));
+  /** Makes `codes` the person's confirmed codes, voiding the earlier ones. */
+  activate(codes: string[]): void {
     this.codes = new Map(
       codes.map((code) => [RecoveryStub.normalise(code), 'active'] as const),
     );
+  }
+
+  /** How many of the person's codes are unused. */
+  remaining(): number {
+    return [...this.codes.values()].filter((state) => state === 'active')
+      .length;
+  }
+
+  /** `POST /__stub/recovery-codes {codes}`: the person's confirmed codes. */
+  private issue(body: string): RecoveryReply {
+    const { codes } = issueSchema.parse(JSON.parse(body || '{}'));
+    this.activate(codes);
     return { status: 200, body: { remaining: codes.length } };
   }
 
