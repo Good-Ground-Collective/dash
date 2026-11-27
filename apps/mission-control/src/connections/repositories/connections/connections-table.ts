@@ -74,7 +74,11 @@ export const connectionRepositoryTable = pgTable(
   (table) => [primaryKey({ columns: [table.connectionId, table.externalId] })],
 );
 
-/** Someone asked an organisation owner to install the app on this account, and is waiting for the installation. */
+/**
+ * Someone asked an organisation owner to install the app on this account. Nothing writes it
+ * yet: the provider's request callback doesn't name the account. It stays for #117, which
+ * shows pending requests once Dash issues install links for organisations.
+ */
 export const installRequestTable = pgTable(
   'install_request',
   {

@@ -18,7 +18,6 @@ const statePayloadSchema = z.object({
   returnTo: returnToSchema,
   expiresAt: z.number().int(),
   nonce: z.string().min(1),
-  targetAccountId: z.string().min(1).optional(),
   installationId: z.string().min(1).optional(),
 });
 
@@ -41,8 +40,6 @@ export interface ConnectStateRequest {
   userId: string;
   provider: string;
   returnTo: string;
-  /** The account an install link preselects, so a `request` callback knows which one was asked for. */
-  targetAccountId?: string;
   /** An installation waiting for the person to authorize, so the callback can record it. */
   installationId?: string;
 }

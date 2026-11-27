@@ -109,14 +109,20 @@ export class GithubInstallations {
     };
   }
 
+  /** How many repositories the installation covers, from one page of one. */
+  async countRepositories(props: { installationId: string }): Promise<number> {
+    const { data } = await this.request('GET /installation/repositories', {
+      headers: { authorization: `Bearer ${await this.tokenFor(props)}` },
+      per_page: 1,
+    });
+    return installationRepositoriesSchema.parse(data).totalCount;
+  }
+
   /** Every repository the installation covers, read with an installation token. */
   async listRepositories(props: {
     installationId: string;
   }): Promise<Repository[]> {
-    const { token } = await this.auth({
-      type: 'installation',
-      installationId: props.installationId,
-    });
+    const token = await this.tokenFor(props);
     const repositories: Repository[] = [];
     for (let page = 1; ; page += 1) {
       const { data } = await this.request('GET /installation/repositories', {
@@ -133,5 +139,13 @@ export class GithubInstallations {
         return repositories;
       }
     }
+  }
+
+  private async tokenFor(props: { installationId: string }): Promise<string> {
+    const { token } = await this.auth({
+      type: 'installation',
+      installationId: props.installationId,
+    });
+    return token;
   }
 }

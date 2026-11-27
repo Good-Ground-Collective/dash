@@ -25,7 +25,11 @@ export type GithubJson =
 /** A JSON body GitHub would answer with. */
 export type GithubBody = { readonly [key: string]: GithubJson };
 
-type Reply = (call: RecordedCall) => { status?: number; body: GithubBody };
+type Reply = (call: RecordedCall) => {
+  status?: number;
+  headers?: Record<string, string>;
+  body: GithubBody;
+};
 
 const formBodySchema = z.record(z.string(), z.string());
 const jwtPayloadSchema = z.object({ iss: z.string() });
@@ -59,6 +63,7 @@ export const octocat = {
   login: 'octocat',
   type: 'User',
   html_url: 'https://github.com/octocat',
+  avatar_url: 'https://avatars.githubusercontent.com/u/583231?v=4',
 };
 
 export const acmeInstallation = {
@@ -68,6 +73,7 @@ export const acmeInstallation = {
     login: 'acme',
     type: 'Organization',
     html_url: 'https://github.com/acme',
+    avatar_url: 'https://avatars.githubusercontent.com/u/9919?v=4',
   },
   repository_selection: 'selected',
   html_url: 'https://github.com/organizations/acme/settings/installations/42',
@@ -171,11 +177,15 @@ export class FakeGithub {
     this.calls.push(call);
 
     const reply = this.routes.get(`${method} ${url.origin}${url.pathname}`);
-    const { status = 200, body: answer } = reply?.(call) ?? {
+    const {
+      status = 200,
+      headers = {},
+      body: answer,
+    } = reply?.(call) ?? {
       status: 404,
       body: { message: 'Not Found' },
     };
-    return Response.json(answer, { status });
+    return Response.json(answer, { status, headers });
   }
 
   /** An HMAC-SHA256 webhook signature, as GitHub sends it. */

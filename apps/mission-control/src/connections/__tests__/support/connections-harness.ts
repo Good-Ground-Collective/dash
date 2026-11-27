@@ -17,7 +17,6 @@ import {
   InMemoryWebhookDeliveryRepository,
 } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import { ConnectionsModule } from '#src/connections/module.ts';
-import { SignedConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
@@ -117,6 +116,17 @@ export class ConnectionsHarness {
     );
   }
 
+  /** Authorizes the app as `userId` through the OAuth callback. */
+  async link(props: { userId: string }): Promise<void> {
+    const state = await this.issuedState({ ...props, url: 'authorizeUrl' });
+    await (
+      await this.start()
+    ).inject({
+      url: `/integrations/github/callback?code=good&state=${state}`,
+      headers: ConnectionsHarness.cookie(props.userId),
+    });
+  }
+
   async stop(): Promise<void> {
     await this.app?.close();
     this.app = undefined;
@@ -133,17 +143,5 @@ export class ConnectionsHarness {
   /** The `state` query parameter of a URL the routes handed out. */
   static stateOf(url: string | undefined): string {
     return new URL(url ?? '').searchParams.get('state') ?? '';
-  }
-
-  /** A state as an install link for a chosen account carries it. Call with the clock frozen. */
-  static requestState(props: {
-    userId: string;
-    targetAccountId: string;
-  }): string {
-    return new SignedConnectState({ secret }).issue({
-      ...props,
-      provider: 'github',
-      returnTo: '/setup/github',
-    });
   }
 }

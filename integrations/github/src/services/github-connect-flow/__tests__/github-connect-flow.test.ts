@@ -1,12 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
+import { GrantRevokedError } from '@dash/integrations-core';
+
 import {
   appConfig,
+  acmeInstallation,
   appPrivateKey,
   FakeGithub,
   redirectUrl,
 } from '#src/__tests__/support/fake-github.ts';
+import {
+  Accounts,
+  enterpriseInstallation,
+  installationsUrl,
+} from '#src/__tests__/support/fake-user-accounts.ts';
 import { GithubConnectFlow } from '#src/services/github-connect-flow/github-connect-flow.ts';
 
 afterEach(() => {
@@ -54,5 +62,51 @@ describe('GithubConnectFlow config', () => {
     const config = { ...appConfig, privateKey: escaped };
 
     expect(() => new GithubConnectFlow({ config })).not.toThrow();
+  });
+});
+
+describe('GithubConnectFlow listUserInstallationIds', () => {
+  it('lists every installation the user can manage, across pages, from the ids alone', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => index + 1);
+    const github = new FakeGithub().on({
+      method: 'GET',
+      url: installationsUrl,
+      reply: ({ url }) => {
+        const page = Number(url.searchParams.get('page'));
+        const installations = ids
+          .slice((page - 1) * 100, page * 100)
+          .map((id) => ({ id }));
+        return { body: { total_count: ids.length, installations } };
+      },
+    });
+
+    const listed = await github
+      .flow()
+      .listUserInstallationIds({ accessToken: 'ghu_access' });
+
+    expect(listed).toEqual(ids.map(String));
+    expect(github.calls).toHaveLength(2);
+  });
+
+  it('counts an enterprise installation among those the user can manage', async () => {
+    const ids = await Accounts.github({
+      installations: [acmeInstallation, enterpriseInstallation],
+    })
+      .flow()
+      .listUserInstallationIds({ accessToken: 'ghu_access' });
+
+    expect(ids).toEqual(['42', '88']);
+  });
+
+  it('reports a token GitHub refuses as a revoked grant', async () => {
+    const github = new FakeGithub().on({
+      method: 'GET',
+      url: installationsUrl,
+      reply: () => ({ status: 401, body: { message: 'Bad credentials' } }),
+    });
+
+    await expect(
+      github.flow().listUserInstallationIds({ accessToken: 'ghu_revoked' }),
+    ).rejects.toThrow(GrantRevokedError);
   });
 });

@@ -139,39 +139,3 @@ describe('GithubConnectFlow refreshGrant', () => {
     ).rejects.toThrow(GithubOAuthError);
   });
 });
-
-describe('GithubConnectFlow listUserInstallationIds', () => {
-  it('lists every installation the user can manage, across pages', async () => {
-    const ids = Array.from({ length: 101 }, (_, index) => index + 1);
-    const github = new FakeGithub().on({
-      method: 'GET',
-      url: 'https://api.github.com/user/installations',
-      reply: ({ url }) => {
-        const page = Number(url.searchParams.get('page'));
-        const installations = ids
-          .slice((page - 1) * 100, page * 100)
-          .map((id) => ({ id }));
-        return { body: { total_count: ids.length, installations } };
-      },
-    });
-
-    const listed = await github
-      .flow()
-      .listUserInstallationIds({ accessToken: 'ghu_access' });
-
-    expect(listed).toEqual(ids.map(String));
-    expect(github.calls).toHaveLength(2);
-  });
-
-  it('reports a token GitHub refuses as a revoked grant', async () => {
-    const github = new FakeGithub().on({
-      method: 'GET',
-      url: 'https://api.github.com/user/installations',
-      reply: () => ({ status: 401, body: { message: 'Bad credentials' } }),
-    });
-
-    await expect(
-      github.flow().listUserInstallationIds({ accessToken: 'ghu_revoked' }),
-    ).rejects.toThrow(GrantRevokedError);
-  });
-});

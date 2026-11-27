@@ -3,6 +3,7 @@ import {
   repositorySelectionSchema,
   providerIdSchema,
   repositorySchema,
+  userAccountSchema,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
@@ -57,6 +58,79 @@ export const connectStatusSchema = z.object({
     ),
   connections: z.array(ownedConnectionSchema),
 });
+
+const installedStateSchema = z.object({
+  state: z.literal('installed'),
+  installationId: z.string().min(1),
+  repositorySelection: repositorySelectionSchema,
+  repositoryCount: z
+    .int()
+    .nonnegative()
+    .nullable()
+    .describe(
+      'Private repositories included. Null while the installation is suspended, where you are not an owner, or when it could not be read.',
+    ),
+  suspended: z.boolean(),
+  incomplete: z
+    .boolean()
+    .describe(
+      'True when the provider failed to give your role or the repository count, as when it rate-limits the request. Those fields are then null, and loading again may fill them.',
+    ),
+  settingsUrl: z
+    .url()
+    .describe(
+      "The installation's settings on the provider, where the person changes which repositories it covers: “Manage”.",
+    ),
+  connectionId: z
+    .uuid()
+    .nullable()
+    .describe(
+      'The owned connection Dash recorded for it. Null when the app was installed without coming back through the setup URL.',
+    ),
+});
+
+const installableStateSchema = z.object({
+  state: z.literal('installable'),
+  installUrl: z
+    .url()
+    .describe(
+      'Opens the provider’s install page with this account chosen. Valid for ten minutes.',
+    ),
+});
+
+/** One account the person can connect, and where its install stands. */
+export const connectableAccountSchema = z.object({
+  account: userAccountSchema,
+  install: z.discriminatedUnion('state', [
+    installedStateSchema,
+    installableStateSchema,
+  ]),
+});
+
+export const accountsResponseSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z
+      .literal('authorize')
+      .describe(
+        'You haven’t authorized the provider’s app, or it no longer accepts your grant.',
+      ),
+    authorizeUrl: z
+      .url()
+      .describe('Links the provider account. Valid for ten minutes.'),
+  }),
+  z.object({
+    status: z.literal('linked'),
+    addAccountUrl: z
+      .url()
+      .describe(
+        'Opens the provider’s own account picker, which lists every account you can install the app on or request it for. A request made there isn’t listed: the provider doesn’t say which account it was for, so the account appears once an owner installs. Valid for ten minutes.',
+      ),
+    accounts: z.array(connectableAccountSchema),
+  }),
+]);
+
+export type InstalledState = z.infer<typeof installedStateSchema>;
+export type ConnectableAccount = z.infer<typeof connectableAccountSchema>;
 
 export const setupQuerySchema = z
   .object({

@@ -124,16 +124,6 @@ export class OwnedConnections {
     });
   }
 
-  async recordInstallRequest(props: {
-    userId: string;
-    accountExternalId: string;
-  }): Promise<void> {
-    await this.connections.recordInstallRequest({
-      ...props,
-      provider: this.provider,
-    });
-  }
-
   async list(): Promise<OwnedConnection[]> {
     return this.connections.listOwned({ provider: this.provider });
   }

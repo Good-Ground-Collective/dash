@@ -6,7 +6,6 @@ import { ConnectionNotStoredError } from '#src/connections/errors.ts';
 import {
   connectionRepositoryTable,
   connectionTable,
-  installRequestTable,
 } from '#src/connections/repositories/connections/connections-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
@@ -26,11 +25,11 @@ export interface ConnectionRepository {
     provider: string;
     installationId: string;
   }): Promise<boolean>;
-  recordInstallRequest(props: {
-    userId: string;
+  /** The owned connection id for each of `installationIds` that Dash has recorded. */
+  connectionIdsFor(props: {
     provider: string;
-    accountExternalId: string;
-  }): Promise<void>;
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>>;
 }
 
 export class DrizzleConnectionRepository implements ConnectionRepository {
@@ -150,22 +149,31 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
     return rows.length > 0;
   }
 
-  async recordInstallRequest(props: {
-    userId: string;
+  async connectionIdsFor(props: {
     provider: string;
-    accountExternalId: string;
-  }): Promise<void> {
-    await this.database.orm
-      .insert(installRequestTable)
-      .values(props)
-      .onConflictDoUpdate({
-        target: [
-          installRequestTable.userId,
-          installRequestTable.provider,
-          installRequestTable.accountExternalId,
-        ],
-        set: { requestedAt: new Date() },
-      });
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>> {
+    if (props.installationIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.database.orm
+      .select({
+        id: connectionTable.id,
+        installationId: connectionTable.installationId,
+      })
+      .from(connectionTable)
+      .where(
+        and(
+          eq(connectionTable.provider, props.provider),
+          eq(connectionTable.kind, 'owned'),
+          inArray(connectionTable.installationId, [...props.installationIds]),
+        ),
+      );
+    return new Map(
+      rows.flatMap(({ id, installationId }) =>
+        installationId === null ? [] : [[installationId, id] as const],
+      ),
+    );
   }
 
   private toOwned(props: {

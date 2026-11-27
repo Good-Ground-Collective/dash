@@ -8,15 +8,8 @@ import type {
 } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 
-export interface StoredInstallRequest {
-  userId: string;
-  provider: string;
-  accountExternalId: string;
-}
-
 export class InMemoryConnectionRepository implements ConnectionRepository {
   readonly owned = new Map<string, OwnedConnection>();
-  readonly installRequests: StoredInstallRequest[] = [];
 
   async saveOwned(props: {
     provider: string;
@@ -61,8 +54,19 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     );
   }
 
-  async recordInstallRequest(request: StoredInstallRequest): Promise<void> {
-    this.installRequests.push(request);
+  async connectionIdsFor(props: {
+    provider: string;
+    installationIds: readonly string[];
+  }): Promise<ReadonlyMap<string, string>> {
+    return new Map(
+      [...this.owned.values()]
+        .filter(
+          (connection) =>
+            connection.provider === props.provider &&
+            props.installationIds.includes(connection.installationId),
+        )
+        .map((connection) => [connection.installationId, connection.id]),
+    );
   }
 }
 

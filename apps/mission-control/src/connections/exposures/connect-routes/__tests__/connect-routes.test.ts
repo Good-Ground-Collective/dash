@@ -15,16 +15,7 @@ class Served {
   static async linked(): Promise<ConnectionsHarness> {
     const harness = new ConnectionsHarness();
     running.push(harness);
-    const state = await harness.issuedState({
-      userId: adaId,
-      url: 'authorizeUrl',
-    });
-    await (
-      await harness.start()
-    ).inject({
-      url: `/integrations/github/callback?code=good&state=${state}`,
-      headers: ConnectionsHarness.cookie(adaId),
-    });
+    await harness.link({ userId: adaId });
     return harness;
   }
 
@@ -182,11 +173,11 @@ describe('ConnectionsModule install with a refused grant', () => {
 });
 
 describe('ConnectionsModule install requests', () => {
-  it('records which account an owner was asked to install on', async () => {
+  it('sends the person back with the request noted and records no connection', async () => {
     const harness = await Served.fresh();
-    const state = ConnectionsHarness.requestState({
+    const state = await harness.issuedState({
       userId: adaId,
-      targetAccountId: '9919',
+      url: 'installUrl',
     });
 
     const response = await (
@@ -196,12 +187,12 @@ describe('ConnectionsModule install requests', () => {
       headers: ConnectionsHarness.cookie(adaId),
     });
 
-    expect(Served.query(response.headers.location)).toMatchObject({
+    expect(Served.query(response.headers.location)).toEqual({
+      path: `${webOrigin}/setup/github`,
       connect: 'requested',
+      provider: 'github',
     });
-    expect(harness.connections.installRequests).toEqual([
-      { userId: adaId, provider: 'github', accountExternalId: '9919' },
-    ]);
+    expect(harness.connections.owned.size).toBe(0);
   });
 });
 

@@ -17,14 +17,16 @@ import {
   InstallationNotYoursError,
   SignInRequiredError,
 } from '#src/connections/errors.ts';
+import type { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
 import type { ConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
+import { SignedInPerson } from '#src/connections/services/signed-in-person/signed-in-person.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
 /**
  * A provider's connect flow under `/integrations/<provider>`:
  * - `GET /connect`: the install and authorize URLs for the web's “Connect” button, the linked account and the owned connections. Needs a session.
- * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request).
+ * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request). A request isn't recorded, because the provider doesn't say which account it was for; the account shows up once an owner installs.
  * - `GET /callback`: the OAuth callback, which links the account and finishes an install that was waiting for it.
  *
  * Both callbacks end with a redirect to the web app's `returnTo` path, carrying `connect=<outcome>` and, on failure, `reason`.
@@ -32,10 +34,9 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 export class ConnectRoutes {
   private readonly connections: OwnedConnections;
   private readonly flow: ConnectFlow;
-  private readonly identity: Pick<Identity, 'session'>;
+  private readonly person: SignedInPerson;
   private readonly state: ConnectState;
-  private readonly prefix: string;
-  private readonly redirectUrl: string;
+  private readonly paths: ConnectPaths;
   private readonly webOrigin: string;
 
   constructor(props: {
@@ -43,22 +44,20 @@ export class ConnectRoutes {
     flow: ConnectFlow;
     identity: Pick<Identity, 'session'>;
     state: ConnectState;
-    /** Mission Control's public origin, where the provider sends people back. */
-    baseUrl: string;
+    paths: ConnectPaths;
     webOrigin: string;
   }) {
     this.connections = props.connections;
     this.flow = props.flow;
-    this.identity = props.identity;
+    this.person = new SignedInPerson({ identity: props.identity });
     this.state = props.state;
-    this.prefix = `/integrations/${props.connections.provider}`;
-    this.redirectUrl = `${props.baseUrl}${this.prefix}/callback`;
+    this.paths = props.paths;
     this.webOrigin = props.webOrigin;
   }
 
   register(app: ZodFastifyInstance): void {
     app.get(
-      `${this.prefix}/connect`,
+      `${this.paths.prefix}/connect`,
       {
         schema: {
           querystring: connectQuerySchema,
@@ -66,17 +65,17 @@ export class ConnectRoutes {
         },
       },
       async (request) => {
-        const userId = await this.personOf(request);
+        const userId = await this.person.of(request);
         if (userId === null) {
           throw new SignInRequiredError();
         }
-        const returnTo = request.query.returnTo ?? this.defaultReturnTo();
+        const returnTo = request.query.returnTo ?? this.paths.defaultReturnTo;
         const base = { userId, provider: this.connections.provider, returnTo };
         return {
           installUrl: this.flow.installUrl({ state: this.state.issue(base) }),
           authorizeUrl: this.flow.authorizeUrl({
             state: this.state.issue(base),
-            redirectUrl: this.redirectUrl,
+            redirectUrl: this.paths.callbackUrl,
           }),
           account: await this.connections.linkedAccount({ userId }),
           connections: await this.connections.list(),
@@ -85,13 +84,13 @@ export class ConnectRoutes {
     );
 
     app.get(
-      `${this.prefix}/setup`,
+      `${this.paths.prefix}/setup`,
       { schema: { querystring: setupQuerySchema } },
       async (request, reply) => this.setup({ request, reply }),
     );
 
     app.get(
-      `${this.prefix}/callback`,
+      `${this.paths.prefix}/callback`,
       { schema: { querystring: callbackQuerySchema } },
       async (request, reply) => this.callback({ request, reply }),
     );
@@ -103,7 +102,7 @@ export class ConnectRoutes {
   }): Promise<FastifyReply> {
     const { request, reply } = props;
     const query = request.query;
-    const userId = await this.personOf(request);
+    const userId = await this.person.of(request);
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
@@ -115,15 +114,9 @@ export class ConnectRoutes {
             userId,
             provider: this.connections.provider,
           });
-    const returnTo = state?.returnTo ?? this.defaultReturnTo();
+    const returnTo = state?.returnTo ?? this.paths.defaultReturnTo;
 
     if (query.setupAction === 'request') {
-      if (state?.targetAccountId !== undefined) {
-        await this.connections.recordInstallRequest({
-          userId,
-          accountExternalId: state.targetAccountId,
-        });
-      }
       return this.finish({ reply, returnTo, outcome: 'requested' });
     }
     if (query.installationId === undefined) {
@@ -151,7 +144,7 @@ export class ConnectRoutes {
   }): Promise<FastifyReply> {
     const { request, reply } = props;
     const query = request.query;
-    const userId = await this.personOf(request);
+    const userId = await this.person.of(request);
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
@@ -180,7 +173,7 @@ export class ConnectRoutes {
       await this.connections.link({
         userId,
         code: query.code,
-        redirectUrl: this.redirectUrl,
+        redirectUrl: this.paths.callbackUrl,
       });
     } catch (error) {
       return this.fail({ request, reply, returnTo, error });
@@ -212,7 +205,10 @@ export class ConnectRoutes {
           installationId,
         });
         return reply.redirect(
-          this.flow.authorizeUrl({ state, redirectUrl: this.redirectUrl }),
+          this.flow.authorizeUrl({
+            state,
+            redirectUrl: this.paths.callbackUrl,
+          }),
         );
       }
       return this.fail({ request, reply, returnTo, error });
@@ -268,7 +264,7 @@ export class ConnectRoutes {
     reason?: ConnectErrorReason;
   }): FastifyReply {
     const url = new URL(
-      props.returnTo ?? this.defaultReturnTo(),
+      props.returnTo ?? this.paths.defaultReturnTo,
       this.webOrigin,
     );
     url.searchParams.set('connect', props.outcome);
@@ -277,21 +273,5 @@ export class ConnectRoutes {
       url.searchParams.set('reason', props.reason);
     }
     return props.reply.redirect(url.toString());
-  }
-
-  private defaultReturnTo(): string {
-    return `/setup/${this.connections.provider}`;
-  }
-
-  /** The signed-in person, or null without a session or for a service principal. */
-  private async personOf(request: FastifyRequest): Promise<string | null> {
-    const headers = new Headers();
-    for (const [name, value] of Object.entries(request.headers)) {
-      for (const item of [value ?? []].flat()) {
-        headers.append(name, item);
-      }
-    }
-    const session = await this.identity.session({ headers });
-    return session?.kind === 'user' ? session.principalId : null;
   }
 }
