@@ -15,6 +15,13 @@
     children: Snippet;
     footer?: Snippet;
   } = $props();
+
+  let heading = $state<HTMLHeadingElement>();
+
+  /** Moves focus to the title, so a screen reader announces the new screen and its step. */
+  export function focusTitle(): void {
+    heading?.focus();
+  }
 </script>
 
 <section class="auth" aria-labelledby="auth-title">
@@ -39,9 +46,16 @@
       </svg>
     </span>
     {#if step}
-      <p class="step">{step}</p>
+      <p class="step" id="auth-step">{step}</p>
     {/if}
-    <h1 id="auth-title">{title}</h1>
+    <h1
+      id="auth-title"
+      tabindex="-1"
+      aria-describedby={step ? 'auth-step' : undefined}
+      bind:this={heading}
+    >
+      {title}
+    </h1>
     <p class="lede">{lede}</p>
     {@render children()}
   </div>
@@ -83,6 +97,10 @@
     margin-bottom: calc(var(--space-2) * -1);
     font-size: var(--font-size-xs);
     color: var(--ink-muted);
+  }
+
+  h1:focus {
+    outline: none;
   }
 
   h1 {

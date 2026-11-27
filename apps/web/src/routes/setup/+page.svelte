@@ -22,24 +22,32 @@
   let email = $state('');
   let busy = $state(false);
   let tokenInput = $state<HTMLInputElement>();
-  let nameInput = $state<HTMLInputElement>();
+  let card = $state<AuthCard>();
 
-  /** Runs one step's request, then focuses the first field of wherever it lands. */
+  /**
+   * Runs one step's request. A rejected token puts focus back in the token field; any other move
+   * to a new screen focuses its title, so the title and step are announced. Once done, the form
+   * stays busy until home loads.
+   */
   const advance = async (next: () => Promise<SetupStep>): Promise<void> => {
     const before = current.step;
     busy = true;
     try {
       current = await next();
-    } finally {
+    } catch (cause) {
       busy = false;
+      throw cause;
     }
     if (current.step === 'done') {
       await goto('/', { invalidateAll: true });
       return;
     }
-    if (current.step !== before) {
-      await tick();
-      (current.step === 'token' ? tokenInput : nameInput)?.focus();
+    busy = false;
+    await tick();
+    if (current.step === 'token' && current.error !== null) {
+      tokenInput?.focus();
+    } else if (current.step !== before) {
+      card?.focusTitle();
     }
   };
 
@@ -64,6 +72,7 @@
 
 {#if data.open === true && current.step === 'token'}
   <AuthCard
+    bind:this={card}
     step="Step 1 of 4"
     title="Set up Dash"
     lede="Enter the setup token from Mission Control’s first-boot logs. It works once."
@@ -80,10 +89,16 @@
           autocomplete="off"
           spellcheck="false"
           placeholder="Paste the token"
+          aria-invalid={current.error !== null}
+          aria-describedby={current.error === null
+            ? undefined
+            : 'setup-token-error'}
         />
       </div>
       {#if current.error}
-        <p class="auth-error" role="alert">{current.error}</p>
+        <p class="auth-error" id="setup-token-error" role="alert">
+          {current.error}
+        </p>
       {/if}
       <button class="auth-button" type="submit" disabled={busy}>
         {busy ? 'Checking…' : 'Continue'}
@@ -96,8 +111,9 @@
       </p>
     </form>
   </AuthCard>
-{:else if data.open === true}
+{:else if data.open === true && current.step !== 'closed'}
   <AuthCard
+    bind:this={card}
     step="Step 2 of 4"
     title="Create your account"
     lede="Dash signs you in with a passkey. There’s no password."
@@ -105,13 +121,7 @@
     <form class="auth-form" onsubmit={createAccount}>
       <div class="auth-field">
         <label for="setup-name">Display name</label>
-        <input
-          id="setup-name"
-          bind:this={nameInput}
-          bind:value={name}
-          required
-          autocomplete="name"
-        />
+        <input id="setup-name" bind:value={name} required autocomplete="name" />
       </div>
       <div class="auth-field">
         <label for="setup-email">Email</label>
@@ -146,8 +156,9 @@
       </button>
     </form>
   </AuthCard>
-{:else if data.open === false}
+{:else if data.open === false || current.step === 'closed'}
   <AuthCard
+    bind:this={card}
     title="Setup is done"
     lede="Someone has already created the first account, so setup is closed."
   >

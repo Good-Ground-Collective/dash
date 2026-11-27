@@ -31,14 +31,15 @@ import type {
   PasskeyEnrolmentSource,
   PasskeyEnrolmentUser,
 } from '#src/auth/services/passkeys/passkeys.ts';
+import {
+  type SetupThrottle,
+  WindowSetupThrottle,
+} from '#src/auth/services/setup/setup-throttle.ts';
 
 const enrolmentPrefix = 'setup-enrolment:';
 const enrolmentLifetimeMilliseconds = 10 * 60 * 1000;
 /** The only value `setup_token.slot` accepts, so at most one token exists at a time. */
 const tokenSlot = 'first-person';
-/** The endpoints that take a setup token, held to Better Auth's sign-in limit so the check can't be used to guess tokens quickly. */
-const tokenPaths = new Set(['/setup/check', '/setup/begin']);
-const tokenRateLimit = { window: 10, max: 3 };
 
 interface StoredSetupToken {
   id: string;
@@ -57,12 +58,14 @@ export interface Setup extends PasskeyEnrolmentSource {
  * it's the current one without spending it. Beginning setup trades the token
  * for a short-lived enrolment, which the passkey registration then spends: in one transaction it
  * deletes the token, creates the person and stores the passkey. Every step refuses once anyone
- * has signed up.
+ * has signed up. Check and begin share one throttle that ignores the client address.
  */
 export class TokenSetup implements Setup {
   readonly plugin: BetterAuthPlugin;
+  private readonly throttle: SetupThrottle;
 
-  constructor() {
+  constructor(props: { throttle?: SetupThrottle } = {}) {
+    this.throttle = props.throttle ?? new WindowSetupThrottle();
     this.plugin = {
       id: 'setup',
       schema: {
@@ -74,12 +77,6 @@ export class TokenSetup implements Setup {
           },
         },
       },
-      rateLimit: [
-        {
-          pathMatcher: (path) => tokenPaths.has(path),
-          ...tokenRateLimit,
-        },
-      ],
       endpoints: {
         setupStatus: createAuthEndpoint(
           '/setup/status',
@@ -223,6 +220,7 @@ export class TokenSetup implements Setup {
     context: AuthContext;
     input: SetupCheck;
   }): Promise<SetupChecked> {
+    this.throttle.attempt();
     const input = setupCheckSchema.parse(props.input);
     await this.assertOpen({
       adapter: props.context.adapter,
@@ -235,6 +233,7 @@ export class TokenSetup implements Setup {
     context: AuthContext;
     input: SetupBegin;
   }): Promise<SetupEnrolment> {
+    this.throttle.attempt();
     const input = setupBeginSchema.parse(props.input);
     const tokenHash = this.hash(input.token);
     await this.assertOpen({ adapter: props.context.adapter, tokenHash });

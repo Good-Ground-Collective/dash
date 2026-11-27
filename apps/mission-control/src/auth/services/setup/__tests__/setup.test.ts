@@ -1,5 +1,3 @@
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,8 +5,6 @@ import {
   passkeyWebOrigin,
 } from '#src/auth/__tests__/support/passkey-identity.ts';
 import { setupEnrolmentSchema } from '#src/auth/contracts/setup.ts';
-import { KindPrincipalGuard } from '#src/auth/services/principal-guard/principal-guard.ts';
-import { TokenSetup } from '#src/auth/services/setup/setup.ts';
 
 describe('TokenSetup tokens', () => {
   it('issues a token at boot while nobody has signed up, storing only its hash', async () => {
@@ -104,25 +100,26 @@ describe('TokenSetup token check', () => {
 });
 
 describe('TokenSetup rate limit', () => {
-  it('holds the check to the sign-in rate limit, like begin', async () => {
-    const auth = betterAuth({
-      baseURL: 'http://localhost:3000',
-      secret: 'test-secret-that-is-at-least-32-characters',
-      database: memoryAdapter({ user: [], setupToken: [] }),
-      trustedOrigins: [passkeyWebOrigin],
-      plugins: [new KindPrincipalGuard().plugin, new TokenSetup().plugin],
-      rateLimit: { enabled: true },
-      telemetry: { enabled: false },
-      logger: { disabled: true },
-    });
-    const attempt = async (path: string): Promise<number> => {
-      const response = await auth.handler(
-        new Request(`http://localhost:3000/api/auth${path}`, {
+  it('runs Better Auth with its rate limiter pinned on, whatever NODE_ENV is', async () => {
+    const context = await new PasskeyIdentity().identity.auth.$context;
+
+    expect(context.rateLimit.enabled).toBe(true);
+  });
+
+  it('shares one budget between check and begin, whatever address the caller claims', async () => {
+    const fixture = new PasskeyIdentity();
+    await fixture.issueToken();
+    const attempt = async (props: {
+      path: string;
+      forwardedFor: string;
+    }): Promise<Response> =>
+      fixture.identity.handle(
+        new Request(`http://localhost:3000/api/auth${props.path}`, {
           method: 'POST',
           headers: {
             origin: passkeyWebOrigin,
             'content-type': 'application/json',
-            'x-forwarded-for': '203.0.113.7',
+            'x-forwarded-for': props.forwardedFor,
           },
           body: JSON.stringify({
             token: 'guess',
@@ -131,18 +128,24 @@ describe('TokenSetup rate limit', () => {
           }),
         }),
       );
-      return response.status;
-    };
 
-    const checks = [];
-    const begins = [];
-    for (let attempts = 0; attempts < 4; attempts += 1) {
-      checks.push(await attempt('/setup/check'));
-      begins.push(await attempt('/setup/begin'));
+    const statuses = [];
+    for (let attempts = 0; attempts < 10; attempts += 1) {
+      const response = await attempt({
+        path: attempts % 2 === 0 ? '/setup/check' : '/setup/begin',
+        forwardedFor: `203.0.113.${attempts}`,
+      });
+      statuses.push(response.status);
     }
+    const refused = await attempt({
+      path: '/setup/check',
+      forwardedFor: '198.51.100.1',
+    });
 
-    expect(checks).toEqual([401, 401, 401, 429]);
-    expect(begins).toEqual([401, 401, 401, 429]);
+    expect(statuses).toEqual(Array.from({ length: 10 }, () => 401));
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toMatchObject({ code: 'SETUP_RATE_LIMITED' });
+    expect(refused.headers.get('retry-after')).toMatch(/^\d+$/u);
   });
 });
 

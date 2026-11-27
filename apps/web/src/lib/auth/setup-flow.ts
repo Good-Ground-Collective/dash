@@ -6,9 +6,13 @@ import type { PasskeyWording } from '#lib/auth/passkey-wording.ts';
 export type SetupStep =
   | { step: 'token'; error: string | null }
   | { step: 'account'; token: string; error: string | null }
-  | { step: 'done' };
+  | { step: 'done' }
+  | { step: 'closed' };
 
-/** The two setup steps: check the token, then create the account with a passkey. */
+/**
+ * The two setup steps: check the token, then create the account with a passkey. Either step
+ * closes when someone else finished setup after the page loaded, since only signing in is left.
+ */
 export class SetupFlow {
   private readonly auth: Pick<PasskeyAuth, 'checkSetupToken' | 'setUp'>;
   private readonly wording: Pick<PasskeyWording, 'explain'>;
@@ -28,6 +32,7 @@ export class SetupFlow {
       await this.auth.checkSetupToken({ token });
       return { step: 'account', token, error: null };
     } catch (cause) {
+      if (SetupFlow.hasCode(cause, 'SETUP_CLOSED')) return { step: 'closed' };
       return { step: 'token', error: this.wording.explain(cause) };
     }
   }
@@ -46,11 +51,9 @@ export class SetupFlow {
       });
       return { step: 'done' };
     } catch (cause) {
+      if (SetupFlow.hasCode(cause, 'SETUP_CLOSED')) return { step: 'closed' };
       const error = this.wording.explain(cause);
-      if (
-        cause instanceof PasskeyAuthError &&
-        cause.code === 'SETUP_TOKEN_REJECTED'
-      ) {
+      if (SetupFlow.hasCode(cause, 'SETUP_TOKEN_REJECTED')) {
         return { step: 'token', error };
       }
       return { step: 'account', token: props.token, error };
@@ -59,5 +62,10 @@ export class SetupFlow {
 
   static start(): SetupStep {
     return { step: 'token', error: null };
+  }
+
+  /** True when `cause` is Mission Control's answer with `code`. */
+  private static hasCode(cause: unknown, code: string): boolean {
+    return cause instanceof PasskeyAuthError && cause.code === code;
   }
 }

@@ -122,6 +122,10 @@ test.beforeAll(async ({ browser, baseURL, request }, testInfo) => {
   device = await PasskeyDevice.open({ browser, baseURL: baseURL ?? '' });
 });
 
+test.afterEach(async () => {
+  await device.page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 test('setup step 1 catches a wrong token before asking for the account', async () => {
   const { page } = device;
   await page.goto('/setup');
@@ -134,7 +138,38 @@ test('setup step 1 catches a wrong token before asking for the account', async (
   await expect(
     page.getByRole('heading', { name: 'Set up Dash' }),
   ).toBeVisible();
+  await expect(page.getByLabel('Setup token')).toBeFocused();
+  await expect(page.getByLabel('Setup token')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await expect(page.getByLabel('Setup token')).toHaveAccessibleDescription(
+    /isn’t the current one/u,
+  );
   await expect(page.getByLabel('Display name')).toHaveCount(0);
+});
+
+test('a setup someone else finished in the meantime offers sign-in', async () => {
+  const { page } = device;
+  await page.goto('/setup');
+  await page.route(`${missionControlUrl}/api/auth/setup/check`, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { code: 'SETUP_CLOSED', message: 'closed' },
+    }),
+  );
+
+  await page.getByLabel('Setup token').fill(setupToken);
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Setup is done' }),
+  ).toBeFocused();
+  await expect(
+    page
+      .getByRole('region', { name: 'Setup is done' })
+      .getByRole('link', { name: 'Sign in' }),
+  ).toHaveAttribute('href', '/sign-in');
 });
 
 test('a token begin rejects sends you back to step 1', async () => {
@@ -159,7 +194,6 @@ test('a token begin rejects sends you back to step 1', async () => {
   ).toBeVisible();
   await expect(page.getByRole('alert')).toHaveText(/isn’t the current one/u);
   await expect(page.getByLabel('Setup token')).toBeFocused();
-  await page.unroute(`${missionControlUrl}/api/auth/setup/begin`);
 });
 
 test('setup goes token, then account, then passkey, without the token in the URL', async () => {
@@ -173,7 +207,12 @@ test('setup goes token, then account, then passkey, without the token in the URL
   await expect(
     page.getByRole('heading', { name: 'Create your account' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Display name')).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Create your account' }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Create your account' }),
+  ).toHaveAccessibleDescription('Step 2 of 4');
   await expect(page).toHaveURL('/setup');
   await page.getByLabel('Display name').fill('Ada Lovelace');
   await page.getByLabel('Email').fill('ada@example.com');

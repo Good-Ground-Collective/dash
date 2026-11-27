@@ -29,6 +29,7 @@ const rejected = new PasskeyAuthError({
   code: 'SETUP_TOKEN_REJECTED',
   status: 401,
 });
+const closed = new PasskeyAuthError({ code: 'SETUP_CLOSED', status: 403 });
 
 class Harness {
   readonly auth = new FakeSetup();
@@ -60,6 +61,30 @@ describe('SetupFlow token step', () => {
       error: passkeyWording.explain(rejected),
     });
     expect(auth.begun).toEqual([]);
+  });
+});
+
+describe('SetupFlow once someone else has finished setup', () => {
+  it('closes from the token step', async () => {
+    const { auth, flow } = new Harness();
+    auth.checkFails = closed;
+
+    expect(await flow.checkToken({ token: 'abc123' })).toEqual({
+      step: 'closed',
+    });
+  });
+
+  it('closes from the account step', async () => {
+    const { auth, flow } = new Harness();
+    auth.setUpFails = closed;
+
+    const next = await flow.createAccount({
+      token: 'abc123',
+      name: 'Ada',
+      email: 'ada@example.com',
+    });
+
+    expect(next).toEqual({ step: 'closed' });
   });
 });
 

@@ -96,7 +96,8 @@ export interface Identity {
 /**
  * Better Auth configured for Dash: principals in `user`, passkeys as the only sign-in, 30-day
  * sliding sessions in an HttpOnly, SameSite=Lax cookie, fresh for 15 minutes after sign-in. The origin check is pinned on because Better Auth skips it when
- * NODE_ENV is `test`, which would let tests pass that production would fail.
+ * NODE_ENV is `test`, which would let tests pass that production would fail. The rate limiter is
+ * pinned on for the same reason: Better Auth otherwise enables it only when NODE_ENV is `production`.
  */
 export class BetterAuthIdentity implements Identity {
   readonly auth: Auth;
@@ -156,6 +157,7 @@ export class BetterAuthIdentity implements Identity {
             ? { enabled: false }
             : { enabled: true, domain: settings.cookieDomain },
       },
+      rateLimit: { enabled: true },
       telemetry: { enabled: false },
     });
   }
