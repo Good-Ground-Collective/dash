@@ -57,6 +57,11 @@ export const webhookDeliverySchema = z.object({
     .min(1)
     .nullable()
     .describe('Null for events that concern no installation.'),
+  installationLifecycle: z
+    .boolean()
+    .describe(
+      'True when the event is about the installation itself, such as its creation or a change to its repositories. These can arrive before Dash has recorded the installation.',
+    ),
 });
 
 /** Request headers as Node and Fastify hand them over. */

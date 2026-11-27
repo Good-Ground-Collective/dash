@@ -24,7 +24,12 @@ export class DrizzleWebhookDeliveryRepository implements WebhookDeliveryReposito
   }): Promise<{ duplicate: boolean }> {
     const inserted = await this.database.orm
       .insert(webhookDeliveryTable)
-      .values({ provider: props.provider, ...props.delivery })
+      .values({
+        provider: props.provider,
+        deliveryId: props.delivery.deliveryId,
+        event: props.delivery.event,
+        installationId: props.delivery.installationId,
+      })
       .onConflictDoNothing()
       .returning({ deliveryId: webhookDeliveryTable.deliveryId });
     return { duplicate: inserted.length === 0 };

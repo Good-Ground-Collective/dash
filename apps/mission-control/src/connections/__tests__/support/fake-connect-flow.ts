@@ -59,7 +59,8 @@ export const acmeInstallation: Installation = {
 /**
  * A provider in memory. Code `good` authorizes octocat with `access-1`, which can manage
  * installation 42. Tokens in `revoked` are refused, and so is every refresh once
- * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`; its
+ * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`, and its event is
+ * `x-event`: `installation` (the default) or `pull_request`. Its
  * installation is the body's `installation.id`, read only after the signature checks out.
  */
 export class FakeConnectFlow implements ConnectFlow {
@@ -136,6 +137,10 @@ export class FakeConnectFlow implements ConnectFlow {
   }): Promise<WebhookDelivery | null> {
     const text = Buffer.from(props.body).toString('utf8');
     const delivery = props.headers['x-delivery'];
+    const event = z
+      .enum(['installation', 'pull_request'])
+      .catch('installation')
+      .parse(props.headers['x-event']);
     if (
       props.headers['x-signature'] !== `signed:${text}` ||
       delivery === undefined ||
@@ -146,8 +151,9 @@ export class FakeConnectFlow implements ConnectFlow {
     const body = deliveryBodySchema.safeParse(text);
     return {
       deliveryId: String(delivery),
-      event: 'installation',
+      event,
       installationId: body.success ? String(body.data.installation.id) : null,
+      installationLifecycle: event === 'installation',
     };
   }
 }

@@ -16,6 +16,12 @@ const webhookHeadersSchema = z
     event: headers['x-github-event'],
   }));
 
+/** Events about the installation itself rather than activity inside it. */
+const lifecycleEvents: ReadonlySet<string> = new Set([
+  'installation',
+  'installation_repositories',
+]);
+
 const webhookBodySchema = z
   .string()
   .transform((text, context) => {
@@ -59,6 +65,7 @@ export class GithubWebhooks {
       event: headers.data.event,
       installationId:
         installationId === undefined ? null : String(installationId),
+      installationLifecycle: lifecycleEvents.has(headers.data.event),
     };
   }
 

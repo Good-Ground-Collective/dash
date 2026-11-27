@@ -21,9 +21,12 @@ const rawBodySchema = z.instanceof(Buffer).catch(Buffer.alloc(0));
 /**
  * `POST /integrations/<provider>/webhooks`: checks the delivery's signature over the exact body
  * bytes before anything parses them, records its id so a redelivery is spotted, and answers
- * 202. Only deliveries for an installation Dash has a connection for are stored; the App is
- * public, so any account can install it and send deliveries. Processing the events belongs
- * to the feed, so nothing else happens here yet.
+ * 202. Activity is stored only for an installation Dash has a connection for, because the App
+ * is public and any account can install it. Events about an installation itself are stored
+ * whatever the installation: they can arrive before the setup callback records it, they are
+ * the only news that an owner approved a requested install, and there is one per install or
+ * repository change, not per piece of activity. Processing the events belongs to the feed,
+ * so nothing else happens here yet.
  */
 export class WebhookRoutes {
   private readonly provider: string;
@@ -74,13 +77,14 @@ export class WebhookRoutes {
           throw new WebhookSignatureRejectedError();
         }
 
-        const known =
+        const kept =
           delivery.installationId !== null &&
-          (await this.connections.hasInstallation({
-            provider: this.provider,
-            installationId: delivery.installationId,
-          }));
-        if (!known) {
+          (delivery.installationLifecycle ||
+            (await this.connections.hasInstallation({
+              provider: this.provider,
+              installationId: delivery.installationId,
+            })));
+        if (!kept) {
           return reply
             .code(202)
             .send({ deliveryId: delivery.deliveryId, status: 'ignored' });

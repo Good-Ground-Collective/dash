@@ -28,6 +28,7 @@ class Deliveries {
     signature: string;
     delivery: string;
     body?: string;
+    event?: string;
   }): Promise<{ statusCode: number; body: unknown }> {
     const app = await harness.start();
     const response = await app.inject({
@@ -37,6 +38,7 @@ class Deliveries {
         'content-type': 'application/json',
         'x-signature': props.signature,
         'x-delivery': props.delivery,
+        'x-event': props.event ?? 'installation',
       },
       payload: props.body ?? payload,
     });
@@ -61,6 +63,7 @@ describe('ConnectionsModule webhooks', () => {
         deliveryId: 'delivery-1',
         event: 'installation',
         installationId: '42',
+        installationLifecycle: true,
       },
     ]);
   });
@@ -80,13 +83,14 @@ describe('ConnectionsModule webhooks', () => {
     expect(harness.deliveries.deliveries).toHaveLength(1);
   });
 
-  it('acknowledges a delivery for an installation Dash has no connection for without storing it', async () => {
-    const stranger = '{ "action": "created", "installation": { "id": 7 } }';
+  it('acknowledges activity for an installation Dash has no connection for without storing it', async () => {
+    const stranger = '{ "action": "opened", "installation": { "id": 7 } }';
 
     const response = await Deliveries.send({
       signature: `signed:${stranger}`,
       delivery: 'd-4',
       body: stranger,
+      event: 'pull_request',
     });
 
     expect(response).toEqual({
@@ -94,6 +98,26 @@ describe('ConnectionsModule webhooks', () => {
       body: { deliveryId: 'd-4', status: 'ignored' },
     });
     expect(harness.deliveries.deliveries).toEqual([]);
+  });
+});
+
+describe('ConnectionsModule installation events', () => {
+  it('records an installation event before Dash has a connection for it', async () => {
+    const approved = '{ "action": "created", "installation": { "id": 7 } }';
+
+    const response = await Deliveries.send({
+      signature: `signed:${approved}`,
+      delivery: 'd-7',
+      body: approved,
+    });
+
+    expect(response).toEqual({
+      statusCode: 202,
+      body: { deliveryId: 'd-7', status: 'recorded' },
+    });
+    expect(harness.deliveries.deliveries).toMatchObject([
+      { deliveryId: 'd-7', installationId: '7' },
+    ]);
   });
 });
 

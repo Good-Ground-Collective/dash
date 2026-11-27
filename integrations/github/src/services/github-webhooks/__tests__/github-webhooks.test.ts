@@ -18,6 +18,7 @@ describe('GithubWebhooks', () => {
       deliveryId: 'delivery-1',
       event: 'installation',
       installationId: '42',
+      installationLifecycle: true,
     });
   });
 
@@ -53,6 +54,23 @@ describe('GithubWebhooks', () => {
     await expect(
       webhooks.verify({ headers: unsigned, body }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('GithubWebhooks lifecycle events', () => {
+  it('marks repository changes as installation lifecycle, and activity as not', async () => {
+    const changed = {
+      ...headers,
+      'x-github-event': 'installation_repositories',
+    };
+    const activity = { ...headers, 'x-github-event': 'pull_request' };
+
+    await expect(
+      webhooks.verify({ headers: changed, body }),
+    ).resolves.toMatchObject({ installationLifecycle: true });
+    await expect(
+      webhooks.verify({ headers: activity, body }),
+    ).resolves.toMatchObject({ installationLifecycle: false });
   });
 });
 
