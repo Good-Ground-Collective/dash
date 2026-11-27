@@ -43,7 +43,7 @@ class PageVisit {
 }
 
 class RedirectCatcher {
-  static async location(load: Promise<object>): Promise<string | null> {
+  static async location(load: Promise<unknown>): Promise<string | null> {
     try {
       await load;
       return null;
@@ -87,6 +87,21 @@ describe('MissionControlAuthPageLoader setup and sign-in', () => {
       '/',
     );
     expect(visit.requested).toEqual([]);
+  });
+});
+
+describe('MissionControlAuthPageLoader recover', () => {
+  it('sends a signed-in visitor home and lets a signed-out one stay', async () => {
+    const signedIn = new PageVisit({ viewer: ada });
+    const signedOut = new PageVisit({ viewer: null });
+
+    expect(await RedirectCatcher.location(loader.recover(signedIn.event))).toBe(
+      '/',
+    );
+    expect(
+      await RedirectCatcher.location(loader.recover(signedOut.event)),
+    ).toBeNull();
+    expect(signedOut.requested).toEqual([]);
   });
 });
 

@@ -9,7 +9,7 @@
     footer,
   }: {
     title: string;
-    lede: string;
+    lede?: string;
     /** Where this screen sits in a multi-screen flow, such as "Step 1 of 4", shown above the title. */
     step?: string;
     children: Snippet;
@@ -56,7 +56,9 @@
     >
       {title}
     </h1>
-    <p class="lede">{lede}</p>
+    {#if lede}
+      <p class="lede">{lede}</p>
+    {/if}
     {@render children()}
   </div>
   {#if footer}

@@ -22,6 +22,10 @@
   background: var(--bg);
 }
 
+.auth-field input[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+
 .auth-field input.mono {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);

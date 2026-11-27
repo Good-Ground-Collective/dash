@@ -98,6 +98,12 @@ for (const theme of themes) {
         name: `sign-in-${theme}-${mode}.png`,
         testInfo,
       });
+      await page.goto('/recover');
+      await Screens.capture({
+        page,
+        name: `recover-${theme}-${mode}.png`,
+        testInfo,
+      });
       await context.close();
     });
   }

@@ -34,7 +34,7 @@ type LoggedRequest = {
   remotePort: number;
 };
 
-/** Builds the Fastify app: pino logging, Zod schemas, the CORS allowlist and one scope per module. */
+/** Builds the Fastify app: pino logging, Zod schemas, the CORS allowlist (which lets the web app read `Retry-After`) and one scope per module. */
 export class HttpServer {
   private readonly props: {
     config: z.output<typeof httpServerConfigSchema>;
@@ -71,6 +71,7 @@ export class HttpServer {
     await app.register(cors, {
       origin: [...this.props.config.corsOrigins],
       credentials: true,
+      exposedHeaders: ['retry-after'],
     });
 
     for (const module of this.props.modules) {

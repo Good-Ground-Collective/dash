@@ -232,3 +232,74 @@ describe('HttpPasskeyAuth sign-in and management', () => {
     ).rejects.toMatchObject({ code: 'SESSION_NOT_FRESH' });
   });
 });
+
+describe('HttpPasskeyAuth recovery', () => {
+  it('redeems a code, names the account from the options, then registers and signs in', async () => {
+    const harness = new Harness({
+      answers: {
+        '/api/auth/recovery/redeem': () =>
+          Response.json({ enrolment: 'recovery-enrolment:abc' }),
+        '/api/auth/passkey/generate-register-options': () =>
+          Response.json({
+            challenge: 'abc',
+            user: { id: 'u', name: 'ada@example.com' },
+          }),
+        '/api/auth/passkey/verify-registration': Answer.ok,
+      },
+    });
+
+    const enrolment = await harness.auth.redeemRecoveryCode({
+      email: 'ada@example.com',
+      code: 'k7m2-q9xp',
+    });
+    const prepared = await harness.auth.prepareEnrolment({ enrolment });
+    expect(harness.ceremonies.seen).toEqual([]);
+    await harness.auth.enrol({ prepared });
+
+    expect(prepared.account).toBe('ada@example.com');
+    expect(harness.missionControl.calls.map((call) => call.url)).toEqual([
+      '/api/auth/recovery/redeem',
+      '/api/auth/passkey/generate-register-options?context=recovery-enrolment%3Aabc',
+      '/api/auth/passkey/verify-registration',
+    ]);
+    expect(JSON.parse(harness.missionControl.calls[0]?.body ?? '{}')).toEqual({
+      email: 'ada@example.com',
+      code: 'k7m2-q9xp',
+    });
+    expect(
+      JSON.parse(harness.missionControl.calls[2]?.body ?? '{}'),
+    ).toMatchObject({ response: { id: 'credential' }, createSession: true });
+  });
+
+  it('carries Retry-After on a rate-limited redeem', async () => {
+    const harness = new Harness({
+      answers: {
+        '/api/auth/recovery/redeem': () =>
+          Response.json(
+            { code: 'RECOVERY_RATE_LIMITED' },
+            { status: 429, headers: { 'retry-after': '840' } },
+          ),
+      },
+    });
+
+    await expect(
+      harness.auth.redeemRecoveryCode({ email: 'a@b.c', code: 'x' }),
+    ).rejects.toMatchObject({
+      code: 'RECOVERY_RATE_LIMITED',
+      status: 429,
+      retryAfterSeconds: 840,
+    });
+  });
+});
+
+describe('PasskeyAuthError.retryAfterSeconds', () => {
+  it.each([
+    [null, undefined],
+    ['120', 120],
+    [' 5 ', 5],
+    ['Wed, 21 Oct 2026 07:28:00 GMT', undefined],
+    ['-3', undefined],
+  ])('reads Retry-After %j as %j seconds', (header, seconds) => {
+    expect(PasskeyAuthError.retryAfterSeconds(header)).toBe(seconds);
+  });
+});

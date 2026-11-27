@@ -6,9 +6,11 @@ import {
 } from 'node:http';
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
+import { RecoveryStub } from './recovery-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
 import { SetupStub } from './setup-stub.ts';
 import { StubRequest } from './stub-request.ts';
+import { WebAuthnOptions } from './webauthn-options.ts';
 
 const sessionCookie = 'better-auth.session_token';
 const credentialBodySchema = z.object({
@@ -39,6 +41,7 @@ interface StubReply {
   status: number;
   body: object | null;
   cookie?: string;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -47,6 +50,8 @@ interface StubReply {
  * are Mission Control's own tests. `POST /__stub/reset` forgets everyone,
  * `POST /__stub/sign-in` signs a person straight in, and `POST /__stub/age-session` makes
  * service account changes answer `SESSION_NOT_FRESH` until the next passkey sign-in.
+ * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
+ * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`).
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -57,6 +62,10 @@ export class MissionControlStub {
   private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
+  private readonly recovery = new RecoveryStub({
+    email: () => this.person?.email ?? null,
+    webOrigin: () => this.webOrigin,
+  });
 
   constructor(props: { webOrigin: string }) {
     this.webOrigin = props.webOrigin;
@@ -76,6 +85,7 @@ export class MissionControlStub {
     response.setHeader('access-control-allow-credentials', 'true');
     response.setHeader('access-control-allow-headers', 'accept, content-type');
     response.setHeader('access-control-allow-methods', 'GET, POST');
+    response.setHeader('access-control-expose-headers', 'retry-after');
     if (request.method === 'OPTIONS') {
       response.writeHead(204).end();
       return;
@@ -88,11 +98,15 @@ export class MissionControlStub {
       path: url.pathname.replace(/^\/api\/auth/u, ''),
       session: this.sessionOf(request),
       body,
+      context: url.searchParams.get('context'),
     });
     if (reply.cookie !== undefined) {
       response.setHeader('set-cookie', reply.cookie);
     }
-    response.writeHead(reply.status, { 'content-type': 'application/json' });
+    response.writeHead(reply.status, {
+      ...reply.headers,
+      'content-type': 'application/json',
+    });
     response.end(JSON.stringify(reply.body));
   }
 
@@ -100,6 +114,7 @@ export class MissionControlStub {
     path: string;
     session: string | null;
     body: string;
+    context: string | null;
   }): StubReply {
     const { path, session, body } = props;
     switch (path) {
@@ -119,17 +134,17 @@ export class MissionControlStub {
       case '/setup/begin':
         return this.setup.begin({ body, signedUp: this.person !== null });
       case '/passkey/generate-register-options':
-        return this.registrationOptions(session);
+        return this.registrationOptions({ session, context: props.context });
       case '/passkey/verify-registration':
         return this.register({ session, body });
       case '/passkey/generate-authenticate-options':
-        return this.authenticationOptions();
+        return { status: 200, body: WebAuthnOptions.authentication() };
       case '/passkey/verify-authentication':
         return this.authenticate(body);
       case '/sign-out':
         return this.signOut(session);
       default:
-        return this.manage({ path, session, body });
+        return this.recovery.route(props) ?? this.manage(props);
     }
   }
 
@@ -167,6 +182,7 @@ export class MissionControlStub {
     this.sessionStale = false;
     this.appearance.reset();
     this.serviceAccounts.reset();
+    this.recovery.reset();
     return { status: 200, body: { status: true } };
   }
 
@@ -191,39 +207,40 @@ export class MissionControlStub {
     };
   }
 
-  private registrationOptions(session: string | null): StubReply {
-    const person = session === null ? this.setup.pending : this.person;
-    if (person === null) return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
+  /** Without a session, `context` names a setup or recovery enrolment, which registration then spends. */
+  private registrationOptions(props: {
+    session: string | null;
+    context: string | null;
+  }): StubReply {
+    const recovery =
+      props.session === null ? this.recovery.prepare(props.context) : 'none';
+    const person =
+      recovery === 'ready' || props.session !== null
+        ? this.person
+        : this.setup.pending;
+    if (recovery === 'rejected' || person === null) {
+      return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
+    }
     return {
       status: 200,
-      body: {
-        challenge: randomBytes(32).toString('base64url'),
-        rp: { name: 'Dash', id: 'localhost' },
-        user: {
-          id: randomBytes(16).toString('base64url'),
-          name: person.email,
-          displayName: person.name,
-        },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-        timeout: 60_000,
-        attestation: 'none',
-        excludeCredentials: this.passkeys.map((passkey) => ({
-          id: passkey.credentialId,
-          type: 'public-key',
-        })),
-        authenticatorSelection: {
-          residentKey: 'required',
-          userVerification: 'required',
-        },
-      },
+      body: WebAuthnOptions.registration({
+        ...person,
+        passkeys: this.passkeys,
+      }),
     };
   }
 
+  /** A recovery signs out every other session, as Mission Control does. */
   private register(props: { session: string | null; body: string }): StubReply {
     const input = credentialBodySchema.parse(JSON.parse(props.body || '{}'));
-    const signedUp = props.session === null ? this.setup.pending : null;
-    if (props.session === null && signedUp === null) {
-      return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
+    let signedUp: StubPerson | null = null;
+    if (props.session === null) {
+      const recovery = this.recovery.complete();
+      if (recovery === 'spent') this.sessions = new Set();
+      signedUp = recovery === 'spent' ? this.person : this.setup.pending;
+      if (recovery === 'rejected' || signedUp === null) {
+        return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
+      }
     }
     const passkey: StubPasskey = {
       id: randomUUID(),
@@ -239,19 +256,6 @@ export class MissionControlStub {
     this.person = signedUp;
     this.setup.reset();
     return { ...this.newSession(), body: passkey };
-  }
-
-  private authenticationOptions(): StubReply {
-    return {
-      status: 200,
-      body: {
-        challenge: randomBytes(32).toString('base64url'),
-        rpId: 'localhost',
-        timeout: 60_000,
-        userVerification: 'required',
-        allowCredentials: [],
-      },
-    };
   }
 
   private authenticate(body: string): StubReply {

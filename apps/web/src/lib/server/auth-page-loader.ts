@@ -47,6 +47,8 @@ export interface ServiceAccountsPageData {
 export interface AuthPageLoader {
   readonly setup: (event: AuthPageLoadEvent) => Promise<SetupPageData>;
   readonly signIn: (event: AuthPageLoadEvent) => Promise<SignInPageData>;
+  /** `/recover`. The break-glass page has no load: its enrolment is in the fragment, which a redirect would carry along. */
+  readonly recover: (event: AuthPageLoadEvent) => Promise<void>;
   readonly settings: (event: AuthPageLoadEvent) => Promise<SettingsPageData>;
   readonly serviceAccounts: (
     event: AuthPageLoadEvent,
@@ -70,6 +72,10 @@ export class MissionControlAuthPageLoader implements AuthPageLoader {
   ): Promise<SignInPageData> => {
     if ((await this.viewer(event)) !== null) redirect(303, '/');
     return { setupOpen: (await this.setupOpen(event)) === true };
+  };
+
+  readonly recover = async (event: AuthPageLoadEvent): Promise<void> => {
+    if ((await this.viewer(event)) !== null) redirect(303, '/');
   };
 
   readonly settings = async (

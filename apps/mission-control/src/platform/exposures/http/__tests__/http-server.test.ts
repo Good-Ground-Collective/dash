@@ -41,6 +41,9 @@ describe('HttpServer', () => {
       'https://dash.doublel.studio',
     );
     expect(allowed.headers['access-control-allow-credentials']).toBe('true');
+    expect(allowed.headers['access-control-expose-headers']).toBe(
+      'retry-after',
+    );
     expect(refused.headers['access-control-allow-origin']).toBeUndefined();
   });
 

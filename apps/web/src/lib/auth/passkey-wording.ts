@@ -17,6 +17,10 @@ const messages: ReadonlyMap<string, string> = new Map([
   ],
   ['PASSKEY_NOT_FOUND', 'That passkey isn’t registered with Dash.'],
   [
+    'RECOVERY_REJECTED',
+    'That email and recovery code don’t match an unused code. Check both, or try another code.',
+  ],
+  [
     'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED',
     'This device already has a passkey for Dash.',
   ],
@@ -52,6 +56,15 @@ export class PasskeyWording {
       cause instanceof PasskeyAuthError &&
       ['ERROR_CEREMONY_ABORTED', 'AbortError'].includes(cause.code)
     );
+  }
+
+  /** For too many recovery attempts, with Mission Control's `Retry-After` when the browser could read it. */
+  retryLater(retryAfterSeconds: number | undefined): string {
+    if (retryAfterSeconds === undefined) {
+      return 'Too many tries. Wait a few minutes, then try again.';
+    }
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+    return `Too many tries. Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`;
   }
 
   label(passkey: Passkey): string {
