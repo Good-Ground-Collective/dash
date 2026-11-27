@@ -72,6 +72,16 @@ jobs:
 
       - run: pnpm format:check
 
+      - name: Check generated JSON Schema
+        run: |
+          pnpm --filter @good-ground-collective/agentic-communication-standards generate
+          if [[ -n $(git status --porcelain -- packages/standards/schemas) ]]; then
+            git status --short -- packages/standards/schemas
+            git diff -- packages/standards/schemas
+            echo "::error title=JSON Schema is stale::packages/standards/schemas does not match the Zod schemas. Run 'pnpm --filter @good-ground-collective/agentic-communication-standards generate' and commit the result."
+            exit 1
+          fi
+
       - name: Verify affected packages
         if: github.event_name == 'pull_request'
         run: pnpm turbo run lint typecheck test build --affected
