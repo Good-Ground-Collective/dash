@@ -9,7 +9,7 @@ Open questions live in [discussions](./discussions). Each one is a conversation 
 ```
 apps/web              SvelteKit web app
 apps/mission-control  Fastify server with Drizzle and DBOS on Postgres
-packages/standards    Zod schemas shared between components
+packages/standards    Zod message schemas shared between components, published as @good-ground-collective/agentic-communication-standards
 packages/config       Shared tsconfig, ESLint and Stylelint config
 ```
 
@@ -52,7 +52,7 @@ The workspace uses pnpm and Turborepo, on Node 24 LTS.
 | `pnpm format`                              | Prettier, writing changes                                                                             |
 | `pnpm format:check`                        | Prettier, check only                                                                                  |
 
-Add `--filter <package>` to run a task in one package, for example `pnpm turbo run test --filter @dash/standards`.
+Add `--filter <package>` to run a task in one package, for example `pnpm turbo run test --filter @good-ground-collective/agentic-communication-standards`.
 
 ## Web app
 

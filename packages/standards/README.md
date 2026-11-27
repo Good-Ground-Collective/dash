@@ -1,0 +1,72 @@
+# @good-ground-collective/agentic-communication-standards
+
+Zod schemas for the messages that pass between Dash's components: Mission Control, the web app, the hooks and the bench daemon. Each component builds against this package, so nobody keeps a hand-synced copy of a message shape.
+
+## Install
+
+The package is published to GitHub Packages. Map the scope and supply a token with `read:packages`:
+
+```sh
+echo '@good-ground-collective:registry=https://npm.pkg.github.com' >> .npmrc
+echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+pnpm add @good-ground-collective/agentic-communication-standards
+```
+
+## The envelope
+
+Every message has the same outer fields:
+
+| Field           | What it holds                                                |
+| --------------- | ------------------------------------------------------------ |
+| `schemaVersion` | `"<major>.<minor>"`, versioned per message kind              |
+| `kind`          | A dotted message name, such as `example.ping`                |
+| `id`            | A UUID, unique per message, so receivers can drop duplicates |
+| `emittedAt`     | An ISO 8601 UTC timestamp, such as `2026-11-27T09:30:00Z`    |
+| `payload`       | The message-specific body                                    |
+
+Sender identity, sessions and sequence numbers are not part of the envelope yet.
+
+```ts
+import { examplePing } from '@good-ground-collective/agentic-communication-standards';
+
+const ping = examplePing.schema.parse(JSON.parse(body));
+```
+
+## Adding a message
+
+1. Create `src/messages/<area>.ts` and construct a `MessageDefinition` with the kind, the starting version (`1.0`) and a `z.object` payload. `src/messages/example.ts` is the model.
+2. Add the definition to `messageRegistry` in `src/registry.ts`. Generators read the registry, so a message missing from it is missing from the generated schemas.
+3. Export it from `src/index.ts`.
+
+## Versioning rules
+
+### Minor and major bumps
+
+A minor bump (`1.0` → `1.1`) is any change an older reader can still read:
+
+- adding an optional field
+- adding a value to an enum marked open
+
+A major bump (`1.4` → `2.0`) is any change that can break an existing reader or writer:
+
+- removing or renaming a field
+- making a field required
+- narrowing a type
+- adding a value to a closed enum
+
+### How readers behave
+
+- Readers ignore fields they don't know. Wire schemas use `z.object`, which strips unknown keys, never `z.strictObject`.
+- Readers reject a message whose major version they don't know, and accept any minor version of a major they do. `MessageDefinition` builds this into `schemaVersion`: a `1.0` definition accepts `1.0` and `1.7` and rejects `2.0`.
+
+### Keeping schemas portable
+
+Wire schemas avoid transforms and refinements that JSON Schema can't express, so the generated JSON Schema says the same thing as the Zod schema. Prefer `.min()`, `.max()`, `.regex()`, `z.enum` and `z.literal` over `.transform()`, `.refine()` and `.superRefine()`.
+
+### The package version
+
+The package's own major version moves only when a message's major version moves. New messages and minor message bumps are minor package releases.
+
+## License
+
+MIT
