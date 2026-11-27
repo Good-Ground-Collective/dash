@@ -25,6 +25,7 @@ const minReadGapMs = 60_000;
 const followUpInputSchema = z.tuple([
   z.object({ connectionId: z.string(), startedAt: z.number() }),
 ]);
+const readInputSchema = z.tuple([z.string()]);
 
 /** Each read waits until the test releases it, so a test can act while a read is running. */
 class HeldReconcile implements GithubReconcile {
@@ -117,11 +118,16 @@ class Reads {
     );
   }
 
-  static async waiting() {
-    return DBOS.listWorkflows({
+  static async unfinished(connectionId: string) {
+    const unfinished = await DBOS.listWorkflows({
       workflowName: 'githubReconcileConnection',
-      status: 'DELAYED',
+      status: ['ENQUEUED', 'DELAYED', 'PENDING'],
+      loadInput: true,
     });
+    return unfinished.filter(
+      (read) =>
+        readInputSchema.safeParse(read.input).data?.[0] === connectionId,
+    );
   }
 
   static of(connectionId: string) {
@@ -165,7 +171,6 @@ beforeAll(async () => {
 afterAll(async () => {
   reconcile.release();
   await runtime?.shutdown();
-  vi.useRealTimers();
 });
 
 describe.skipIf(databaseUrl === null)(
@@ -218,7 +223,6 @@ describe.skipIf(databaseUrl === null)(
     }, 60_000);
 
     it('reads once more, a minute after the earlier read started, when GitHub reports changes while a read is running', async () => {
-      vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
       const id = await Reads.connection(acmeInstallation.externalId);
       const opened = {
         provider: 'github',
@@ -241,10 +245,18 @@ describe.skipIf(databaseUrl === null)(
         expect(await Reads.followUpsOf(id)).toHaveLength(1);
       }, settle);
       await pullRequests.handle({ ...opened, deliveryId: 'race-3' });
-      expect(await Reads.waiting()).toHaveLength(1);
+      const unfinished = await Reads.unfinished(id);
+      expect(unfinished.map((read) => read.status)).toEqual(['DELAYED']);
+      const [delayed] = unfinished;
       expect(Reads.of(id)).toHaveLength(1);
+      const [first] = await Reads.followUpsOf(id);
+      expect(delayed?.delayUntilEpochMS).toBeGreaterThanOrEqual(
+        (first?.startedAt ?? Infinity) + minReadGapMs,
+      );
 
-      vi.advanceTimersByTime(minReadGapMs);
+      await DBOS.setWorkflowDelay(delayed?.workflowID ?? '', {
+        delayUntilEpochMS: Date.now(),
+      });
       await vi.waitFor(() => {
         expect(Reads.of(id)).toHaveLength(2);
       }, settle);
@@ -252,13 +264,7 @@ describe.skipIf(databaseUrl === null)(
       await vi.waitFor(async () => {
         expect(await Reads.followUpsOf(id)).toHaveLength(2);
       }, settle);
-      const starts = (await Reads.followUpsOf(id)).map(
-        (followUp) => followUp.startedAt,
-      );
       expect(Reads.of(id)).toHaveLength(2);
-      expect(Math.max(...starts) - Math.min(...starts)).toBeGreaterThanOrEqual(
-        minReadGapMs,
-      );
     }, 60_000);
   },
 );

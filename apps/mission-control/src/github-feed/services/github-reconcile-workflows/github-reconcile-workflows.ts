@@ -24,7 +24,7 @@ const githubReconcileWorkflowsPropsSchema = z.object({
 
 /** Reads a connection again on request, from inside or outside a workflow. */
 export interface ConnectionReads {
-  /** Enqueues a read of the connection unless one is already queued or running. */
+  /** Enqueues a read of the connection unless one is already waiting out the gap, queued or running; the request then attaches to that read, which may start up to a minute later. */
   syncConnection(props: { connectionId: string }): Promise<void>;
 }
 
