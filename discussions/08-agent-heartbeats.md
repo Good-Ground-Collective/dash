@@ -24,4 +24,4 @@ Your "Musings On A Heartbeat Format" covers most of the shape:
 7. Watchdog N and K values, and notification channels.
 
 ## Done when
-Spec v1 is frozen in standards, the hook design is chosen, and the issues are written.
+Spec v1 is frozen in the standards package (epic #78), the hook design is chosen, and the issues are written.

@@ -23,4 +23,5 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 | ✓ | 06 Hosting + 10 IaC: concluded in #6 and #10 → #42 (Linode boxes rebuilt with OpenTofu, self-hosted Postgres with pgBackRest, Kamal deploys, release pipeline) | |
 | ✓ | 11 Objectives: concluded in #22 → #52–#55 (initiative → epic → ticket as a read-only lens over GitHub Projects and sub-issues, Jira later; providers behind `integrations/core` interfaces) | |
 | ✓ | 03 Onboarding: concluded in #3 → epic #70 with #71–#77 (bootstrap only, required recovery codes, skippable GitHub connect for your account and every org, a setup checklist on the empty home) | |
-| later | [07 Communication standards](./07-communication-standards.md) → [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
+| ✓ | 07 Communication standards: concluded in #7 → epic #78 with #80–#84 (`@good-ground/agentic-communication-standards` on npm; Zod 4 → JSON Schema → Go with a drift check; `schemaVersion` on every message; OpenTelemetry GenAI attribute names) | |
+| later | [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
