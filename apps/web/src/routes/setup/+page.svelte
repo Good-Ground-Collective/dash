@@ -27,7 +27,7 @@
   /**
    * Runs one step's request. A rejected token puts focus back in the token field; any other move
    * to a new screen focuses its title, so the title and step are announced. Once done, the form
-   * stays busy until home loads.
+   * stays busy until the recovery codes step loads.
    */
   const advance = async (next: () => Promise<SetupStep>): Promise<void> => {
     const before = current.step;
@@ -39,7 +39,7 @@
       throw cause;
     }
     if (current.step === 'done') {
-      await goto('/', { invalidateAll: true });
+      await goto('/setup/recovery-codes', { invalidateAll: true });
       return;
     }
     busy = false;

@@ -1,6 +1,6 @@
 import { isRedirect } from '@sveltejs/kit';
 import { describe, expect, it } from 'vitest';
-import type { Viewer } from '#lib/api/mission-control.ts';
+import type { RecoveryCodeStatus, Viewer } from '#lib/api/mission-control.ts';
 import {
   type AuthPageLoadEvent,
   MissionControlAuthPageLoader,
@@ -17,19 +17,25 @@ const ada: Viewer = {
 class PageVisit {
   readonly requested: string[] = [];
   private readonly viewer: Viewer | null;
+  private readonly recoveryCodes: RecoveryCodeStatus | null;
   private readonly answers: Map<string, () => Response>;
 
   constructor(props: {
     viewer: Viewer | null;
+    recoveryCodes?: RecoveryCodeStatus | null;
     answers?: Record<string, () => Response>;
   }) {
     this.viewer = props.viewer;
+    this.recoveryCodes = props.recoveryCodes ?? null;
     this.answers = new Map(Object.entries(props.answers ?? {}));
   }
 
   get event(): AuthPageLoadEvent {
     return {
-      parent: async () => ({ viewer: this.viewer }),
+      parent: async () => ({
+        viewer: this.viewer,
+        recoveryCodes: this.recoveryCodes,
+      }),
       fetch: async (input) => {
         const path = new URL(String(input)).pathname;
         this.requested.push(path);
@@ -102,6 +108,39 @@ describe('MissionControlAuthPageLoader recover', () => {
       await RedirectCatcher.location(loader.recover(signedOut.event)),
     ).toBeNull();
     expect(signedOut.requested).toEqual([]);
+  });
+});
+
+describe('MissionControlAuthPageLoader recovery codes', () => {
+  it('shows the codes step only to a signed-in visitor without confirmed codes', async () => {
+    const pending = new PageVisit({
+      viewer: ada,
+      recoveryCodes: { confirmed: false, remaining: 0 },
+    });
+    const confirmed = new PageVisit({
+      viewer: ada,
+      recoveryCodes: { confirmed: true, remaining: 10 },
+    });
+    const signedOut = new PageVisit({ viewer: null });
+
+    expect(
+      await RedirectCatcher.location(loader.recoveryCodes(pending.event)),
+    ).toBeNull();
+    expect(
+      await RedirectCatcher.location(loader.recoveryCodes(confirmed.event)),
+    ).toBe('/');
+    expect(
+      await RedirectCatcher.location(loader.recoveryCodes(signedOut.event)),
+    ).toBe('/sign-in');
+    expect(pending.requested).toEqual([]);
+  });
+
+  it('shows the codes step when the shell couldn’t read the status', async () => {
+    const unknown = new PageVisit({ viewer: ada, recoveryCodes: null });
+
+    expect(
+      await RedirectCatcher.location(loader.recoveryCodes(unknown.event)),
+    ).toBeNull();
   });
 });
 

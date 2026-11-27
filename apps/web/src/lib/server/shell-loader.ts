@@ -1,11 +1,17 @@
-import type { Cookies, ServerLoadEvent } from '@sveltejs/kit';
+import { type Cookies, redirect, type ServerLoadEvent } from '@sveltejs/kit';
 import { z } from 'zod';
 import {
   HttpMissionControl,
   missionControlBaseUrlSchema,
+  type RecoveryCodeStatus,
   type Viewer,
 } from '#lib/api/mission-control.ts';
+import { MissionControlError } from '#lib/api/mission-control-error.ts';
 import { type BuildStamp, buildStampSchema } from '#lib/build/build-stamp.ts';
+import {
+  type RecoveryCodeGate,
+  recoveryCodeGate,
+} from '#lib/server/recovery-code-gate.ts';
 import {
   type ThemeCookieMirror,
   themeCookieMirror,
@@ -21,6 +27,8 @@ export type ShellLoaderProps = z.input<typeof shellLoaderPropsSchema>;
 
 export interface ShellData {
   viewer: Viewer | null;
+  /** The viewer's recovery codes, or `null` when signed out or Mission Control couldn't say. */
+  recoveryCodes: RecoveryCodeStatus | null;
   /** The theme and mode the page rendered in. */
   appearance: ThemePreference;
   build: BuildStamp;
@@ -33,13 +41,15 @@ export interface ShellLoader {
 
 export type ShellLoadEvent = Pick<ServerLoadEvent, 'fetch' | 'locals'> & {
   cookies: Pick<Cookies, 'get' | 'set'>;
+  url: Pick<URL, 'pathname'>;
 };
 
-/** Asks Mission Control for the viewer, renders in their saved appearance and adds the build stamp. The shell still renders when Mission Control is unreachable. */
+/** Asks Mission Control for the viewer, sends them to the codes step until they've saved recovery codes, renders in their saved appearance and adds the build stamp. The shell still renders when Mission Control is unreachable. */
 export class MissionControlShellLoader implements ShellLoader {
   private readonly apiBaseUrl: string;
   private readonly build: BuildStamp;
   private readonly cookieMirror: ThemeCookieMirror = themeCookieMirror;
+  private readonly gate: RecoveryCodeGate = recoveryCodeGate;
 
   constructor(props: ShellLoaderProps) {
     const valid = shellLoaderPropsSchema.parse(props);
@@ -48,14 +58,27 @@ export class MissionControlShellLoader implements ShellLoader {
   }
 
   readonly load = async (event: ShellLoadEvent): Promise<ShellData> => {
-    const viewer = await this.viewer(event);
+    const [viewer, codes] = await Promise.all([
+      this.viewer(event),
+      event.locals.hasSessionCookie ? this.recoveryCodes(event) : null,
+    ]);
+    const recoveryCodes = viewer === null ? null : codes;
+
+    const location = this.gate.redirectFor({
+      pathname: event.url.pathname,
+      status: recoveryCodes,
+    });
+    if (location !== null) redirect(303, location);
+
     event.locals.themePreference = this.cookieMirror.resolve({
       cookies: event.cookies,
       requested: event.locals.themePreference,
       saved: viewer,
     });
+
     return {
       viewer,
+      recoveryCodes,
       appearance: event.locals.themePreference,
       build: this.build,
     };
@@ -64,17 +87,36 @@ export class MissionControlShellLoader implements ShellLoader {
   private async viewer(event: ShellLoadEvent): Promise<Viewer | null> {
     if (!event.locals.hasSessionCookie) return null;
 
-    const missionControl = new HttpMissionControl({
-      baseUrl: this.apiBaseUrl,
-      fetch: event.fetch,
-    });
     try {
-      return await missionControl.getViewer();
+      return await this.missionControl(event).getViewer();
     } catch (error) {
       console.warn(
         `Mission Control did not return the viewer: ${String(error)}`,
       );
       return null;
     }
+  }
+
+  private async recoveryCodes(
+    event: ShellLoadEvent,
+  ): Promise<RecoveryCodeStatus | null> {
+    try {
+      return await this.missionControl(event).getRecoveryCodeStatus();
+    } catch (error) {
+      if (error instanceof MissionControlError && error.status === 401) {
+        return null;
+      }
+      console.warn(
+        `Mission Control did not report recovery codes: ${String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private missionControl(event: ShellLoadEvent): HttpMissionControl {
+    return new HttpMissionControl({
+      baseUrl: this.apiBaseUrl,
+      fetch: event.fetch,
+    });
   }
 }

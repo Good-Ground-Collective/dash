@@ -43,6 +43,13 @@ export const setupStatusSchema = z.object({
     .describe('True while nobody has signed up and a setup token is waiting.'),
 });
 
+export const recoveryCodeStatusSchema = z.object({
+  confirmed: z
+    .boolean()
+    .describe('False until the person has confirmed saving a set of codes.'),
+  remaining: z.number().int().nonnegative(),
+});
+
 export const httpMissionControlPropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
   fetch: z.custom<typeof fetch>((value) => value instanceof Function),
@@ -52,6 +59,7 @@ export const httpMissionControlPropsSchema = z.object({
 export type Viewer = z.infer<typeof viewerSchema>;
 export type Passkey = z.infer<typeof passkeySchema>;
 export type SetupStatus = z.infer<typeof setupStatusSchema>;
+export type RecoveryCodeStatus = z.infer<typeof recoveryCodeStatusSchema>;
 export type HttpMissionControlProps = z.input<
   typeof httpMissionControlPropsSchema
 >;
@@ -70,6 +78,11 @@ export interface PasskeyReads {
   listPasskeys(): Promise<Passkey[]>;
 }
 
+/** Whether the signed-in person has saved recovery codes, and how many are unused. */
+export interface RecoveryCodeReads {
+  getRecoveryCodeStatus(): Promise<RecoveryCodeStatus>;
+}
+
 /** Reads the service account page renders from. */
 export interface ServiceAccountReads {
   /** The signed-in person's service accounts with their keys, oldest first. */
@@ -78,7 +91,11 @@ export interface ServiceAccountReads {
 
 /** Mission Control over HTTP. Calls include credentials; on the server only the session cookie is forwarded. */
 export class HttpMissionControl
-  implements MissionControl, PasskeyReads, ServiceAccountReads
+  implements
+    MissionControl,
+    PasskeyReads,
+    RecoveryCodeReads,
+    ServiceAccountReads
 {
   private readonly endpoint: MissionControlEndpoint;
   private readonly fetcher: typeof fetch;
@@ -114,6 +131,13 @@ export class HttpMissionControl
     return passkeys.toSorted(
       (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
     );
+  }
+
+  async getRecoveryCodeStatus(): Promise<RecoveryCodeStatus> {
+    return this.getJson({
+      path: 'api/auth/recovery-codes/status',
+      schema: recoveryCodeStatusSchema,
+    });
   }
 
   async listServiceAccounts(): Promise<ServiceAccount[]> {

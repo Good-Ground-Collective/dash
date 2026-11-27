@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { isRedirect } from '@sveltejs/kit';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EnvironmentBuildStamp } from '#lib/build/build-stamp.ts';
 import {
   MissionControlShellLoader,
@@ -7,17 +8,28 @@ import {
 import type { ThemePreference } from '#lib/theme/theme-preference-reader.ts';
 import { RecordingCookies } from '#lib/theme/__tests__/support/recording-cookies.ts';
 
+const confirmedCodes = { confirmed: true, remaining: 10 };
+
+/** Answers the session lookup with `response` and the recovery code status with `recoveryCodes`. */
 class CountingFetch {
   calls = 0;
   private readonly response: () => Response;
+  private readonly recoveryCodes: () => Response;
 
-  constructor(props: { response: () => Response }) {
+  constructor(props: {
+    response: () => Response;
+    recoveryCodes?: () => Response;
+  }) {
     this.response = props.response;
+    this.recoveryCodes =
+      props.recoveryCodes ?? (() => Response.json(confirmedCodes));
   }
 
-  readonly fetch: typeof fetch = async () => {
+  readonly fetch: typeof fetch = async (input) => {
     this.calls += 1;
-    return this.response();
+    return new URL(String(input)).pathname === '/api/auth/recovery-codes/status'
+      ? this.recoveryCodes()
+      : this.response();
   };
 }
 
@@ -38,9 +50,11 @@ class ShellVisit {
     fetch: typeof fetch;
     hasSessionCookie: boolean;
     cookies?: RecordingCookies;
+    pathname?: string;
   }): ShellLoadEvent {
     return {
       fetch: props.fetch,
+      url: { pathname: props.pathname ?? '/' },
       cookies: props.cookies ?? new RecordingCookies(),
       locals: {
         hasSessionCookie: props.hasSessionCookie,
@@ -60,6 +74,7 @@ describe('ShellLoader', () => {
       ),
     ).resolves.toEqual({
       viewer: null,
+      recoveryCodes: null,
       appearance: lightCharacters,
       build,
     });
@@ -78,6 +93,7 @@ describe('ShellLoader', () => {
       ),
     ).resolves.toEqual({
       viewer: { ...viewer, theme: 'characters', colorMode: null },
+      recoveryCodes: confirmedCodes,
       appearance: lightCharacters,
       build,
     });
@@ -130,15 +146,109 @@ describe('ShellLoader failures', () => {
       ),
     ).resolves.toEqual({
       viewer: null,
+      recoveryCodes: null,
       appearance: lightCharacters,
       build,
     });
-    expect(counter.calls).toBe(1);
+    expect(counter.calls).toBe(2);
   });
 
   it('refuses an API base URL that is not a URL', () => {
     expect(
       () => new MissionControlShellLoader({ apiBaseUrl: 'not a url', build }),
     ).toThrow();
+  });
+});
+
+const ada = { user: { id: 'u1', name: 'Ada', email: 'ada@example.com' } };
+
+class RedirectCatcher {
+  static async location(load: Promise<unknown>): Promise<string | null> {
+    try {
+      await load;
+      return null;
+    } catch (thrown) {
+      if (!isRedirect(thrown)) throw thrown;
+      expect(thrown.status).toBe(303);
+      return thrown.location;
+    }
+  }
+}
+
+describe('ShellLoader recovery codes', () => {
+  it('sends a viewer without confirmed codes to the codes step', async () => {
+    const counter = new CountingFetch({
+      response: () => Response.json(ada),
+      recoveryCodes: () => Response.json({ confirmed: false, remaining: 0 }),
+    });
+
+    await expect(
+      RedirectCatcher.location(
+        shellLoader.load(
+          ShellVisit.event({
+            fetch: counter.fetch,
+            hasSessionCookie: true,
+            pathname: '/settings',
+          }),
+        ),
+      ),
+    ).resolves.toBe('/setup/recovery-codes');
+  });
+
+  it('renders the codes step itself for that viewer', async () => {
+    const unconfirmed = { confirmed: false, remaining: 0 };
+    const counter = new CountingFetch({
+      response: () => Response.json(ada),
+      recoveryCodes: () => Response.json(unconfirmed),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({
+        fetch: counter.fetch,
+        hasSessionCookie: true,
+        pathname: '/setup/recovery-codes',
+      }),
+    );
+
+    expect(data.recoveryCodes).toEqual(unconfirmed);
+  });
+});
+
+describe('ShellLoader recovery code failures', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('drops the status quietly for an expired session cookie', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const counter = new CountingFetch({
+      response: () => Response.json(null),
+      recoveryCodes: () =>
+        Response.json({ code: 'UNAUTHORIZED' }, { status: 401 }),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
+    );
+
+    expect(data.viewer).toBeNull();
+    expect(data.recoveryCodes).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('lets the viewer through when Mission Control can’t report codes', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const counter = new CountingFetch({
+      response: () => Response.json(ada),
+      recoveryCodes: () => new Response('down', { status: 503 }),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
+    );
+
+    expect(data.viewer?.name).toBe('Ada');
+    expect(data.recoveryCodes).toBeNull();
+    expect(warn).toHaveBeenCalledOnce();
   });
 });
