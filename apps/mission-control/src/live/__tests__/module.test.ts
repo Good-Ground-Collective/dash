@@ -94,9 +94,7 @@ describe('LiveModule', () => {
     ['no session', false],
   ])('answers 401 to %s', async (_label, withKey) => {
     served = await LiveHarness.start();
-    const headers = withKey
-      ? { authorization: `Bearer ${served.apiKey}` }
-      : {};
+    const headers = withKey ? { authorization: `Bearer ${served.apiKey}` } : {};
 
     const response = await served.open({ headers });
 
