@@ -5,23 +5,31 @@ import { z } from 'zod';
 
 const absolutePathSchema = z.string().regex(/^\//);
 
-const environmentSchema = z.object({
-  DASH_STATE_DIR: absolutePathSchema
-    .optional()
-    .catch(undefined)
-    .describe('Overrides the whole state directory: outbox, sessions and log.'),
-  XDG_STATE_HOME: absolutePathSchema
-    .optional()
-    .catch(undefined)
-    .describe('The XDG base directory for state; ignored unless absolute.'),
-  DASH_OUTBOX_RETENTION_DAYS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(7)
-    .catch(7)
-    .describe('How many days an untouched session outbox file is kept.'),
-});
+const environmentSchema = z
+  .object({
+    DASH_STATE_DIR: absolutePathSchema
+      .optional()
+      .catch(undefined)
+      .describe(
+        'Overrides the whole state directory: outbox, sessions and log; ignored unless absolute.',
+      ),
+    XDG_STATE_HOME: absolutePathSchema
+      .optional()
+      .catch(undefined)
+      .describe('The XDG base directory for state; ignored unless absolute.'),
+    DASH_OUTBOX_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(7)
+      .catch(7)
+      .describe('How many days an untouched session outbox file is kept.'),
+  })
+  .transform((env) => ({
+    stateDirectory: env.DASH_STATE_DIR,
+    xdgStateHome: env.XDG_STATE_HOME,
+    outboxRetentionDays: env.DASH_OUTBOX_RETENTION_DAYS,
+  }));
 
 const hooksConfigPropsSchema = z.object({
   stateDirectory: z
@@ -88,11 +96,11 @@ export class HooksConfig {
   ): HooksConfig {
     const env = environmentSchema.parse(environment);
     const stateHome =
-      env.XDG_STATE_HOME ?? path.join(homedir(), '.local', 'state');
+      env.xdgStateHome ?? path.join(homedir(), '.local', 'state');
 
     return new HooksConfig({
-      stateDirectory: env.DASH_STATE_DIR ?? path.join(stateHome, 'dash'),
-      outboxRetentionDays: env.DASH_OUTBOX_RETENTION_DAYS,
+      stateDirectory: env.stateDirectory ?? path.join(stateHome, 'dash'),
+      outboxRetentionDays: env.outboxRetentionDays,
       machine: hostname().slice(0, 256) || undefined,
     });
   }

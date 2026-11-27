@@ -29,6 +29,7 @@ export const hookInputSchema = z
     source: textSchema,
     model: textSchema,
     tool_name: textSchema,
+    tool_use_id: textSchema,
     tool_input: z
       .looseObject({
         questions: z.array(askedQuestionSchema).optional().catch(undefined),
@@ -51,6 +52,7 @@ export const hookInputSchema = z
     source: input.source,
     model: input.model,
     toolName: input.tool_name,
+    toolUseId: input.tool_use_id,
     questions: input.tool_input?.questions,
     message: input.message,
     notificationType: input.notification_type,

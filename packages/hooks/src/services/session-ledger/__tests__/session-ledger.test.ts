@@ -36,6 +36,14 @@ class Plans {
     };
   }
 
+  static asked(toolUseId: string): HeartbeatPlan {
+    return { ...Plans.make('question'), awaitsAnswer: true, toolUseId };
+  }
+
+  static answered(toolUseId: string): HeartbeatPlan {
+    return { ...Plans.make('working', 'answer'), toolUseId };
+  }
+
   static async record(
     ledger: FileSessionLedger,
     plan: HeartbeatPlan,
@@ -93,6 +101,45 @@ describe('FileSessionLedger liveness', () => {
     expect(
       await Plans.record(ledger, Plans.make('working', 'liveness'), 600),
     ).toBeUndefined();
+  });
+});
+
+describe('FileSessionLedger late AskUserQuestion answers', () => {
+  it('writes the answer to the question that is still open', async () => {
+    const ledger = new FileSessionLedger({ config: state.config });
+
+    await Plans.record(ledger, Plans.asked('toolu_q1'), 0);
+
+    expect(await Plans.record(ledger, Plans.answered('toolu_q1'), 5)).toBe(1);
+  });
+
+  it('drops the answer to a question a newer one has replaced', async () => {
+    const ledger = new FileSessionLedger({ config: state.config });
+
+    await Plans.record(ledger, Plans.asked('toolu_q1'), 0);
+    await Plans.record(ledger, Plans.asked('toolu_q2'), 1);
+
+    expect(
+      await Plans.record(ledger, Plans.answered('toolu_q1'), 2),
+    ).toBeUndefined();
+    expect((await state.heartbeats('session-1')).at(-1)?.payload.status).toBe(
+      'question',
+    );
+    expect(await Plans.record(ledger, Plans.answered('toolu_q2'), 3)).toBe(2);
+  });
+
+  it('drops an answer that arrives after the turn has finished', async () => {
+    const ledger = new FileSessionLedger({ config: state.config });
+
+    await Plans.record(ledger, Plans.asked('toolu_q1'), 0);
+    await Plans.record(ledger, Plans.make('complete'), 1);
+
+    expect(
+      await Plans.record(ledger, Plans.answered('toolu_q1'), 2),
+    ).toBeUndefined();
+    expect((await state.heartbeats('session-1')).at(-1)?.payload.status).toBe(
+      'complete',
+    );
   });
 });
 

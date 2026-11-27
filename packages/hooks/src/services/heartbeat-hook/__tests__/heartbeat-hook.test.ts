@@ -50,7 +50,11 @@ describe('ClaudeCodeHeartbeatHook across a session', () => {
       await state.run(
         command,
         command === 'post-tool-use'
-          ? { ...Payloads.for(command), tool_name: 'AskUserQuestion' }
+          ? {
+              ...Payloads.for(command),
+              tool_name: 'AskUserQuestion',
+              tool_use_id: 'toolu_01ABC123',
+            }
           : Payloads.for(command),
       );
     }
@@ -148,6 +152,7 @@ describe('ClaudeCodeHeartbeatHook questions', () => {
     const answered = await state.run('post-tool-use', {
       ...Payloads.for('post-tool-use'),
       tool_name: 'AskUserQuestion',
+      tool_use_id: 'toolu_01ABC123',
     });
 
     expect(parallel).toBeUndefined();

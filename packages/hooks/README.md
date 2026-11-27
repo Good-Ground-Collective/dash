@@ -20,26 +20,26 @@ Then copy the `hooks` object from [`hooks/hooks.json`](hooks/hooks.json) (also e
 
 ## What each event writes
 
-| Claude Code event                                  | Heartbeat                                                                                                                                                                                                                   |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SessionStart`                                     | `complete`, the session's first heartbeat: idle until a prompt arrives. After a compaction, which can happen mid-turn, `working`. The model it reports is carried on the main agent's later heartbeats.                     |
-| `UserPromptSubmit`                                 | `working`                                                                                                                                                                                                                   |
-| `PreToolUse` on `AskUserQuestion`                  | `question`, with the question and its options copied verbatim. When it asks several questions at once, their texts are joined and the options left out.                                                                     |
-| `PostToolUse`                                      | `working`, as a liveness heartbeat: at most one a minute per session while the agent is already working, so a long run of tool calls doesn't look silent. The answer to an AskUserQuestion always sends one.                |
-| `Notification`: permission prompt, MCP elicitation | `question`, with the notification text as the question                                                                                                                                                                      |
-| `Notification`: idle prompt                        | Nothing. `Stop` already said the turn is complete.                                                                                                                                                                          |
-| `Stop`                                             | `complete`, with the last assistant message as `summary`, from the hook input or else the transcript. A transcript that can't be read leaves `summary` out.                                                                 |
-| `StopFailure`                                      | `error`, with Claude Code's error type as `error.kind`                                                                                                                                                                      |
-| `SubagentStart`, `SubagentStop`                    | `working` and `complete` for the subagent, under the parent's `sessionId` with the subagent's `agentId` and type. A stop for a subagent whose start wasn't seen, such as Claude Code's own internal agents, writes nothing. |
-| `SessionEnd`                                       | `complete`, the session's last heartbeat                                                                                                                                                                                    |
+| Claude Code event                                  | Heartbeat                                                                                                                                                                                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`                                     | `complete`, the session's first heartbeat: idle until a prompt arrives. After a compaction, which can happen mid-turn, `working`. The model it reports is carried on the main agent's later heartbeats.                                         |
+| `UserPromptSubmit`                                 | `working`                                                                                                                                                                                                                                       |
+| `PreToolUse` on `AskUserQuestion`                  | `question`, with the question and its options copied verbatim. When it asks several questions at once, their texts are joined and the options left out.                                                                                         |
+| `PostToolUse`                                      | `working`, as a liveness heartbeat: at most one a minute per session while the agent is already working, so a long run of tool calls doesn't look silent. The answer to an AskUserQuestion sends one while that question is still the open one. |
+| `Notification`: permission prompt, MCP elicitation | `question`, with the notification text as the question                                                                                                                                                                                          |
+| `Notification`: idle prompt                        | Nothing. `Stop` already said the turn is complete.                                                                                                                                                                                              |
+| `Stop`                                             | `complete`, with the last assistant message as `summary`, from the hook input or else the transcript. A transcript that can't be read leaves `summary` out.                                                                                     |
+| `StopFailure`                                      | `error`, with Claude Code's error type as `error.kind`                                                                                                                                                                                          |
+| `SubagentStart`, `SubagentStop`                    | `working` and `complete` for the subagent, under the parent's `sessionId` with the subagent's `agentId` and type. A stop for a subagent whose start wasn't seen, such as Claude Code's own internal agents, writes nothing.                     |
+| `SessionEnd`                                       | `complete`, the session's last heartbeat                                                                                                                                                                                                        |
 
-A liveness heartbeat never follows a finished turn, since a late tool hook is out of order there, and never replaces an AskUserQuestion that is still waiting for its answer, even when a tool running alongside it finishes first.
+A liveness heartbeat never follows a finished turn, since a late tool hook is out of order there, and never replaces an AskUserQuestion that is still waiting for its answer, even when a tool running alongside it finishes first. `PostToolUse` runs in the background, so an AskUserQuestion's answer can arrive after a newer question or after `Stop`; it is dropped then, rather than marking the agent busy again.
 
 Every heartbeat also carries the working directory, the repository and branch read from `.git` (without starting `git`), and the hostname.
 
 ## Where it writes
 
-Everything lives under `$XDG_STATE_HOME/dash/`, falling back to `~/.local/state/dash/`. Set `DASH_STATE_DIR` to use another directory.
+Everything lives under `$XDG_STATE_HOME/dash/`, falling back to `~/.local/state/dash/`. Set `DASH_STATE_DIR` to use another directory. Both variables are ignored unless they hold an absolute path, so `DASH_STATE_DIR=./state` leaves the hooks writing to the default directory.
 
 | Path                        | What it holds                                                                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,6 +52,10 @@ A parent agent and its subagents run hooks as separate processes at the same mom
 A heartbeat that would pass 4 KB once encoded loses detail step by step until it fits: option descriptions first, then shorter text. Text is trimmed by `String.length`, keeping the start and ending with `…`.
 
 On `SessionStart` the hooks delete outbox files nobody has written to for 7 days (`DASH_OUTBOX_RETENTION_DAYS` changes it) and counter files after 180 days.
+
+## Using it as a library
+
+The package's job is the `dash-hooks` command. Its only export is `HooksConfig`, for a reader such as the relay that needs the same state directory layout: `HooksConfig.fromEnvironment()` resolves the directory as the hooks do, and `outboxDirectory`, `sessionsDirectory` and `logPath` name what is inside it. Everything else is internal and can change in any release.
 
 ## Cost per hook
 

@@ -13,7 +13,7 @@ install_pinned() {
   find "$data" -maxdepth 1 -name install.lock -mmin +10 -exec rmdir {} \; 2>/dev/null
   mkdir "$data/install.lock" 2>/dev/null || return 0
   if ! cp "$root/package.json" "$root/.npmrc" "$data/" ||
-    ! npm install --prefix "$data" --omit=dev --no-audit --no-fund --loglevel=error >"$data/install.log" 2>&1; then
+    ! npm install --prefix "$data" --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error >"$data/install.log" 2>&1; then
     rm -f "$data/package.json"
   fi
   rmdir "$data/install.lock"

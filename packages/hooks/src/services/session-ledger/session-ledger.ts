@@ -12,8 +12,9 @@ import {
   type AgentHeartbeat,
   agentHeartbeat,
 } from '@good-ground-collective/agentic-communication-standards';
+import { z } from 'zod';
 
-import type { HooksConfig } from '#src/config/hooks-config.js';
+import { HooksConfig } from '#src/config/hooks-config.js';
 import { jsonLineSchema } from '#src/contracts/json-line.js';
 import { FileLock } from '#src/services/file-lock/file-lock.js';
 import type { HeartbeatPlan } from '#src/services/heartbeat-mapper/heartbeat-plan.js';
@@ -24,6 +25,14 @@ import {
   type SessionState,
   sessionStateSchema,
 } from '#src/services/session-ledger/session-state.js';
+
+const fileSessionLedgerPropsSchema = z.object({
+  config: z.instanceof(HooksConfig),
+});
+
+export type FileSessionLedgerProps = z.input<
+  typeof fileSessionLedgerPropsSchema
+>;
 
 const sessionStateFileSchema = jsonLineSchema.pipe(sessionStateSchema);
 
@@ -42,8 +51,10 @@ export interface SessionLedger {
 export class FileSessionLedger implements SessionLedger {
   private readonly config: HooksConfig;
 
-  constructor(props: { config: HooksConfig }) {
-    this.config = props.config;
+  constructor(props: FileSessionLedgerProps) {
+    const { config } = fileSessionLedgerPropsSchema.parse(props);
+
+    this.config = config;
   }
 
   async record(
@@ -63,7 +74,7 @@ export class FileSessionLedger implements SessionLedger {
         return undefined;
       }
 
-      const heartbeat = FileSessionLedger.number(plan, state, now);
+      const heartbeat = FileSessionLedger.numberedHeartbeat(plan, state, now);
       await appendFile(outboxPath, `${LineFitter.fit(heartbeat)}\n`);
       await FileSessionLedger.save(
         statePath,
@@ -86,6 +97,9 @@ export class FileSessionLedger implements SessionLedger {
     if (plan.condition === 'liveness') {
       return this.livenessDue(key, state, now);
     }
+    if (plan.condition === 'answer') {
+      return state.awaitingAnswer[key] === (plan.toolUseId ?? '');
+    }
 
     return true;
   }
@@ -102,7 +116,7 @@ export class FileSessionLedger implements SessionLedger {
       return false;
     }
     if (last === 'question') {
-      return !state.awaitingAnswer.includes(key);
+      return !(key in state.awaitingAnswer);
     }
     if (last === 'working') {
       return (
@@ -136,7 +150,7 @@ export class FileSessionLedger implements SessionLedger {
   }
 
   /** The heartbeat with its `seq`, envelope and the session's model, checked against the standards schema. */
-  private static number(
+  private static numberedHeartbeat(
     plan: HeartbeatPlan,
     state: SessionState,
     now: Date,
@@ -163,8 +177,8 @@ export class FileSessionLedger implements SessionLedger {
     now: Date,
   ): SessionState {
     const key = plan.draft.agentId ?? mainAgentKey;
-    const awaitingAnswer = state.awaitingAnswer.filter(
-      (agent) => agent !== key,
+    const awaitingAnswer = Object.fromEntries(
+      Object.entries(state.awaitingAnswer).filter(([agent]) => agent !== key),
     );
 
     return {
@@ -172,7 +186,7 @@ export class FileSessionLedger implements SessionLedger {
       lastWrittenAt: now.getTime(),
       agents: { ...state.agents, [key]: plan.draft.status },
       awaitingAnswer: plan.awaitsAnswer
-        ? [...awaitingAnswer, key]
+        ? { ...awaitingAnswer, [key]: plan.toolUseId ?? '' }
         : awaitingAnswer,
       model: plan.sessionModel ?? state.model,
     };

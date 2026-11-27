@@ -1,6 +1,19 @@
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { hookCommands } from '#src/contracts/hook-event.js';
@@ -34,9 +47,11 @@ class Registrations {
   );
 
   /** Each registered event with its matcher and the dash-hooks subcommand it runs. */
-  static async read(
-    file: URL,
-  ): Promise<{ command: string; entries: string[] }> {
+  static async read(file: URL): Promise<{
+    command: string;
+    entries: string[];
+    invocations: { command: string; args: string[] }[];
+  }> {
     const { hooks } = hooksFileSchema.parse(
       JSON.parse(await readFile(file, 'utf8')),
     );
@@ -60,7 +75,65 @@ class Registrations {
             `${event} ${matcher} ${handler.args.join(' ')}`,
         )
         .sort(),
+      invocations: handlers.map(({ handler }) => handler),
     };
+  }
+}
+
+const pluginRoot = fileURLToPath(
+  new URL('../../../../../plugins/dash-heartbeats', import.meta.url),
+);
+
+const stubScript = '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$STUB_RECORD"\n';
+
+/**
+ * Runs registered hook commands the way Claude Code runs a command hook with `args`: `command` is
+ * spawned directly with `args` as its argument vector, no shell, after `${CLAUDE_PLUGIN_ROOT}` is
+ * substituted. A stub `dash-hooks` records the arguments it receives.
+ */
+class ExecForm {
+  readonly directory = mkdtempSync(path.join(tmpdir(), 'dash-exec-'));
+  readonly record = path.join(this.directory, 'record.txt');
+  readonly pluginData = path.join(this.directory, 'plugin-data');
+  readonly binDirectory = path.join(this.directory, 'bin');
+
+  /** A `dash-hooks` stub on `PATH`, and one already installed in the plugin's data directory at the pinned version. */
+  async prepare(): Promise<void> {
+    const installedBin = path.join(this.pluginData, 'node_modules', '.bin');
+    await mkdir(installedBin, { recursive: true });
+    await mkdir(this.binDirectory, { recursive: true });
+    await copyFile(
+      path.join(pluginRoot, 'package.json'),
+      path.join(this.pluginData, 'package.json'),
+    );
+    for (const stub of [installedBin, this.binDirectory]) {
+      await writeFile(path.join(stub, 'dash-hooks'), stubScript);
+      await chmod(path.join(stub, 'dash-hooks'), 0o755);
+    }
+  }
+
+  async run(invocation: { command: string; args: string[] }): Promise<void> {
+    await promisify(execFile)(
+      invocation.command.replaceAll('${CLAUDE_PLUGIN_ROOT}', pluginRoot),
+      invocation.args,
+      {
+        env: {
+          PATH: `${this.binDirectory}:/usr/bin:/bin`,
+          CLAUDE_PLUGIN_ROOT: pluginRoot,
+          CLAUDE_PLUGIN_DATA: this.pluginData,
+          STUB_RECORD: this.record,
+        },
+      },
+    );
+  }
+
+  async received(): Promise<string[]> {
+    const text = await readFile(this.record, 'utf8').catch(() => '');
+    return text.split('\n').filter((line) => line !== '');
+  }
+
+  async remove(): Promise<void> {
+    await rm(this.directory, { recursive: true, force: true });
   }
 }
 
@@ -90,5 +163,36 @@ describe('hook registration', () => {
 
     expect(plugin.command).toBe('${CLAUDE_PLUGIN_ROOT}/scripts/dash-hooks.sh');
     expect(plugin.entries).toEqual(npm.entries);
+  });
+});
+
+describe('hook commands as Claude Code runs them', () => {
+  let exec: ExecForm;
+
+  beforeEach(async () => {
+    exec = new ExecForm();
+    await exec.prepare();
+  });
+
+  afterEach(async () => {
+    await exec.remove();
+  });
+
+  it.each([
+    ['the npm package', Registrations.PACKAGE],
+    ['the Claude Code plugin', Registrations.PLUGIN],
+  ])('hands dash-hooks its subcommand from %s', async (_name, file) => {
+    const { invocations } = await Registrations.read(file);
+
+    for (const invocation of invocations) {
+      await exec.run(invocation);
+    }
+
+    expect(await exec.received()).toEqual(
+      invocations.map(({ args }) => args.join(' ')),
+    );
+    expect((await exec.received()).sort()).toEqual(
+      Object.keys(hookCommands).sort(),
+    );
   });
 });

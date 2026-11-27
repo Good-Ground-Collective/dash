@@ -50,17 +50,22 @@ export class HeartbeatMapper {
       };
     }
     if (event === 'SessionEnd') {
-      return HeartbeatMapper.always(context, 'complete');
+      return HeartbeatMapper.unconditionalPlan(context, 'complete');
     }
     if (event === 'UserPromptSubmit') {
-      return HeartbeatMapper.always(context, 'working');
+      return HeartbeatMapper.unconditionalPlan(context, 'working');
     }
     if (event === 'PostToolUse') {
-      return {
-        draft: HeartbeatMapper.draft(context, 'working'),
-        condition:
-          input.toolName === HeartbeatMapper.ASK_TOOL ? 'always' : 'liveness',
-      };
+      return input.toolName === HeartbeatMapper.ASK_TOOL
+        ? {
+            draft: HeartbeatMapper.draft(context, 'working'),
+            condition: 'answer',
+            toolUseId: input.toolUseId,
+          }
+        : {
+            draft: HeartbeatMapper.draft(context, 'working'),
+            condition: 'liveness',
+          };
     }
     if (event === 'PreToolUse') {
       return HeartbeatMapper.askedQuestion(context);
@@ -102,7 +107,7 @@ export class HeartbeatMapper {
       return undefined;
     }
     if (event === 'SubagentStart') {
-      return HeartbeatMapper.always(context, 'working');
+      return HeartbeatMapper.unconditionalPlan(context, 'working');
     }
 
     return {
@@ -145,6 +150,7 @@ export class HeartbeatMapper {
         options: kept.length > 0 ? kept : undefined,
       }),
       awaitsAnswer: true,
+      toolUseId: context.input.toolUseId,
     };
   }
 
@@ -177,7 +183,7 @@ export class HeartbeatMapper {
     };
   }
 
-  private static always(
+  private static unconditionalPlan(
     context: HeartbeatContext,
     status: Status,
   ): HeartbeatPlan {
