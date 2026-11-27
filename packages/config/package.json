@@ -9,7 +9,8 @@
     "./tsconfig/base.json": "./tsconfig/base.json"
   },
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
@@ -18,6 +19,8 @@
     "@typescript-eslint/parser": "catalog:",
     "eslint-plugin-import-x": "catalog:",
     "eslint-plugin-unicorn": "catalog:",
+    "postcss": "catalog:",
+    "postcss-html": "catalog:",
     "stylelint-config-standard": "catalog:"
   },
   "peerDependencies": {
@@ -28,6 +31,7 @@
   "devDependencies": {
     "eslint": "catalog:",
     "stylelint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
