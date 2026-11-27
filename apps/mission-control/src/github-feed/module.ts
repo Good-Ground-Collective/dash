@@ -11,7 +11,10 @@ import type { GithubSource } from '#src/github-feed/contracts/github-source.ts';
 import { FeedRoutes } from '#src/github-feed/exposures/feed-routes/feed-routes.ts';
 import type { GithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import type { GithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
-import { GithubReconcile } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
+import {
+  type GithubReconcile,
+  SourcedGithubReconcile,
+} from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
 import { GithubReconcileWorkflows } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
 import { OwnedGithubSource } from '#src/github-feed/services/owned-github-source/owned-github-source.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
@@ -46,7 +49,7 @@ export class GithubFeedModule
             linkedAccounts: props.linkedAccounts,
           }),
       );
-    this.reconcile = new GithubReconcile({
+    this.reconcile = new SourcedGithubReconcile({
       sources,
       reader: props.reader,
       writer: props.writer,

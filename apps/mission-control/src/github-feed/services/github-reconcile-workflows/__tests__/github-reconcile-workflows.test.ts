@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 import { ReconcileNotRegisteredError } from '#src/github-feed/errors.ts';
-import { GithubReconcile } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
+import { SourcedGithubReconcile } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
 import { GithubReconcileWorkflows } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
 
 describe('GithubReconcileWorkflows', () => {
   const records = new InMemoryGithubRecords();
   const workflows = new GithubReconcileWorkflows({
-    reconcile: new GithubReconcile({
+    reconcile: new SourcedGithubReconcile({
       sources: [],
       reader: records,
       writer: records,
