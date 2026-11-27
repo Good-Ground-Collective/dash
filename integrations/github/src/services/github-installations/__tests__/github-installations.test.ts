@@ -59,3 +59,29 @@ describe('GithubConnectFlow getInstallation', () => {
     expect(repositories?.authorization).toBe('Bearer ghs_installation');
   });
 });
+
+describe('GithubConnectFlow isInstallationSuspended', () => {
+  it('reads the suspension from the installation record alone, as the App', async () => {
+    const github = new FakeGithub().on({
+      method: 'GET',
+      url: installationUrl,
+      reply: () => ({
+        body: { ...acmeInstallation, suspended_at: '2026-11-26T12:00:00Z' },
+      }),
+    });
+
+    expect(
+      await github.flow().isInstallationSuspended({ installationId: '42' }),
+    ).toBe(true);
+    expect(github.calls).toHaveLength(1);
+  });
+
+  it('says an installation without a suspension date is not suspended', async () => {
+    expect(
+      await new FakeGithub()
+        .withInstallation()
+        .flow()
+        .isInstallationSuspended({ installationId: '42' }),
+    ).toBe(false);
+  });
+});

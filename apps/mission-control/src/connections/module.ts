@@ -4,6 +4,7 @@ import {
   type IntegrationRegistry,
 } from '@dash/integrations-core';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
 import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
@@ -30,21 +31,29 @@ import type { WebhookEventRegistry } from '#src/connections/services/webhook-eve
 import { DbosWebhookRetention } from '#src/connections/services/webhook-retention/webhook-retention.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
+import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts';
 
-interface ConnectionsModuleProps {
-  registry: IntegrationRegistry;
-  identity: Pick<Identity, 'session'>;
-  connections: ConnectionRepository;
-  linkedAccounts: LinkedAccountRepository;
-  deliveries: WebhookDeliveryRepository;
-  /** Where modules register the webhook events they act on. */
-  webhookEvents: WebhookEventRegistry;
-  /** Mission Control's auth secret. Keys for the connect state and the token cipher are derived from it. */
-  secret: string;
-  baseUrl: string;
-  webOrigin: string;
-  listener?: ConnectListener | undefined;
-}
+const connectionsModulePropsSchema = z.object({
+  registry: z.custom<IntegrationRegistry>(),
+  identity: z.custom<Pick<Identity, 'session'>>(),
+  connections: z.custom<ConnectionRepository>(),
+  linkedAccounts: z.custom<LinkedAccountRepository>(),
+  deliveries: z.custom<WebhookDeliveryRepository>(),
+  webhookEvents: z
+    .custom<WebhookEventRegistry>()
+    .describe('Where modules register the webhook events they act on.'),
+  secret: z
+    .string()
+    .min(32)
+    .describe(
+      "Mission Control's auth secret. Keys for the connect state and the token cipher are derived from it.",
+    ),
+  baseUrl: webOriginSchema,
+  webOrigin: webOriginSchema,
+  listener: z.custom<ConnectListener>().optional(),
+});
+
+type ConnectionsModuleProps = z.output<typeof connectionsModulePropsSchema>;
 
 type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
 
@@ -60,7 +69,8 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
   readonly owned: ReadonlyMap<string, OwnedConnections>;
   private readonly workflows: readonly WorkflowModule[];
 
-  constructor(props: ConnectionsModuleProps) {
+  constructor(input: z.input<typeof connectionsModulePropsSchema>) {
+    const props = connectionsModulePropsSchema.parse(input);
     const cipher = new AesGcmTokenCipher({ secret: props.secret });
     const state: ConnectState = new SignedConnectState({
       secret: props.secret,

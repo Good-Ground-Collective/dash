@@ -17,12 +17,12 @@ export interface WebhookDeliveryRepository {
     delivery: WebhookDelivery;
     dispatchPending: boolean;
   }): Promise<{ duplicate: boolean }>;
-  /** Notes that the delivery's processing has started, so it is not started again. */
+  /** Notes that the delivery's processing finished, or was given up on, so it is not retried. */
   markDispatched(props: {
     provider: string;
     deliveryId: string;
   }): Promise<void>;
-  /** Deliveries stored for processing that never started, oldest first. */
+  /** Deliveries stored for processing that hasn't finished, oldest first. */
   pendingDispatch(props: {
     receivedBefore: Date;
     limit: number;

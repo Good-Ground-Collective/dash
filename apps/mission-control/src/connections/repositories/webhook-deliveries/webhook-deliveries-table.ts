@@ -13,7 +13,8 @@ import {
  * Every verified webhook delivery, keyed by the provider's delivery id so a redelivery is
  * recorded once. The payload is kept for debugging and deleted after seven days.
  * `dispatch_pending` stays true from the moment a delivery that needs processing is stored
- * until its processing workflow starts, so a crash between the two is picked up again.
+ * until its processing succeeds or is given up on, so a crash or a failed attempt is picked up
+ * again.
  */
 export const webhookDeliveryTable = pgTable(
   'webhook_delivery',

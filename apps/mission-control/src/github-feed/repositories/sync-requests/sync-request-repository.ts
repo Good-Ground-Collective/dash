@@ -11,7 +11,6 @@ const repositoryPropsSchema = z.object({
 export interface SyncRequestRepository {
   /** Records that the connection changed at `requestedAt`, keeping the latest such moment. */
   request(props: { connectionId: string; requestedAt: Date }): Promise<void>;
-  /** Whether a change was recorded at or after `since`. */
   requestedSince(props: {
     connectionId: string;
     since: Date;
@@ -35,9 +34,7 @@ export class DrizzleSyncRequestRepository implements SyncRequestRepository {
       .onConflictDoUpdate({
         target: githubSyncRequestTable.connectionId,
         set: {
-          requestedAt: sql.raw(
-            'greatest("github_sync_request"."requested_at", excluded."requested_at")',
-          ),
+          requestedAt: sql`greatest(${githubSyncRequestTable.requestedAt}, excluded.requested_at)`,
         },
       });
   }

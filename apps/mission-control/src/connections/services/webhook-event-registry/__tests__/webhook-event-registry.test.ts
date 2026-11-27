@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import type {
   DispatchedDelivery,
@@ -6,15 +7,21 @@ import type {
 } from '#src/connections/contracts/webhook-events.ts';
 import { InMemoryWebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
 
+const namedHandlerPropsSchema = z.object({
+  event: z.string().min(1),
+  actions: z.array(z.string().min(1)).readonly().nullable(),
+});
+
 class NamedHandler implements WebhookEventHandler {
   readonly provider = 'github';
   readonly event: string;
   readonly actions: readonly string[] | null;
   readonly handled: DispatchedDelivery[] = [];
 
-  constructor(props: { event: string; actions: readonly string[] | null }) {
-    this.event = props.event;
-    this.actions = props.actions;
+  constructor(props: z.input<typeof namedHandlerPropsSchema>) {
+    const parsed = namedHandlerPropsSchema.parse(props);
+    this.event = parsed.event;
+    this.actions = parsed.actions;
   }
 
   async handle(delivery: DispatchedDelivery): Promise<void> {

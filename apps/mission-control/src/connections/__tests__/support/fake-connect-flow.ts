@@ -100,6 +100,8 @@ export const acmeUserInstallation: UserInstallation = {
  * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`, and its event is
  * `x-event`: `installation` (the default) or `pull_request`. Its
  * installation is the body's `installation.id`, read only after the signature checks out.
+ * Installations in `suspendedInstallations` read as suspended, and the next `unavailableReads`
+ * installation reads fail as a provider outage would.
  */
 export class FakeConnectFlow implements ConnectFlow {
   readonly refreshed: string[] = [];
@@ -118,6 +120,8 @@ export class FakeConnectFlow implements ConnectFlow {
     refreshTokenExpiresAt: '2027-05-27T12:00:00.000Z',
   };
   visible: UserInstallation[] = [acmeUserInstallation];
+  readonly suspendedInstallations = new Set<string>();
+  unavailableReads = 0;
   readonly manageable = new Map<string, readonly string[]>([
     ['access-1', ['42']],
     ['access-2', ['42']],
@@ -179,7 +183,19 @@ export class FakeConnectFlow implements ConnectFlow {
   async getInstallation(props: {
     installationId: string;
   }): Promise<Installation> {
-    return { ...acmeInstallation, externalId: props.installationId };
+    this.failIfUnavailable();
+    return {
+      ...acmeInstallation,
+      externalId: props.installationId,
+      suspended: this.suspendedInstallations.has(props.installationId),
+    };
+  }
+
+  async isInstallationSuspended(props: {
+    installationId: string;
+  }): Promise<boolean> {
+    this.failIfUnavailable();
+    return this.suspendedInstallations.has(props.installationId);
   }
 
   async verifyWebhook(props: {
@@ -215,5 +231,12 @@ export class FakeConnectFlow implements ConnectFlow {
         installationChanges.get(`${event}.${action ?? ''}`) ?? null,
       payload: body.success ? body.data : null,
     };
+  }
+
+  private failIfUnavailable(): void {
+    if (this.unavailableReads > 0) {
+      this.unavailableReads -= 1;
+      throw new Error('The provider is unavailable');
+    }
   }
 }

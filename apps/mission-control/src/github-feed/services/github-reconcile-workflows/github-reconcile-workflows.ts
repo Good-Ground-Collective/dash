@@ -1,7 +1,10 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
-import { ReconcileNotRegisteredError } from '#src/github-feed/errors.ts';
+import {
+  ReconcileNotRegisteredError,
+  ReconcileOutsideWorkflowError,
+} from '#src/github-feed/errors.ts';
 import type {
   GithubReconcile,
   SyncOutcome,
@@ -16,6 +19,12 @@ const githubReconcileWorkflowsPropsSchema = z.object({
   reconcile: z.custom<GithubReconcile>(),
   syncRequests: z.custom<Pick<GithubSyncRequests, 'requestedSince'>>(),
 });
+
+/** Reads a connection again on request, from inside or outside a workflow. */
+export interface ConnectionReads {
+  /** Enqueues a read of the connection unless one is already queued or running. */
+  syncConnection(props: { connectionId: string }): Promise<void>;
+}
 
 type ConnectionWorkflow = (connectionId: string) => Promise<void>;
 type FollowUpWorkflow = (props: {
@@ -35,7 +44,9 @@ type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
  * it, so once each read has finished a follow-up checks for a change reported after the read
  * started, and enqueues one more read if there was one.
  */
-export class GithubReconcileWorkflows implements WorkflowModule {
+export class GithubReconcileWorkflows
+  implements ConnectionReads, WorkflowModule
+{
   private readonly reconcile: GithubReconcile;
   private readonly syncRequests: Pick<GithubSyncRequests, 'requestedSince'>;
   private registered: {
@@ -74,7 +85,6 @@ export class GithubReconcileWorkflows implements WorkflowModule {
     );
   }
 
-  /** Enqueues a read of the connection unless one is already queued or running. Callable from a workflow. */
   async syncConnection(props: { connectionId: string }): Promise<void> {
     if (this.registered === null) {
       throw new ReconcileNotRegisteredError();
@@ -99,7 +109,10 @@ export class GithubReconcileWorkflows implements WorkflowModule {
         );
         GithubReconcileWorkflows.log({ connectionId, outcome });
 
-        const readWorkflowId = DBOS.workflowID ?? '';
+        const readWorkflowId = DBOS.workflowID;
+        if (readWorkflowId === undefined) {
+          throw new ReconcileOutsideWorkflowError();
+        }
         await DBOS.startWorkflow(followUp, {
           workflowID: `${readWorkflowId}-follow-up`,
         })({ connectionId, readWorkflowId, startedAt });

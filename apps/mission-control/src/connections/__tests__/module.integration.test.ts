@@ -93,11 +93,18 @@ class Deliveries {
     );
   }
 
-  static async processed(deliveryId: string) {
+  static async processed(deliveryId: string, attempt = 1) {
     return DBOS.listWorkflows({
-      workflowIDs: [`webhook-github-${deliveryId}`],
+      workflowIDs: [`webhook-github-${deliveryId}-${attempt}`],
       status: 'SUCCESS',
     });
+  }
+
+  static backdate(deliveryId: string): void {
+    const stored = Deliveries.stored(deliveryId);
+    if (stored !== undefined) {
+      stored.receivedAt = new Date(Date.now() - 2 * 60_000);
+    }
   }
 }
 
@@ -176,7 +183,7 @@ describe.skipIf(databaseUrl === null)('Webhook events nothing handles', () => {
       });
       expect(
         await DBOS.listWorkflows({
-          workflowIDs: [`webhook-github-${delivery}`],
+          workflowIDs: [`webhook-github-${delivery}-1`],
         }),
       ).toEqual([]);
     }
@@ -200,10 +207,7 @@ describe.skipIf(databaseUrl === null)('Webhook redispatch on DBOS', () => {
       },
       dispatchPending: true,
     });
-    const stored = Deliveries.stored('crash-1');
-    if (stored !== undefined) {
-      stored.receivedAt = new Date(Date.now() - 2 * 60_000);
-    }
+    Deliveries.backdate('crash-1');
 
     await DBOS.triggerSchedule('webhook-redispatch-every-minute');
 
@@ -219,11 +223,76 @@ describe.skipIf(databaseUrl === null)('Webhook redispatch on DBOS', () => {
   }, 30_000);
 });
 
+describe.skipIf(databaseUrl === null)('Webhook retries on DBOS', () => {
+  const unsuspend = async (delivery: string) => {
+    await harness.connections.setSuspended({
+      provider: 'github',
+      installationId: '42',
+      suspended: true,
+    });
+    await Deliveries.send({
+      delivery,
+      event: 'installation',
+      action: 'unsuspend',
+    });
+  };
+
+  it('applies an installation change after the provider fails a read once', async () => {
+    const before = reconcile.synced.length;
+    harness.flow.unavailableReads = 1;
+
+    await unsuspend('unsuspend-1');
+
+    await vi.waitFor(async () => {
+      expect(await Deliveries.processed('unsuspend-1')).toHaveLength(1);
+    }, settle);
+    expect(
+      await harness.connections.listOwned({ provider: 'github' }),
+    ).toMatchObject([{ suspended: false }]);
+    expect(Deliveries.stored('unsuspend-1')).toMatchObject({
+      dispatchPending: false,
+    });
+    await vi.waitFor(() => {
+      expect(reconcile.synced.length).toBeGreaterThan(before);
+    }, settle);
+  }, 30_000);
+
+  it('starts another attempt at a delivery whose attempt failed', async () => {
+    harness.flow.unavailableReads = 4;
+
+    await unsuspend('unsuspend-2');
+    await vi.waitFor(async () => {
+      expect(
+        await DBOS.listWorkflows({
+          workflowIDs: ['webhook-github-unsuspend-2-1'],
+          status: 'ERROR',
+        }),
+      ).toHaveLength(1);
+    }, settle);
+    expect(Deliveries.stored('unsuspend-2')).toMatchObject({
+      dispatchPending: true,
+    });
+    Deliveries.backdate('unsuspend-2');
+    await DBOS.triggerSchedule('webhook-redispatch-every-minute');
+
+    await vi.waitFor(async () => {
+      expect(await Deliveries.processed('unsuspend-2', 2)).toHaveLength(1);
+    }, settle);
+    expect(
+      await harness.connections.listOwned({ provider: 'github' }),
+    ).toMatchObject([{ suspended: false }]);
+    expect(Deliveries.stored('unsuspend-2')).toMatchObject({
+      dispatchPending: false,
+    });
+  }, 60_000);
+});
+
 describe.skipIf(databaseUrl === null)(
   'Webhook installation changes on DBOS',
   () => {
     it('records a suspension and reads the connection so the feed can say why', async () => {
       const before = reconcile.synced.length;
+      harness.flow.suspendedInstallations.add('42');
 
       await Deliveries.send({
         delivery: 'suspend-1',

@@ -3,6 +3,7 @@ import {
   type IntegrationRegistry,
 } from '@dash/integrations-core';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
 import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
@@ -26,6 +27,17 @@ import { OwnedGithubSource } from '#src/github-feed/services/owned-github-source
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
 
+const githubFeedModulePropsSchema = z.object({
+  registry: z.custom<IntegrationRegistry>(),
+  identity: z.custom<Pick<Identity, 'session'>>(),
+  linkedAccounts: z.custom<Pick<LinkedAccountRepository, 'find'>>(),
+  reader: z.custom<GithubRecordReader>(),
+  writer: z.custom<GithubRecordWriter>(),
+  connections: z.custom<Pick<ConnectionRepository, 'connectionIdsFor'>>(),
+  syncRequests: z.custom<SyncRequestRepository>(),
+  webhookEvents: z.custom<WebhookEventRegistry>(),
+});
+
 /**
  * The GitHub feed: tables every kind of connection writes into, a reconcile that keeps
  * them fresh, and `GET /integrations/github/feed`. Owned connections are read through the
@@ -39,16 +51,8 @@ export class GithubFeedModule
   readonly reconcile: GithubReconcile;
   private readonly workflows: GithubReconcileWorkflows;
 
-  constructor(props: {
-    registry: IntegrationRegistry;
-    identity: Pick<Identity, 'session'>;
-    linkedAccounts: Pick<LinkedAccountRepository, 'find'>;
-    reader: GithubRecordReader;
-    writer: GithubRecordWriter;
-    connections: Pick<ConnectionRepository, 'connectionIdsFor'>;
-    syncRequests: SyncRequestRepository;
-    webhookEvents: WebhookEventRegistry;
-  }) {
+  constructor(input: z.input<typeof githubFeedModulePropsSchema>) {
+    const props = githubFeedModulePropsSchema.parse(input);
     const sources: GithubSource[] = props.registry
       .offering(activityFeedCapability)
       .filter(({ integration }) => integration.provider === 'github')

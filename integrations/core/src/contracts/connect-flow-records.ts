@@ -96,7 +96,6 @@ export const installationChangeSchema = z.enum([
   'repositoriesChanged',
 ]);
 
-/** A webhook body as JSON. */
 export const webhookPayloadSchema = z.record(z.string(), z.json());
 
 /** A webhook delivery whose signature checked out. */

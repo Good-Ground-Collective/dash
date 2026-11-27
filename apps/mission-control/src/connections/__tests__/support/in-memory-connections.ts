@@ -81,12 +81,21 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     provider: string;
     installation: Installation;
   }): Promise<boolean> {
-    const key = `${props.provider}:${props.installation.externalId}`;
+    const { installation } = props;
+    const key = `${props.provider}:${installation.externalId}`;
     const existing = this.owned.get(key);
     if (existing === undefined) {
       return false;
     }
-    await this.saveOwned({ ...props, connectedBy: existing.id });
+    this.owned.set(key, {
+      ...existing,
+      account: installation.account,
+      repositorySelection: installation.repositorySelection,
+      repositories: installation.repositories,
+      suspended: installation.suspended,
+      settingsUrl: installation.url,
+      updatedAt: new Date().toISOString(),
+    });
     return true;
   }
 

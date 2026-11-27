@@ -16,6 +16,20 @@ const redispatchScheduleName = 'webhook-redispatch-every-minute';
 /** A delivery stored this recently may still be on its way to its workflow. */
 const redispatchGraceMilliseconds = 60_000;
 const redispatchBatchSize = 100;
+/** Workflows started for one delivery before it is given up on, one a minute at most. */
+const maxDispatchAttempts = 10;
+const failedStatuses: ReadonlySet<string> = new Set([
+  'ERROR',
+  'MAX_RECOVERY_ATTEMPTS_EXCEEDED',
+  'CANCELLED',
+]);
+/** A provider outage of a few seconds is retried inside the workflow: after 1, 2 and 4 seconds. */
+const retriedStep = {
+  retriesAllowed: true,
+  maxAttempts: 4,
+  intervalSeconds: 1,
+  backoffRate: 2,
+};
 
 const webhookDispatchPropsSchema = z.object({
   registry: z.custom<WebhookEventRegistry>(),
@@ -35,10 +49,12 @@ export interface WebhookDispatch {
 }
 
 /**
- * One DBOS workflow per delivery, keyed by its delivery id: it brings the connection up to date
- * with any change to its installation, then runs each registered handler. The delivery is stored
- * marked pending before its workflow starts, and every minute a schedule starts any delivery
- * still pending, so a crash between the two loses nothing.
+ * One DBOS workflow per attempt at a delivery: it brings the connection up to date with any
+ * change to its installation, runs each registered handler, and only then marks the delivery
+ * dispatched. A delivery is stored pending before its first attempt starts. Every minute a
+ * schedule looks at each delivery still pending: it starts the first attempt if a crash kept
+ * it from starting, leaves a running attempt alone, and starts another after one that failed,
+ * up to ten, so neither a crash nor a provider outage loses a change.
  */
 export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
   private readonly registry: WebhookEventRegistry;
@@ -65,13 +81,7 @@ export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
   }
 
   async start(delivery: DispatchedDelivery): Promise<void> {
-    if (this.registered === null) {
-      throw new WebhookWorkflowsNotRegisteredError();
-    }
-    await DBOS.startWorkflow(this.registered.dispatch, {
-      workflowID: `webhook-${delivery.provider}-${delivery.deliveryId}`,
-      queueName,
-    })(delivery);
+    await this.startAttempt({ delivery, attempt: 1 });
   }
 
   async activate(): Promise<void> {
@@ -98,36 +108,28 @@ export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
         },
       ),
       redispatch: DBOS.registerWorkflow(
-        async (firedAt: Date) => {
-          const pending = await DBOS.runStep(
-            () =>
-              this.deliveries.pendingDispatch({
-                receivedBefore: new Date(
-                  firedAt.getTime() - redispatchGraceMilliseconds,
-                ),
-                limit: redispatchBatchSize,
-              }),
-            { name: 'webhookPendingDispatch' },
-          );
-          for (const delivery of pending) {
-            await this.start(delivery);
-          }
-        },
+        async (firedAt: Date) => this.redispatch(firedAt),
         { name: 'webhookRedispatch' },
       ),
     };
   }
 
+  private async startAttempt(props: {
+    delivery: DispatchedDelivery;
+    attempt: number;
+  }): Promise<void> {
+    if (this.registered === null) {
+      throw new WebhookWorkflowsNotRegisteredError();
+    }
+    await DBOS.startWorkflow(this.registered.dispatch, {
+      workflowID: DbosWebhookDispatch.workflowId(props),
+      queueName,
+    })(props.delivery);
+  }
+
   private async process(delivery: DispatchedDelivery): Promise<void> {
-    const { provider, installationId, installationChange } = delivery;
-    await DBOS.runStep(
-      () =>
-        this.deliveries.markDispatched({
-          provider,
-          deliveryId: delivery.deliveryId,
-        }),
-      { name: 'webhookMarkDispatched' },
-    );
+    const { provider, deliveryId, installationId, installationChange } =
+      delivery;
     if (installationId !== null && installationChange !== null) {
       await DBOS.runStep(
         () =>
@@ -136,12 +138,70 @@ export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
             installationId,
             change: installationChange,
           }),
-        { name: 'webhookApplyInstallationChange' },
+        { ...retriedStep, name: 'webhookApplyInstallationChange' },
       );
     }
 
     for (const handler of this.registry.handlersFor(delivery)) {
       await handler.handle(delivery);
     }
+
+    await DBOS.runStep(
+      () => this.deliveries.markDispatched({ provider, deliveryId }),
+      { ...retriedStep, name: 'webhookMarkDispatched' },
+    );
+  }
+
+  private async redispatch(firedAt: Date): Promise<void> {
+    const pending = await DBOS.runStep(
+      () =>
+        this.deliveries.pendingDispatch({
+          receivedBefore: new Date(
+            firedAt.getTime() - redispatchGraceMilliseconds,
+          ),
+          limit: redispatchBatchSize,
+        }),
+      { name: 'webhookPendingDispatch' },
+    );
+
+    for (const delivery of pending) {
+      await this.retry(delivery);
+    }
+  }
+
+  /** Starts the first attempt that never started, unless an earlier one is running or succeeded. */
+  private async retry(delivery: DispatchedDelivery): Promise<void> {
+    for (let attempt = 1; attempt <= maxDispatchAttempts; attempt += 1) {
+      const status = await DBOS.getWorkflowStatus(
+        DbosWebhookDispatch.workflowId({ delivery, attempt }),
+      );
+      if (status === null) {
+        await this.startAttempt({ delivery, attempt });
+        return;
+      }
+      if (!failedStatuses.has(status.status)) {
+        return;
+      }
+    }
+
+    DBOS.logger.warn(
+      `Giving up on webhook delivery ${delivery.deliveryId} after ${maxDispatchAttempts} failed attempts`,
+    );
+    await DBOS.runStep(
+      () =>
+        this.deliveries.markDispatched({
+          provider: delivery.provider,
+          deliveryId: delivery.deliveryId,
+        }),
+      { name: 'webhookAbandonDispatch' },
+    );
+  }
+
+  private static workflowId(props: {
+    delivery: DispatchedDelivery;
+    attempt: number;
+  }): string {
+    const { provider, deliveryId } = props.delivery;
+    return `webhook-${provider}-${deliveryId}-${props.attempt}`;
   }
 }

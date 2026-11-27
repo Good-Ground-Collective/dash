@@ -20,9 +20,11 @@ export interface InstallationChanges {
 }
 
 /**
- * An uninstalled app removes its connection and everything read through it. A suspension is
- * recorded as it is, because a suspended installation can't be read. Lifting a suspension or
- * changing the repositories reads the installation again, so the repositories stay current.
+ * An uninstalled app removes its connection and everything read through it. Any other change
+ * reads the installation's current state rather than trusting the event, because deliveries are
+ * processed concurrently and in no set order, so a suspension can be processed after the
+ * unsuspension that lifted it. A suspended installation's repositories can't be read, so only
+ * its suspension is recorded; otherwise the whole installation is read again.
  */
 export class OwnedInstallationChanges implements InstallationChanges {
   private readonly flows: ReadonlyMap<string, ConnectFlow>;
@@ -44,14 +46,6 @@ export class OwnedInstallationChanges implements InstallationChanges {
       await this.connections.removeInstallation({ provider, installationId });
       return;
     }
-    if (change === 'suspended') {
-      await this.connections.setSuspended({
-        provider,
-        installationId,
-        suspended: true,
-      });
-      return;
-    }
 
     const flow = this.flows.get(provider);
     if (
@@ -60,6 +54,16 @@ export class OwnedInstallationChanges implements InstallationChanges {
     ) {
       return;
     }
+
+    if (await flow.isInstallationSuspended({ installationId })) {
+      await this.connections.setSuspended({
+        provider,
+        installationId,
+        suspended: true,
+      });
+      return;
+    }
+
     await this.connections.refreshOwned({
       provider,
       installation: await flow.getInstallation({ installationId }),

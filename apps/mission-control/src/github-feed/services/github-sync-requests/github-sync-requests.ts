@@ -15,7 +15,6 @@ export interface GithubSyncRequests {
     installationId: string;
     requestedAt: Date;
   }): Promise<string | null>;
-  /** Whether a change was reported at or after `since`. */
   requestedSince(props: {
     connectionId: string;
     since: Date;

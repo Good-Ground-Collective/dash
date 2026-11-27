@@ -20,6 +20,14 @@ const webhookBodyLimitBytes = 5 * 1024 * 1024;
 /** A delivery without a body reaches the handler without one, and fails the signature check. */
 const rawBodySchema = z.instanceof(Buffer).catch(Buffer.alloc(0));
 
+const webhookRoutesPropsSchema = z.object({
+  provider: z.string().min(1),
+  flow: z.custom<ConnectFlow>(),
+  connections: z.custom<ConnectionRepository>(),
+  deliveries: z.custom<WebhookDeliveryRepository>(),
+  dispatch: z.custom<WebhookDispatch>(),
+});
+
 /**
  * `POST /integrations/<provider>/webhooks`: checks the delivery's signature over the exact body
  * bytes before anything parses them, records its id so a redelivery is spotted, and answers
@@ -37,18 +45,13 @@ export class WebhookRoutes {
   private readonly deliveries: WebhookDeliveryRepository;
   private readonly dispatch: WebhookDispatch;
 
-  constructor(props: {
-    provider: string;
-    flow: ConnectFlow;
-    connections: ConnectionRepository;
-    deliveries: WebhookDeliveryRepository;
-    dispatch: WebhookDispatch;
-  }) {
-    this.provider = props.provider;
-    this.flow = props.flow;
-    this.connections = props.connections;
-    this.deliveries = props.deliveries;
-    this.dispatch = props.dispatch;
+  constructor(props: z.input<typeof webhookRoutesPropsSchema>) {
+    const parsed = webhookRoutesPropsSchema.parse(props);
+    this.provider = parsed.provider;
+    this.flow = parsed.flow;
+    this.connections = parsed.connections;
+    this.deliveries = parsed.deliveries;
+    this.dispatch = parsed.dispatch;
   }
 
   /** Registers the route in its own scope, whose only body parser keeps the bytes as a `Buffer`. */

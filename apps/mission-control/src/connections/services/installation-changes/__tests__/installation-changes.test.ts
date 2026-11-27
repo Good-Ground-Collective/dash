@@ -1,3 +1,4 @@
+import type { InstallationChange } from '@dash/integrations-core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -9,10 +10,17 @@ import { OwnedInstallationChanges } from '#src/connections/services/installation
 
 const adaId = '00000000-0000-4000-8000-00000000000a';
 const connections = new InMemoryConnectionRepository();
+const flow = new FakeConnectFlow();
 const changes = new OwnedInstallationChanges({
-  flows: new Map([['github', new FakeConnectFlow()]]),
+  flows: new Map([['github', flow]]),
   connections,
 });
+
+class Changes {
+  static async apply(change: InstallationChange): Promise<void> {
+    await changes.apply({ provider: 'github', installationId: '42', change });
+  }
+}
 
 class Stored {
   static async acme() {
@@ -22,6 +30,7 @@ class Stored {
 
 beforeEach(async () => {
   connections.owned.clear();
+  flow.suspendedInstallations.clear();
   await connections.saveOwned({
     provider: 'github',
     connectedBy: adaId,
@@ -41,27 +50,44 @@ describe('OwnedInstallationChanges', () => {
   });
 
   it('records a suspension, and reads the installation again when it is lifted', async () => {
-    await changes.apply({
-      provider: 'github',
-      installationId: '42',
-      change: 'suspended',
-    });
+    flow.suspendedInstallations.add('42');
+    await Changes.apply('suspended');
     expect(await Stored.acme()).toMatchObject({
       suspended: true,
       repositories: [],
     });
 
-    await changes.apply({
-      provider: 'github',
-      installationId: '42',
-      change: 'unsuspended',
+    flow.suspendedInstallations.delete('42');
+    await Changes.apply('unsuspended');
+    expect(await Stored.acme()).toMatchObject({
+      suspended: false,
+      repositories: acmeInstallation.repositories,
     });
+  });
+});
+
+describe('OwnedInstallationChanges in any order', () => {
+  it('leaves the connection readable when a suspension is processed after the unsuspension that lifted it', async () => {
+    await Changes.apply('unsuspended');
+    await Changes.apply('suspended');
+
     expect(await Stored.acme()).toMatchObject({
       suspended: false,
       repositories: acmeInstallation.repositories,
     });
   });
 
+  it('keeps the connection suspended when an unsuspension is processed after a later suspension', async () => {
+    flow.suspendedInstallations.add('42');
+
+    await Changes.apply('suspended');
+    await Changes.apply('unsuspended');
+
+    expect(await Stored.acme()).toMatchObject({ suspended: true });
+  });
+});
+
+describe('OwnedInstallationChanges for repositories', () => {
   it('reads the repositories again when they change', async () => {
     await changes.apply({
       provider: 'github',

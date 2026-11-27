@@ -1,6 +1,7 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import { InMemoryConnectionRepository } from '#src/connections/__tests__/support/in-memory-connections.ts';
@@ -20,6 +21,7 @@ import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-r
 const databaseUrl = inject('databaseUrl');
 const settle = { timeout: 15_000, interval: 100 };
 const adaId = '00000000-0000-4000-8000-00000000000a';
+const followUpInputSchema = z.tuple([z.object({ connectionId: z.string() })]);
 
 /** Each read waits until the test releases it, so a test can act while a read is running. */
 class HeldReconcile implements GithubReconcile {
@@ -99,6 +101,19 @@ class Reads {
     return DBOS.listWorkflows({ workflowName, status: 'SUCCESS' });
   }
 
+  static async followUpsOf(connectionId: string) {
+    const finished = await DBOS.listWorkflows({
+      workflowName: 'githubReconcileFollowUp',
+      status: 'SUCCESS',
+      loadInput: true,
+    });
+    return finished.filter(
+      (followUp) =>
+        followUpInputSchema.safeParse(followUp.input).data?.[0].connectionId ===
+        connectionId,
+    );
+  }
+
   static of(connectionId: string) {
     return reconcile.synced.filter((synced) => synced === connectionId);
   }
@@ -162,7 +177,7 @@ describe.skipIf(databaseUrl === null)(
 
       reconcile.release();
       await vi.waitFor(async () => {
-        expect(await Reads.finished('githubReconcileFollowUp')).toHaveLength(1);
+        expect(await Reads.followUpsOf('acme')).toHaveLength(1);
       }, settle);
       await workflows.syncPerson({ userId: 'ada' });
       await vi.waitFor(() => {
@@ -200,7 +215,7 @@ describe.skipIf(databaseUrl === null)(
       }, settle);
       reconcile.release();
       await vi.waitFor(async () => {
-        expect(await Reads.finished('githubReconcileFollowUp')).toHaveLength(4);
+        expect(await Reads.followUpsOf(id)).toHaveLength(2);
       }, settle);
       expect(Reads.of(id)).toHaveLength(2);
     }, 60_000);
@@ -214,7 +229,7 @@ describe.skipIf(databaseUrl === null)(
       }, settle);
       reconcile.release();
       await vi.waitFor(async () => {
-        expect(await Reads.finished('githubReconcileFollowUp')).toHaveLength(5);
+        expect(await Reads.followUpsOf(id)).toHaveLength(1);
       }, settle);
 
       expect(Reads.of(id)).toHaveLength(1);
