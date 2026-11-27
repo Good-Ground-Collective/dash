@@ -5,5 +5,5 @@
     "types": ["node"],
     "customConditions": ["@good-ground-collective/standards-source"]
   },
-  "include": ["src", "scripts", "vitest.config.ts"]
+  "include": ["src", "scripts", "release", "vitest.config.ts"]
 }

@@ -22,7 +22,8 @@
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
     },
-    "#src/*.json": "./src/*.json"
+    "#src/*.json": "./src/*.json",
+    "#release/*.js": "./release/*.ts"
   },
   "files": [
     "dist",
@@ -35,20 +36,53 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "zod": "catalog:"
+  "peerDependencies": {
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
+    "@semantic-release/exec": "catalog:",
     "@types/node": "catalog:",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
+    "conventional-changelog-conventionalcommits": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "semantic-release": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "tagFormat": "standards-v${version}",
+    "plugins": [
+      [
+        "./release/package-commits.ts",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "npm pkg set version=${nextRelease.version} && pnpm run build && pnpm pack --out package.tgz",
+          "publishCmd": "npm publish package.tgz --registry https://npm.pkg.github.com"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "successComment": false,
+          "failComment": false,
+          "releasedLabels": false
+        }
+      ]
+    ]
   }
 }
