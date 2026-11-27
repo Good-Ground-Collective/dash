@@ -111,6 +111,19 @@ describe('stylelint config: Svelte components', () => {
     ['none', '<p style:outline="none">x</p>'],
     ['lowercase currentcolor', '<p style:border-color="currentcolor">x</p>'],
     [
+      'background keywords',
+      '<p style:background="var(--bg) no-repeat center">x</p>',
+    ],
+    [
+      'a gradient over tokens',
+      '<p style:background="linear-gradient(var(--a), var(--b))">x</p>',
+    ],
+    ['an SVG url fill', '<path fill="url(#grad)" />'],
+    [
+      'a string used as a lookup key',
+      "<p style:color={palette['accent']}>x</p>",
+    ],
+    [
       'an SVG stroke of currentColor',
       '<path stroke="currentColor" fill="none" />',
     ],
