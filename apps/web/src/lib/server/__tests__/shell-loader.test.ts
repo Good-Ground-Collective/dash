@@ -1,5 +1,5 @@
 import { isRedirect } from '@sveltejs/kit';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EnvironmentBuildStamp } from '#lib/build/build-stamp.ts';
 import {
   MissionControlShellLoader,
@@ -176,6 +176,10 @@ class RedirectCatcher {
 }
 
 describe('ShellLoader recovery codes', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('sends a viewer without confirmed codes to the codes step', async () => {
     const counter = new CountingFetch({
       response: () => Response.json(ada),
@@ -227,6 +231,5 @@ describe('ShellLoader recovery codes', () => {
     expect(data.viewer?.name).toBe('Ada');
     expect(data.recoveryCodes).toBeNull();
     expect(warn).toHaveBeenCalledOnce();
-    warn.mockRestore();
   });
 });

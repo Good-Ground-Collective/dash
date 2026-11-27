@@ -28,10 +28,12 @@
     const before = current.step === 'saving' ? current.set.setId : null;
     busy = true;
     current = await next();
+
     if (current.step === 'confirmed') {
       await goto('/', { invalidateAll: true });
       return;
     }
+
     busy = false;
     await tick();
     if (current.step === 'saving' && current.set.setId !== before) {

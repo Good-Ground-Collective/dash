@@ -38,6 +38,7 @@
     busy = true;
     announcement = '';
     const step = await next();
+
     if (step.step === 'confirmed') {
       await invalidateAll();
       current = null;
@@ -47,6 +48,7 @@
       regenerateButton?.focus();
       return;
     }
+
     current = step;
     busy = false;
     await tick();

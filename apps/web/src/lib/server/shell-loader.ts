@@ -60,11 +60,13 @@ export class MissionControlShellLoader implements ShellLoader {
     const viewer = await this.viewer(event);
     const recoveryCodes =
       viewer === null ? null : await this.recoveryCodes(event);
+
     const location = this.gate.redirectFor({
       pathname: event.url.pathname,
       status: recoveryCodes,
     });
     if (location !== null) redirect(303, location);
+
     event.locals.themePreference = this.cookieMirror.resolve({
       cookies: event.cookies,
       requested: event.locals.themePreference,
