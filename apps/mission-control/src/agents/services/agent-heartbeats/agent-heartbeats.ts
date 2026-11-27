@@ -17,16 +17,16 @@ const callerCheckedAgentHeartbeatsPropsSchema = z.object({
 });
 
 export interface AgentHeartbeats {
-  /** Stores a heartbeat for `agentName` and moves its session state forward. An agent key may report only as itself. A bench key may report any agent name, including one that also has an agent account: agents aren't registered to benches yet, and the stored `benchId` tells the two apart. */
+  /** Stores a heartbeat as `reporterName` and moves the caller's session state forward. An agent key may report only as its own agent name. A bench key may report any name, including one that also has an agent account: agents aren't registered to benches yet, and the stored `benchId` tells the two apart. */
   report(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
     message: AgentHeartbeatMessage;
   }): Promise<AgentHeartbeatReport>;
   /** Stores each valid heartbeat in order, as `report` does, and answers one result per item. The caller check applies to the whole batch. */
   reportBatch(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
     items: AgentHeartbeatBatchItem[];
   }): Promise<AgentHeartbeatBatchResult[]>;
 }
@@ -44,7 +44,7 @@ export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
 
   async report(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
     message: AgentHeartbeatMessage;
   }): Promise<AgentHeartbeatReport> {
     CallerCheckedAgentHeartbeats.checkCaller(props);
@@ -53,7 +53,7 @@ export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
 
   async reportBatch(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
     items: AgentHeartbeatBatchItem[];
   }): Promise<AgentHeartbeatBatchResult[]> {
     CallerCheckedAgentHeartbeats.checkCaller(props);
@@ -71,12 +71,12 @@ export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
 
   private async store(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
     message: AgentHeartbeatMessage;
   }): Promise<AgentHeartbeatReport> {
     const { account } = props.caller;
     const recorded = await this.repository.record({
-      agentName: props.agentName,
+      reporterName: props.reporterName,
       benchId: account.kind === 'bench' ? account.benchId : null,
       reportedBy: props.caller.principalId,
       message: props.message,
@@ -93,13 +93,13 @@ export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
 
   private static checkCaller(props: {
     caller: AgentCaller;
-    agentName: string;
+    reporterName: string;
   }): void {
     const { account } = props.caller;
-    if (account.kind === 'agent' && account.agentName !== props.agentName) {
+    if (account.kind === 'agent' && account.agentName !== props.reporterName) {
       throw new AgentMismatchError({
         own: account.agentName,
-        named: props.agentName,
+        named: props.reporterName,
       });
     }
   }

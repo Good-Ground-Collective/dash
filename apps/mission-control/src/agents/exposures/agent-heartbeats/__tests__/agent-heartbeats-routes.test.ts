@@ -4,6 +4,7 @@ import {
   agent,
   AgentHeartbeatFixtures,
   bench,
+  otherBench,
   sessionId,
 } from '#src/agents/__tests__/support/agent-heartbeat-fixtures.ts';
 import { AgentsHarness } from '#src/agents/__tests__/support/agents-harness.ts';
@@ -21,7 +22,7 @@ afterEach(async () => {
 
 const message = AgentHeartbeatFixtures.message;
 
-describe('POST /api/agents/:agentName/heartbeats', () => {
+describe('POST /api/agents/:reporterName/heartbeats', () => {
   it('stores a v1 heartbeat, drops fields it doesn’t know, and answers the stored row', async () => {
     const question = { text: 'Merge it?', options: [{ label: 'Yes' }] };
 
@@ -35,7 +36,7 @@ describe('POST /api/agents/:agentName/heartbeats', () => {
     expect(response).toMatchObject({
       statusCode: 201,
       body: {
-        agentName: 'seth-laptop',
+        reporterName: 'seth-laptop',
         benchId: 'studio-mac',
         sessionId,
         seq: 3,
@@ -83,7 +84,59 @@ describe('POST /api/agents/:agentName/heartbeats', () => {
   });
 });
 
-describe('POST /api/agents/:agentName/heartbeats session state', () => {
+describe('POST /api/agents/:reporterName/heartbeats reporters', () => {
+  it('gives another key replaying the same (sessionId, seq) its own row, without the first key’s content or session', async () => {
+    const first = await served.send(
+      JSON.stringify(
+        message({
+          seq: 1,
+          status: 'question',
+          summary: 'Private',
+          question: { text: 'Ship?' },
+        }),
+      ),
+    );
+    const { secret } = await served.keyFor(otherBench);
+
+    const replay = await served.post({
+      path: 'seth-laptop/heartbeats',
+      headers: { authorization: `Bearer ${secret}` },
+      json: JSON.stringify(message({ seq: 1, status: 'complete' })),
+    });
+    const sessions = await served.sessions({
+      headers: { cookie: served.cookie },
+    });
+
+    expect(replay).toMatchObject({
+      statusCode: 201,
+      body: { benchId: 'other-mac', status: 'complete', summary: null },
+    });
+    expect(replay.body['id']).not.toBe(first.body['id']);
+    expect(replay.body['question']).toBeNull();
+    expect(sessions.body['sessions']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId,
+          benchId: 'studio-mac',
+          parent: expect.objectContaining({
+            status: 'question',
+            summary: 'Private',
+          }),
+        }),
+        expect.objectContaining({
+          sessionId,
+          benchId: 'other-mac',
+          parent: expect.objectContaining({
+            status: 'complete',
+            summary: null,
+          }),
+        }),
+      ]),
+    );
+  });
+});
+
+describe('POST /api/agents/:reporterName/heartbeats session state', () => {
   it('never moves session state backwards for a heartbeat that arrives late', async () => {
     await served.send(JSON.stringify(message({ seq: 5, status: 'complete' })));
     const late = await served.send(
@@ -136,7 +189,7 @@ describe('POST /api/agents/:agentName/heartbeats session state', () => {
   });
 });
 
-describe('POST /api/agents/:agentName/heartbeats/batch', () => {
+describe('POST /api/agents/:reporterName/heartbeats/batch', () => {
   it('answers one result per heartbeat, so an invalid one doesn’t block the rest', async () => {
     const response = await served.sendBatch(
       JSON.stringify({

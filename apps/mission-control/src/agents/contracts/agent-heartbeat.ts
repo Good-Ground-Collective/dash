@@ -9,10 +9,16 @@ import { agentIdentifierSchema } from '#src/auth/contracts/service-account.ts';
 const timestampSchema = z.iso.datetime({ offset: true });
 
 export const agentHeartbeatParamsSchema = z.object({
-  agentName: agentIdentifierSchema.describe(
-    'The agent key the hooks report with, such as `seth-laptop`. An agent key may name only its own agent; a bench key may name any agent on its bench.',
+  reporterName: agentIdentifierSchema.describe(
+    'The name the hooks report as, such as `seth-laptop`. An agent key may name only its own agent; a bench key may name any reporter on its bench.',
   ),
 });
+
+export const reporterNameSchema = z
+  .string()
+  .describe(
+    'The name the heartbeat was reported as, from the URL. The agent itself is `harness` and `agentId`.',
+  );
 
 /** An `agent.heartbeat` message at any 1.x version. Unknown fields are dropped and any other major is refused. */
 export const agentHeartbeatMessageSchema = agentHeartbeat.schema;
@@ -35,6 +41,30 @@ export const agentHeartbeatQuestionSchema = z
 export type AgentHeartbeatQuestion = z.infer<
   typeof agentHeartbeatQuestionSchema
 >;
+
+export const agentHeartbeatErrorSchema = z
+  .object({ kind: z.string(), message: z.string() })
+  .describe('What failed, as the agent sent it with an `error` status.');
+
+export type AgentHeartbeatError = z.infer<typeof agentHeartbeatErrorSchema>;
+
+export const agentHeartbeatWorkspaceSchema = z
+  .object({
+    directory: z.string().optional(),
+    repository: z.string().optional(),
+    branch: z.string().optional(),
+  })
+  .describe('Where the agent is working, as it sent it.');
+
+export type AgentHeartbeatWorkspace = z.infer<
+  typeof agentHeartbeatWorkspaceSchema
+>;
+
+export const agentHeartbeatAgentSchema = z
+  .object({ type: z.string().optional(), model: z.string().optional() })
+  .describe('What kind of agent it is, as it sent it.');
+
+export type AgentHeartbeatAgent = z.infer<typeof agentHeartbeatAgentSchema>;
 
 export const agentHeartbeatStatusSchema = z.enum(agentHeartbeatStatuses);
 
@@ -74,7 +104,7 @@ export const agentHeartbeatBatchSchema = z.object({
 
 export const storedAgentHeartbeatSchema = z.object({
   id: z.uuid(),
-  agentName: z.string(),
+  reporterName: reporterNameSchema,
   benchId: z
     .string()
     .nullable()
@@ -89,6 +119,11 @@ export const storedAgentHeartbeatSchema = z.object({
   status: agentHeartbeatStatusSchema,
   summary: z.string().nullable(),
   question: agentHeartbeatQuestionSchema.nullable(),
+  error: agentHeartbeatErrorSchema.nullable(),
+  taskId: z.string().nullable(),
+  workspace: agentHeartbeatWorkspaceSchema.nullable(),
+  machine: z.string().nullable(),
+  agent: agentHeartbeatAgentSchema.nullable(),
   emittedAt: timestampSchema,
   receivedAt: timestampSchema,
 });
@@ -107,7 +142,9 @@ export const agentHeartbeatBatchResultSchema = z.discriminatedUnion('outcome', [
       outcome: z.literal('duplicate'),
       heartbeat: storedAgentHeartbeatSchema,
     })
-    .describe('Its `(sessionId, seq)` was already stored; this is that row.'),
+    .describe(
+      'This key already stored its `(sessionId, seq)`; this is that row.',
+    ),
   z
     .object({
       outcome: z.literal('invalid'),
@@ -126,7 +163,7 @@ export const agentHeartbeatBatchResultsSchema = z.object({
     .describe('One per heartbeat sent, in the same order.'),
 });
 
-/** What storing one heartbeat did: stored it, or found its `(sessionId, seq)` already stored. */
+/** What storing one heartbeat did: stored it, or found its `(sessionId, seq)` already stored by the same principal. */
 export interface AgentHeartbeatReport {
   outcome: 'created' | 'duplicate';
   heartbeat: StoredAgentHeartbeat;
@@ -134,8 +171,9 @@ export interface AgentHeartbeatReport {
 
 /** One heartbeat to store, after the caller's right to report it has been checked. */
 export interface AgentHeartbeatRecord {
-  agentName: string;
+  reporterName: string;
   benchId: string | null;
+  /** The principal whose key reported it. Dedupe and session state are scoped to it. */
   reportedBy: string;
   message: AgentHeartbeatMessage;
 }

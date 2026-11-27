@@ -17,9 +17,9 @@ const agentHeartbeatsRoutesPropsSchema = z.object({
 });
 
 /**
- * `POST /api/agents/:agentName/heartbeats` and its `/batch`, for a service account key with
- * `heartbeat:write`. A new heartbeat answers 201 and a repeated `(sessionId, seq)` answers 200
- * with the row already stored. A batch of up to 100 answers 200 with one result per heartbeat.
+ * `POST /api/agents/:reporterName/heartbeats` and its `/batch`, for a service account key with
+ * `heartbeat:write`. A new heartbeat answers 201 and a `(sessionId, seq)` the same key already
+ * sent answers 200 with that row. A batch of up to 100 answers 200 with one result per heartbeat.
  */
 export class AgentHeartbeatsRoutes {
   private readonly authentication: AgentAuthentication;
@@ -33,7 +33,7 @@ export class AgentHeartbeatsRoutes {
 
   register(app: ZodFastifyInstance): void {
     app.post(
-      '/api/agents/:agentName/heartbeats',
+      '/api/agents/:reporterName/heartbeats',
       {
         onRequest: this.authentication.require('heartbeat:write'),
         schema: {
@@ -48,7 +48,7 @@ export class AgentHeartbeatsRoutes {
       async (request, reply) => {
         const { outcome, heartbeat } = await this.heartbeats.report({
           caller: this.authentication.caller(request),
-          agentName: request.params.agentName,
+          reporterName: request.params.reporterName,
           message: request.body,
         });
         return reply.code(outcome === 'created' ? 201 : 200).send(heartbeat);
@@ -56,7 +56,7 @@ export class AgentHeartbeatsRoutes {
     );
 
     app.post(
-      '/api/agents/:agentName/heartbeats/batch',
+      '/api/agents/:reporterName/heartbeats/batch',
       {
         onRequest: this.authentication.require('heartbeat:write'),
         schema: {
@@ -68,7 +68,7 @@ export class AgentHeartbeatsRoutes {
       async (request) => ({
         results: await this.heartbeats.reportBatch({
           caller: this.authentication.caller(request),
-          agentName: request.params.agentName,
+          reporterName: request.params.reporterName,
           items: request.body.heartbeats,
         }),
       }),

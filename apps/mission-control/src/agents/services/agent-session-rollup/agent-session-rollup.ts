@@ -4,12 +4,13 @@ import type {
   AgentSessionState,
 } from '#src/agents/contracts/agent-session.ts';
 
-/** Rolls subagent rows up under the session they share, most recently updated session first. A session takes its agent name, bench and harness from its own row, or from its first subagent until that row arrives. */
+/** Rolls subagent rows up under the session they share, most recently updated session first. A session is its `(reportedBy, sessionId)`, and takes its reporter name, bench and harness from its own row, or from its first subagent until that row arrives. */
 export class AgentSessionRollup {
   static sessions(states: readonly AgentSessionState[]): AgentSession[] {
     const sessions = new Map<string, AgentSession>();
     for (const state of states) {
-      const session = sessions.get(state.sessionId) ?? {
+      const key = `${state.reportedBy}/${state.sessionId}`;
+      const session = sessions.get(key) ?? {
         ...AgentSessionRollup.identity(state),
         parent: null,
         subagents: [],
@@ -25,7 +26,7 @@ export class AgentSessionRollup {
           ...AgentSessionRollup.activity(state),
         });
       }
-      sessions.set(state.sessionId, session);
+      sessions.set(key, session);
     }
 
     return [...sessions.values()].toSorted(
@@ -36,10 +37,14 @@ export class AgentSessionRollup {
 
   private static identity(
     state: AgentSessionState,
-  ): Pick<AgentSession, 'sessionId' | 'agentName' | 'benchId' | 'harness'> {
+  ): Pick<
+    AgentSession,
+    'reportedBy' | 'sessionId' | 'reporterName' | 'benchId' | 'harness'
+  > {
     return {
+      reportedBy: state.reportedBy,
       sessionId: state.sessionId,
-      agentName: state.agentName,
+      reporterName: state.reporterName,
       benchId: state.benchId,
       harness: state.harness,
     };
@@ -50,6 +55,11 @@ export class AgentSessionRollup {
       status: state.status,
       summary: state.summary,
       question: state.question,
+      error: state.error,
+      taskId: state.taskId,
+      workspace: state.workspace,
+      machine: state.machine,
+      agent: state.agent,
       highestSeq: state.highestSeq,
       startedAt: state.startedAt,
       reportedAt: state.reportedAt,

@@ -1,8 +1,12 @@
 import { z } from 'zod';
 
 import {
+  agentHeartbeatAgentSchema,
+  agentHeartbeatErrorSchema,
   agentHeartbeatQuestionSchema,
   agentHeartbeatStatusSchema,
+  agentHeartbeatWorkspaceSchema,
+  reporterNameSchema,
 } from '#src/agents/contracts/agent-heartbeat.ts';
 
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -18,6 +22,31 @@ export const agentActivitySchema = z.object({
   question: agentHeartbeatQuestionSchema
     .nullable()
     .describe('The open question, from the latest heartbeat only.'),
+  error: agentHeartbeatErrorSchema
+    .nullable()
+    .describe('What failed, from the latest heartbeat only.'),
+  taskId: z
+    .string()
+    .nullable()
+    .describe(
+      'The latest task reported. A heartbeat without one keeps the last.',
+    ),
+  workspace: agentHeartbeatWorkspaceSchema
+    .nullable()
+    .describe(
+      'The latest workspace reported. A heartbeat without one keeps the last.',
+    ),
+  machine: z
+    .string()
+    .nullable()
+    .describe(
+      'The latest machine reported. A heartbeat without one keeps the last.',
+    ),
+  agent: agentHeartbeatAgentSchema
+    .nullable()
+    .describe(
+      'The latest agent kind reported. A heartbeat without one keeps the last.',
+    ),
   highestSeq: z.int().nonnegative(),
   startedAt: timestampSchema.describe('When its first heartbeat arrived.'),
   reportedAt: timestampSchema.describe(
@@ -31,13 +60,20 @@ export const agentActivitySchema = z.object({
 export type AgentActivity = z.infer<typeof agentActivitySchema>;
 
 /** One row of session state: a session's own, or one subagent's under it. Published as `agent.session.updated`. */
+const reportedBySchema = z
+  .uuid()
+  .describe(
+    'The service account principal whose key reported it. Two keys sending the same `sessionId` are two sessions.',
+  );
+
 export const agentSessionStateSchema = agentActivitySchema.extend({
+  reportedBy: reportedBySchema,
   sessionId: z.string(),
   agentId: z
     .string()
     .nullable()
     .describe('The subagent. `null` for the session itself.'),
-  agentName: z.string(),
+  reporterName: reporterNameSchema,
   benchId: z.string().nullable(),
   harness: z.string(),
 });
@@ -49,8 +85,9 @@ export const subagentSchema = agentActivitySchema.extend({
 });
 
 export const agentSessionSchema = z.object({
+  reportedBy: reportedBySchema,
   sessionId: z.string(),
-  agentName: z.string(),
+  reporterName: reporterNameSchema,
   benchId: z.string().nullable(),
   harness: z.string(),
   parent: agentActivitySchema

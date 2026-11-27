@@ -36,7 +36,9 @@ describe('GET /api/agents/sessions', () => {
       body: { code: 'SIGN_IN_REQUIRED' },
     });
   });
+});
 
+describe('GET /api/agents/sessions listing', () => {
   it('lists the most recently updated session first, with subagents under it even before their parent reports', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const report = async (
@@ -48,7 +50,13 @@ describe('GET /api/agents/sessions', () => {
       );
     };
     await report({ sessionId: 'session-a', seq: 1, agentId: 'plan-1' });
-    await report({ sessionId: 'session-b', seq: 1, summary: 'Reading' });
+    await report({
+      sessionId: 'session-b',
+      seq: 1,
+      summary: 'Reading',
+      taskId: 'task-42',
+      machine: 'studio-mac.local',
+    });
     await report({ sessionId: 'session-a', seq: 2, agentId: 'plan-1' });
     await report({ sessionId: 'session-b', seq: 2 });
 
@@ -61,10 +69,16 @@ describe('GET /api/agents/sessions', () => {
       sessions: [
         {
           sessionId: 'session-b',
-          agentName: 'seth-laptop',
+          reporterName: 'seth-laptop',
           benchId: 'studio-mac',
           harness: 'claude-code',
-          parent: { highestSeq: 2, summary: 'Reading' },
+          parent: {
+            highestSeq: 2,
+            summary: 'Reading',
+            taskId: 'task-42',
+            machine: 'studio-mac.local',
+            error: null,
+          },
           subagents: [],
         },
         {

@@ -11,6 +11,15 @@ export const bench: NewServiceAccount = {
   scopes: ['heartbeat:write', 'telemetry:write'],
 };
 
+/** A second bench, whose key must never see or move the first bench's sessions. */
+export const otherBench: NewServiceAccount = {
+  kind: 'bench',
+  name: 'Other Mac',
+  benchId: 'other-mac',
+  description: 'Another desk',
+  scopes: ['heartbeat:write'],
+};
+
 export const agent: NewServiceAccount = {
   kind: 'agent',
   name: 'CI reviewer',

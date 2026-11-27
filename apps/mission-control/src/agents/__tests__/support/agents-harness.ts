@@ -15,6 +15,16 @@ import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
 
 const responseBodySchema = z.record(z.string(), z.json());
 
+const agentsHarnessPropsSchema = z.object({
+  accounts: z.instanceof(ServiceAccountHarness),
+  records: z.instanceof(InMemoryAgentRecords),
+  published: z
+    .custom<LiveEvent[]>((value) => Array.isArray(value))
+    .describe('The array live events are pushed into, kept by reference.'),
+  app: z.custom<ZodFastifyInstance>(),
+  cookie: z.string().min(1),
+});
+
 /** A JSON answer from Mission Control. */
 export interface AgentsResponse {
   statusCode: number;
@@ -31,18 +41,13 @@ export class AgentsHarness {
   private nextSeq = 0;
   private benchAuthorization = '';
 
-  private constructor(props: {
-    accounts: ServiceAccountHarness;
-    records: InMemoryAgentRecords;
-    published: LiveEvent[];
-    app: ZodFastifyInstance;
-    cookie: string;
-  }) {
-    this.accounts = props.accounts;
-    this.records = props.records;
-    this.published = props.published;
-    this.app = props.app;
-    this.cookie = props.cookie;
+  private constructor(props: z.input<typeof agentsHarnessPropsSchema>) {
+    const parsed = agentsHarnessPropsSchema.parse(props);
+    this.accounts = parsed.accounts;
+    this.records = parsed.records;
+    this.published = parsed.published;
+    this.app = parsed.app;
+    this.cookie = parsed.cookie;
   }
 
   /** Creates a service account and answers its key's secret and ids. */
@@ -104,16 +109,16 @@ export class AgentsHarness {
     };
   }
 
-  /** Reports a new heartbeat as `agentName`, each with the next `seq`. */
+  /** Reports a new heartbeat as `reporterName`, each with the next `seq`. */
   async report(props: {
-    agentName: string;
+    reporterName: string;
     headers: Record<string, string>;
   }): Promise<{
     statusCode: number;
     code: AgentsResponse['body'][string] | undefined;
   }> {
     const response = await this.post({
-      path: `${props.agentName}/heartbeats`,
+      path: `${props.reporterName}/heartbeats`,
       headers: props.headers,
       json: JSON.stringify(
         AgentHeartbeatFixtures.message({ seq: this.nextSeq++ }),

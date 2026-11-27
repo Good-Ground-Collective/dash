@@ -33,6 +33,15 @@ export class AgentHeartbeatRetentionWorkflows implements WorkflowModule {
     this.retentionDays = parsed.retentionDays;
   }
 
+  /** Deletes heartbeats received more than the retention window before `now`, and answers how many. */
+  async prune(props: { now: Date }): Promise<number> {
+    return this.repository.deleteReceivedBefore({
+      cutoff: new Date(
+        props.now.getTime() - this.retentionDays * dayMilliseconds,
+      ),
+    });
+  }
+
   async activate(): Promise<void> {
     if (this.scheduled === null) {
       throw new AgentHeartbeatRetentionNotRegisteredError();
@@ -45,15 +54,11 @@ export class AgentHeartbeatRetentionWorkflows implements WorkflowModule {
   registerWorkflows(): void {
     this.scheduled = DBOS.registerWorkflow(
       async (firedAt: Date) => {
-        const cutoff = new Date(
-          firedAt.getTime() - this.retentionDays * dayMilliseconds,
-        );
-        const deleted = await DBOS.runStep(
-          () => this.repository.deleteReceivedBefore({ cutoff }),
-          { name: 'agentHeartbeatDeleteExpired' },
-        );
+        const deleted = await DBOS.runStep(() => this.prune({ now: firedAt }), {
+          name: 'agentHeartbeatDeleteExpired',
+        });
         DBOS.logger.info(
-          `Deleted ${deleted} agent heartbeats received before ${cutoff.toISOString()}`,
+          `Deleted ${deleted} agent heartbeats older than ${this.retentionDays} days`,
         );
       },
       { name: 'agentHeartbeatRetention' },

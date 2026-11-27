@@ -9,7 +9,10 @@ import {
   it,
 } from 'vitest';
 
-import { AgentRecordsDatabase } from '#src/agents/__tests__/support/agent-records-database.ts';
+import {
+  AgentRecordsDatabase,
+  reporterIds,
+} from '#src/agents/__tests__/support/agent-records-database.ts';
 
 const databaseUrl = inject('databaseUrl');
 let store: AgentRecordsDatabase | undefined;
@@ -53,7 +56,87 @@ describe.skipIf(databaseUrl === null)('DrizzleAgentHeartbeatRepository', () => {
       session: null,
     });
   });
+
+  it('keeps the error, task, workspace, machine and agent a heartbeat carries', async () => {
+    const { heartbeats } = AgentRecordsDatabase.required(store);
+    const carried = {
+      error: { kind: 'api', message: 'Overloaded' },
+      taskId: 'task-42',
+      workspace: { repository: 'Good-Ground-Collective/dash', branch: 'main' },
+      machine: 'studio-mac.local',
+      agent: { type: 'explore', model: 'claude-opus' },
+    };
+
+    const recorded = await heartbeats.record(
+      AgentRecordsDatabase.record({ seq: 1, status: 'error', ...carried }),
+    );
+
+    expect(recorded).toMatchObject({
+      heartbeat: { status: 'error', ...carried },
+      session: { status: 'error', ...carried },
+    });
+  });
 });
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleAgentHeartbeatRepository reporters',
+  () => {
+    it('gives a second key sending the same (sessionId, seq) its own row, and never shows or moves the first key’s', async () => {
+      const { heartbeats, sessions } = AgentRecordsDatabase.required(store);
+      const first = await heartbeats.record(
+        AgentRecordsDatabase.record({
+          seq: 1,
+          status: 'question',
+          summary: 'Private',
+          question: { text: 'Ship?' },
+        }),
+      );
+      const other = { reportedBy: reporterIds.other, benchId: 'other-mac' };
+
+      const replay = await heartbeats.record(
+        AgentRecordsDatabase.record({ seq: 1, status: 'working' }, other),
+      );
+      const ahead = await heartbeats.record(
+        AgentRecordsDatabase.record(
+          { seq: 9, status: 'complete' },
+          { ...other, reporterName: 'squatter' },
+        ),
+      );
+      const own = await heartbeats.record(
+        AgentRecordsDatabase.record({ seq: 2, summary: 'Still mine' }),
+      );
+
+      expect(replay).toMatchObject({
+        outcome: 'created',
+        heartbeat: { benchId: 'other-mac', summary: null, question: null },
+      });
+      expect(replay.heartbeat.id).not.toBe(first.heartbeat.id);
+      expect(ahead.outcome).toBe('created');
+      expect(own).toMatchObject({
+        outcome: 'created',
+        session: { reportedBy: reporterIds.bench, highestSeq: 2 },
+      });
+      expect(await sessions.listUpdatedSince({ since: new Date(0) })).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reportedBy: reporterIds.bench,
+            reporterName: 'seth-laptop',
+            benchId: 'studio-mac',
+            status: 'working',
+            summary: 'Still mine',
+            highestSeq: 2,
+          }),
+          expect.objectContaining({
+            reportedBy: reporterIds.other,
+            reporterName: 'squatter',
+            status: 'complete',
+            highestSeq: 9,
+          }),
+        ]),
+      );
+    });
+  },
+);
 
 describe.skipIf(databaseUrl === null)(
   'DrizzleAgentHeartbeatRepository session state',
@@ -121,6 +204,35 @@ describe.skipIf(databaseUrl === null)(
         { agentId: null, status: 'working', highestSeq: 1 },
         { agentId: 'explore-1', status: 'complete', highestSeq: 2 },
       ]);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleAgentHeartbeatRepository latest-known fields',
+  () => {
+    it('keeps the last task, workspace, machine and agent when a later heartbeat has none, and the error only from the latest', async () => {
+      const { heartbeats, sessions } = AgentRecordsDatabase.required(store);
+      const known = {
+        taskId: 'task-42',
+        workspace: { branch: 'main' },
+        machine: 'studio-mac.local',
+        agent: { model: 'claude-opus' },
+      };
+
+      await heartbeats.record(
+        AgentRecordsDatabase.record({
+          seq: 1,
+          status: 'error',
+          error: { kind: 'api', message: 'Overloaded' },
+          ...known,
+        }),
+      );
+      await heartbeats.record(AgentRecordsDatabase.record({ seq: 2 }));
+
+      expect(
+        await sessions.listUpdatedSince({ since: new Date(0) }),
+      ).toMatchObject([{ status: 'working', error: null, ...known }]);
     });
   },
 );

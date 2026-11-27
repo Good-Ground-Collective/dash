@@ -17,23 +17,23 @@ afterEach(async () => {
   await served.stop();
 });
 
-describe('POST /api/agents/:agentName/heartbeats', () => {
+describe('POST /api/agents/:reporterName/heartbeats', () => {
   it('records a bench key’s heartbeat for any agent on the bench', async () => {
     const { secret } = await served.keyFor(bench);
 
     const first = await served.report({
-      agentName: 'claude-code',
+      reporterName: 'claude-code',
       headers: { authorization: `Bearer ${secret}` },
     });
     const second = await served.report({
-      agentName: 'codex',
+      reporterName: 'codex',
       headers: { 'x-api-key': secret },
     });
 
     expect([first.statusCode, second.statusCode]).toEqual([201, 201]);
     expect(served.records.heartbeats).toMatchObject([
-      { agentName: 'claude-code', benchId: 'studio-mac' },
-      { agentName: 'codex', benchId: 'studio-mac' },
+      { reporterName: 'claude-code', benchId: 'studio-mac' },
+      { reporterName: 'codex', benchId: 'studio-mac' },
     ]);
   });
 
@@ -60,7 +60,7 @@ describe('POST /api/agents/:agentName/heartbeats', () => {
   });
 });
 
-describe('POST /api/agents/:agentName/heartbeats refusals', () => {
+describe('POST /api/agents/:reporterName/heartbeats refusals', () => {
   it('rejects a key without heartbeat:write', async () => {
     const { secret } = await served.keyFor({
       ...bench,
@@ -68,7 +68,7 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
     });
 
     const response = await served.report({
-      agentName: 'claude-code',
+      reporterName: 'claude-code',
       headers: { authorization: `Bearer ${secret}` },
     });
 
@@ -78,18 +78,23 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
     });
     expect(served.records.heartbeats).toEqual([]);
   });
+});
 
+describe('POST /api/agents/:reporterName/heartbeats revocation', () => {
   it('stops accepting a key the moment it is revoked', async () => {
     const { secret, keyId } = await served.keyFor(bench);
     const headers = { authorization: `Bearer ${secret}` };
-    const before = await served.report({ agentName: 'claude-code', headers });
+    const before = await served.report({
+      reporterName: 'claude-code',
+      headers,
+    });
 
     await served.accounts.post({
       path: '/service-accounts/keys/revoke',
       cookie: served.cookie,
       body: { keyId },
     });
-    const after = await served.report({ agentName: 'claude-code', headers });
+    const after = await served.report({ reporterName: 'claude-code', headers });
 
     expect(before.statusCode).toBe(201);
     expect(after).toEqual({ statusCode: 401, code: 'API_KEY_REJECTED' });
@@ -105,7 +110,7 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
       body: { serviceAccountId },
     });
     const response = await served.report({
-      agentName: 'claude-code',
+      reporterName: 'claude-code',
       headers: { authorization: `Bearer ${secret}` },
     });
 
@@ -120,7 +125,7 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
     if (stored !== undefined) stored.expiresAt = new Date(Date.now() - 1000);
 
     const response = await served.report({
-      agentName: 'ci-reviewer',
+      reporterName: 'ci-reviewer',
       headers: { authorization: `Bearer ${secret}` },
     });
 
@@ -130,18 +135,18 @@ describe('POST /api/agents/:agentName/heartbeats refusals', () => {
   });
 });
 
-describe('POST /api/agents/:agentName/heartbeats identity', () => {
+describe('POST /api/agents/:reporterName/heartbeats identity', () => {
   it('lets an agent key report only as its own agent', async () => {
     const { secret } = await served.keyFor(agent);
     const headers = { authorization: `Bearer ${secret}` };
 
-    const own = await served.report({ agentName: 'ci-reviewer', headers });
-    const other = await served.report({ agentName: 'claude-code', headers });
+    const own = await served.report({ reporterName: 'ci-reviewer', headers });
+    const other = await served.report({ reporterName: 'claude-code', headers });
 
     expect(own.statusCode).toBe(201);
     expect(other).toEqual({ statusCode: 403, code: 'AGENT_MISMATCH' });
     expect(served.records.heartbeats).toMatchObject([
-      { agentName: 'ci-reviewer', benchId: null },
+      { reporterName: 'ci-reviewer', benchId: null },
     ]);
   });
 
@@ -154,7 +159,7 @@ describe('POST /api/agents/:agentName/heartbeats identity', () => {
       'cookie' in headers ? { cookie: served.cookie } : { ...headers };
 
     const response = await served.report({
-      agentName: 'claude-code',
+      reporterName: 'claude-code',
       headers: sent,
     });
 
@@ -165,7 +170,7 @@ describe('POST /api/agents/:agentName/heartbeats identity', () => {
     const { secret } = await served.keyFor(bench);
 
     await served.report({
-      agentName: 'claude-code',
+      reporterName: 'claude-code',
       headers: { authorization: `Bearer ${secret}` },
     });
     const listed = await served.accounts.get({

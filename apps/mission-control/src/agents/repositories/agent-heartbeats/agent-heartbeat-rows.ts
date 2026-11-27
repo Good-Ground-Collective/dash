@@ -14,7 +14,7 @@ export class AgentHeartbeatRows {
   static row(record: AgentHeartbeatRecord): NewAgentHeartbeatRow {
     const { payload } = record.message;
     return {
-      agentName: record.agentName,
+      reporterName: record.reporterName,
       benchId: record.benchId,
       reportedBy: record.reportedBy,
       sessionId: payload.sessionId,
@@ -24,6 +24,11 @@ export class AgentHeartbeatRows {
       status: payload.status,
       summary: payload.summary ?? null,
       question: payload.question ?? null,
+      error: payload.error ?? null,
+      taskId: payload.taskId ?? null,
+      workspace: payload.workspace ?? null,
+      machine: payload.machine ?? null,
+      agent: payload.agent ?? null,
       emittedAt: new Date(record.message.emittedAt),
     };
   }
@@ -31,7 +36,7 @@ export class AgentHeartbeatRows {
   static heartbeat(row: AgentHeartbeatRow): StoredAgentHeartbeat {
     return {
       id: row.id,
-      agentName: row.agentName,
+      reporterName: row.reporterName,
       benchId: row.benchId,
       sessionId: row.sessionId,
       seq: row.seq,
@@ -40,6 +45,11 @@ export class AgentHeartbeatRows {
       status: row.status,
       summary: row.summary,
       question: row.question,
+      error: row.error,
+      taskId: row.taskId,
+      workspace: row.workspace,
+      machine: row.machine,
+      agent: row.agent,
       emittedAt: row.emittedAt.toISOString(),
       receivedAt: row.receivedAt.toISOString(),
     };

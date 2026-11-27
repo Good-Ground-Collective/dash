@@ -1,5 +1,5 @@
 {
-  "id": "184fe085-494f-4394-9343-86e72114833b",
+  "id": "fff37186-f0ae-4d82-92b8-a3f0c84df8e1",
   "prevId": "3f285826-6320-47db-a515-76111bcae7a4",
   "version": "7",
   "dialect": "postgresql",
@@ -15,8 +15,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "agent_name": {
-          "name": "agent_name",
+        "reporter_name": {
+          "name": "reporter_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -75,6 +75,36 @@
           "primaryKey": false,
           "notNull": false
         },
+        "error": {
+          "name": "error",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "task_id": {
+          "name": "task_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workspace": {
+          "name": "workspace",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "machine": {
+          "name": "machine",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent": {
+          "name": "agent",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "emitted_at": {
           "name": "emitted_at",
           "type": "timestamp with time zone",
@@ -90,11 +120,11 @@
         }
       },
       "indexes": {
-        "agent_heartbeat_agent_name_received_at_idx": {
-          "name": "agent_heartbeat_agent_name_received_at_idx",
+        "agent_heartbeat_reporter_name_received_at_idx": {
+          "name": "agent_heartbeat_reporter_name_received_at_idx",
           "columns": [
             {
-              "expression": "agent_name",
+              "expression": "reporter_name",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -126,9 +156,15 @@
           "method": "btree",
           "with": {}
         },
-        "agent_heartbeat_session_id_seq_idx": {
-          "name": "agent_heartbeat_session_id_seq_idx",
+        "agent_heartbeat_reported_by_session_id_seq_idx": {
+          "name": "agent_heartbeat_reported_by_session_id_seq_idx",
           "columns": [
+            {
+              "expression": "reported_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "session_id",
               "isExpression": false,
@@ -173,6 +209,12 @@
       "name": "agent_session",
       "schema": "",
       "columns": {
+        "reported_by": {
+          "name": "reported_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "session_id": {
           "name": "session_id",
           "type": "text",
@@ -186,8 +228,8 @@
           "notNull": true,
           "default": "''"
         },
-        "agent_name": {
-          "name": "agent_name",
+        "reporter_name": {
+          "name": "reporter_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -218,6 +260,36 @@
         },
         "question": {
           "name": "question",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "task_id": {
+          "name": "task_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workspace": {
+          "name": "workspace",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "machine": {
+          "name": "machine",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent": {
+          "name": "agent",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -268,9 +340,10 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "agent_session_session_id_agent_id_pk": {
-          "name": "agent_session_session_id_agent_id_pk",
+        "agent_session_reported_by_session_id_agent_id_pk": {
+          "name": "agent_session_reported_by_session_id_agent_id_pk",
           "columns": [
+            "reported_by",
             "session_id",
             "agent_id"
           ]

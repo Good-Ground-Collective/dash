@@ -21,14 +21,20 @@ export class AgentSessionRows {
   static row(record: AgentHeartbeatRecord): NewAgentSessionRow {
     const { payload } = record.message;
     return {
+      reportedBy: record.reportedBy,
       sessionId: payload.sessionId,
       agentId: payload.agentId ?? parentAgentId,
-      agentName: record.agentName,
+      reporterName: record.reporterName,
       benchId: record.benchId,
       harness: payload.harness,
       status: payload.status,
       summary: payload.summary ?? null,
       question: payload.question ?? null,
+      error: payload.error ?? null,
+      taskId: payload.taskId ?? null,
+      workspace: payload.workspace ?? null,
+      machine: payload.machine ?? null,
+      agent: payload.agent ?? null,
       highestSeq: payload.seq,
       reportedAt: new Date(record.message.emittedAt),
     };
@@ -36,14 +42,20 @@ export class AgentSessionRows {
 
   static state(row: AgentSessionRow): AgentSessionState {
     return {
+      reportedBy: row.reportedBy,
       sessionId: row.sessionId,
       agentId: storedAgentIdSchema.parse(row.agentId),
-      agentName: row.agentName,
+      reporterName: row.reporterName,
       benchId: row.benchId,
       harness: row.harness,
       status: row.status,
       summary: row.summary,
       question: row.question,
+      error: row.error,
+      taskId: row.taskId,
+      workspace: row.workspace,
+      machine: row.machine,
+      agent: row.agent,
       highestSeq: row.highestSeq,
       startedAt: row.startedAt.toISOString(),
       reportedAt: row.reportedAt.toISOString(),
