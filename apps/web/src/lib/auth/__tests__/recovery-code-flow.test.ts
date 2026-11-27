@@ -159,6 +159,19 @@ describe('RecoveryCodeFlow failing to generate', () => {
     });
   });
 
+  it('explains a passkey check that fails, without generating', async () => {
+    const harness = new Harness({
+      [signInOptionsPath]: [Answer.authenticationOptions],
+      [signInPath]: [Answer.failure(401, 'PASSKEY_NOT_FOUND')],
+    });
+
+    await expect(harness.flow.reauthenticate()).resolves.toEqual({
+      step: 'reauth',
+      error: 'That passkey isn’t registered with Dash.',
+    });
+    expect(harness.requested).not.toContain(generatePath);
+  });
+
   it('refuses a set that isn’t ten codes', async () => {
     const harness = new Harness({
       [generatePath]: [() => Response.json({ setId: 's1', codes: ['one'] })],
@@ -198,6 +211,22 @@ describe('RecoveryCodeFlow confirming', () => {
     expect(next.error).toMatch(/Newer codes replaced those/u);
   });
 
+  it('asks for a passkey when the replacement set needs a fresher sign-in', async () => {
+    const harness = new Harness({
+      [generatePath]: [
+        Answer.set('s1'),
+        Answer.failure(403, 'SESSION_NOT_FRESH'),
+      ],
+      [confirmPath]: [Answer.failure(409, 'RECOVERY_CODE_SET_NOT_PENDING')],
+    });
+    const shown = Steps.saving(await harness.flow.generate());
+
+    await expect(harness.flow.confirm(shown)).resolves.toEqual({
+      step: 'reauth',
+      error: null,
+    });
+  });
+
   it('keeps the shown set with an error when confirming fails', async () => {
     const harness = new Harness({ [generatePath]: [Answer.set('s1')] });
     const shown = Steps.saving(await harness.flow.generate());
@@ -218,8 +247,8 @@ describe('RecoveryCodeFlow wording', () => {
   });
 
   it('counts what’s left and nudges at two or fewer', () => {
-    expect(RecoveryCodeFlow.remaining(10)).toBe('10 of 10 codes left');
-    expect(RecoveryCodeFlow.remaining(1)).toBe('1 of 10 codes left');
+    expect(RecoveryCodeFlow.remainingLabel(10)).toBe('10 of 10 codes left');
+    expect(RecoveryCodeFlow.remainingLabel(1)).toBe('1 of 10 codes left');
     expect(RecoveryCodeFlow.isRunningLow(3)).toBe(false);
     expect(RecoveryCodeFlow.isRunningLow(2)).toBe(true);
   });

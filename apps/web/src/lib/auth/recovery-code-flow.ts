@@ -110,7 +110,7 @@ export class RecoveryCodeFlow {
   }
 
   /** How many unused codes are left, such as "8 of 10 codes left". */
-  static remaining(count: number): string {
+  static remainingLabel(count: number): string {
     return `${count} of ${recoveryCodeSetSize} codes left`;
   }
 

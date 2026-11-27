@@ -42,7 +42,7 @@
     if (step.step === 'confirmed') {
       await invalidateAll();
       current = null;
-      announcement = `New codes saved. Your old codes no longer work. ${RecoveryCodeFlow.remaining(step.remaining)}.`;
+      announcement = `New codes saved. Your old codes no longer work. ${RecoveryCodeFlow.remainingLabel(step.remaining)}.`;
       busy = false;
       await tick();
       regenerateButton?.focus();
@@ -82,7 +82,7 @@
       Mission Control didn’t report your codes. Reload to try again.
     </p>
   {:else}
-    <p class="count">{RecoveryCodeFlow.remaining(status.remaining)}</p>
+    <p class="count">{RecoveryCodeFlow.remainingLabel(status.remaining)}</p>
     {#if low && current === null}
       <p class="auth-notice">
         You’re running low. Regenerate your codes so you don’t get locked out.
