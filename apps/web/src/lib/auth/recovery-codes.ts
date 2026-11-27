@@ -6,9 +6,12 @@ import {
 } from '#lib/api/mission-control.ts';
 import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 
+/** How many codes Mission Control puts in a set. */
+export const recoveryCodeSetSize = 10;
+
 export const recoveryCodeSetSchema = z.object({
   setId: z.string().min(1),
-  codes: z.array(z.string().min(1)).length(10),
+  codes: z.array(z.string().min(1)).length(recoveryCodeSetSize),
 });
 
 export const httpRecoveryCodesPropsSchema = z.object({

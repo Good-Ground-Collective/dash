@@ -134,6 +134,14 @@ describe('MissionControlAuthPageLoader recovery codes', () => {
     ).toBe('/sign-in');
     expect(pending.requested).toEqual([]);
   });
+
+  it('shows the codes step when the shell couldn’t read the status', async () => {
+    const unknown = new PageVisit({ viewer: ada, recoveryCodes: null });
+
+    expect(
+      await RedirectCatcher.location(loader.recoveryCodes(unknown.event)),
+    ).toBeNull();
+  });
 });
 
 describe('MissionControlAuthPageLoader settings', () => {

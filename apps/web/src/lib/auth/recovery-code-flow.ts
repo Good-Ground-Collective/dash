@@ -2,9 +2,10 @@ import { MissionControlError } from '#lib/api/mission-control-error.ts';
 import type { PasskeyAuth } from '#lib/auth/passkey-auth.ts';
 import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
 import type { PasskeyWording } from '#lib/auth/passkey-wording.ts';
-import type {
-  RecoveryCodes,
-  RecoveryCodeSet,
+import {
+  type RecoveryCodes,
+  type RecoveryCodeSet,
+  recoveryCodeSetSize,
 } from '#lib/auth/recovery-codes.ts';
 
 /**
@@ -110,10 +111,9 @@ export class RecoveryCodeFlow {
 
   /** How many unused codes are left, such as "8 of 10 codes left". */
   static remaining(count: number): string {
-    return `${count} of 10 codes left`;
+    return `${count} of ${recoveryCodeSetSize} codes left`;
   }
 
-  /** True when few enough codes are left that the person should make a new set. */
   static isRunningLow(count: number): boolean {
     return count <= 2;
   }

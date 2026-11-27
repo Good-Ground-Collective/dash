@@ -150,7 +150,7 @@ describe('ShellLoader failures', () => {
       appearance: lightCharacters,
       build,
     });
-    expect(counter.calls).toBe(1);
+    expect(counter.calls).toBe(2);
   });
 
   it('refuses an API base URL that is not a URL', () => {
@@ -176,10 +176,6 @@ class RedirectCatcher {
 }
 
 describe('ShellLoader recovery codes', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('sends a viewer without confirmed codes to the codes step', async () => {
     const counter = new CountingFetch({
       response: () => Response.json(ada),
@@ -215,6 +211,29 @@ describe('ShellLoader recovery codes', () => {
     );
 
     expect(data.recoveryCodes).toEqual(unconfirmed);
+  });
+});
+
+describe('ShellLoader recovery code failures', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('drops the status quietly for an expired session cookie', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const counter = new CountingFetch({
+      response: () => Response.json(null),
+      recoveryCodes: () =>
+        Response.json({ code: 'UNAUTHORIZED' }, { status: 401 }),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
+    );
+
+    expect(data.viewer).toBeNull();
+    expect(data.recoveryCodes).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('lets the viewer through when Mission Control can’t report codes', async () => {

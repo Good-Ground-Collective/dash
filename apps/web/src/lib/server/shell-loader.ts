@@ -6,6 +6,7 @@ import {
   type RecoveryCodeStatus,
   type Viewer,
 } from '#lib/api/mission-control.ts';
+import { MissionControlError } from '#lib/api/mission-control-error.ts';
 import { type BuildStamp, buildStampSchema } from '#lib/build/build-stamp.ts';
 import {
   type RecoveryCodeGate,
@@ -57,9 +58,11 @@ export class MissionControlShellLoader implements ShellLoader {
   }
 
   readonly load = async (event: ShellLoadEvent): Promise<ShellData> => {
-    const viewer = await this.viewer(event);
-    const recoveryCodes =
-      viewer === null ? null : await this.recoveryCodes(event);
+    const [viewer, codes] = await Promise.all([
+      this.viewer(event),
+      event.locals.hasSessionCookie ? this.recoveryCodes(event) : null,
+    ]);
+    const recoveryCodes = viewer === null ? null : codes;
 
     const location = this.gate.redirectFor({
       pathname: event.url.pathname,
@@ -72,6 +75,7 @@ export class MissionControlShellLoader implements ShellLoader {
       requested: event.locals.themePreference,
       saved: viewer,
     });
+
     return {
       viewer,
       recoveryCodes,
@@ -99,6 +103,9 @@ export class MissionControlShellLoader implements ShellLoader {
     try {
       return await this.missionControl(event).getRecoveryCodeStatus();
     } catch (error) {
+      if (error instanceof MissionControlError && error.status === 401) {
+        return null;
+      }
       console.warn(
         `Mission Control did not report recovery codes: ${String(error)}`,
       );

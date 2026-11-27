@@ -267,7 +267,7 @@ export class MissionControlStub {
     this.passkeys.push(passkey);
     if (signedUp === null) return { status: 200, body: passkey };
 
-    if (this.setup.pending !== null) this.recoveryCodes.require();
+    if (this.setup.pending !== null) this.recoveryCodes.markUnconfirmed();
     this.person = signedUp;
     this.setup.reset();
     return { ...this.newSession(), body: passkey };

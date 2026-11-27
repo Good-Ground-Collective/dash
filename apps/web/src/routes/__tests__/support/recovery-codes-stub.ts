@@ -38,8 +38,8 @@ export class RecoveryCodesStub {
     this.pending = null;
   }
 
-  /** For a person just made through setup. */
-  require(): void {
+  /** For a person just made through setup, who hasn't saved any codes yet. */
+  markUnconfirmed(): void {
     this.confirmed = false;
   }
 

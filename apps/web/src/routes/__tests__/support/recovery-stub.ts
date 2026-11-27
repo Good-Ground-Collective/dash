@@ -91,7 +91,6 @@ export class RecoveryStub {
     );
   }
 
-  /** How many of the person's codes are unused. */
   remaining(): number {
     return [...this.codes.values()].filter((state) => state === 'active')
       .length;
