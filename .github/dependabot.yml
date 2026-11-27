@@ -18,6 +18,9 @@ updates:
         update-types:
           - version-update:semver-minor
           - version-update:semver-major
+      - dependency-name: conventional-changelog-conventionalcommits
+        update-types:
+          - version-update:semver-major
     groups:
       npm:
         patterns: ['*']

@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+// Fails when the commit analyzer or notes generator can't load the repo's preset.
+import { createRequire } from 'node:module';
+
+const fromRoot = createRequire(`${process.cwd()}/package.json`);
+const fromSemanticRelease = createRequire(fromRoot.resolve('semantic-release'));
+const { analyzeCommits } = await import(
+  fromSemanticRelease.resolve('@semantic-release/commit-analyzer')
+);
+const { generateNotes } = await import(
+  fromSemanticRelease.resolve('@semantic-release/release-notes-generator')
+);
+
+const { release } = fromRoot('./package.json');
+const pluginConfig = (name) => {
+  const entry = release.plugins.find(
+    (plugin) => (Array.isArray(plugin) ? plugin[0] : plugin) === name,
+  );
+  if (entry === undefined) {
+    console.error(`package.json release.plugins has no ${name} entry`);
+    process.exit(1);
+  }
+  return Array.isArray(entry) ? (entry[1] ?? {}) : {};
+};
+
+const commit = {
+  hash: '0000000',
+  message: 'feat(ci): sample feature',
+  subject: 'feat(ci): sample feature',
+  body: '',
+  committerDate: new Date().toISOString(),
+};
+const context = {
+  cwd: process.cwd(),
+  options: { repositoryUrl: 'https://github.com/Good-Ground-Collective/dash' },
+  lastRelease: {},
+  nextRelease: { version: '1.0.0', gitTag: 'v1.0.0' },
+  commits: [commit],
+  logger: { log() {}, error: console.error, success() {}, warn: console.warn },
+};
+
+const releaseType = await analyzeCommits(
+  pluginConfig('@semantic-release/commit-analyzer'),
+  context,
+);
+if (releaseType !== 'minor') {
+  console.error(
+    `commit analyzer returned ${releaseType} for a feat commit, want minor`,
+  );
+  process.exit(1);
+}
+
+const notes = await generateNotes(
+  pluginConfig('@semantic-release/release-notes-generator'),
+  context,
+);
+if (!notes.includes('sample feature')) {
+  console.error('release notes did not render the sample commit');
+  process.exit(1);
+}
+
+console.log('ok: commit analyzer and release notes load the preset');
