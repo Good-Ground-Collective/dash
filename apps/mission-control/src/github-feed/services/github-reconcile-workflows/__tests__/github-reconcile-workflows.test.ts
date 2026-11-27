@@ -21,7 +21,10 @@ import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-r
 const databaseUrl = inject('databaseUrl');
 const settle = { timeout: 15_000, interval: 100 };
 const adaId = '00000000-0000-4000-8000-00000000000a';
-const followUpInputSchema = z.tuple([z.object({ connectionId: z.string() })]);
+const minReadGapMs = 60_000;
+const followUpInputSchema = z.tuple([
+  z.object({ connectionId: z.string(), startedAt: z.number() }),
+]);
 
 /** Each read waits until the test releases it, so a test can act while a read is running. */
 class HeldReconcile implements GithubReconcile {
@@ -107,11 +110,18 @@ class Reads {
       status: 'SUCCESS',
       loadInput: true,
     });
-    return finished.filter(
-      (followUp) =>
-        followUpInputSchema.safeParse(followUp.input).data?.[0].connectionId ===
-        connectionId,
+    return finished.flatMap((followUp) =>
+      (followUpInputSchema.safeParse(followUp.input).data ?? []).filter(
+        (input) => input.connectionId === connectionId,
+      ),
     );
+  }
+
+  static async waiting() {
+    return DBOS.listWorkflows({
+      workflowName: 'githubReconcileConnection',
+      status: 'DELAYED',
+    });
   }
 
   static of(connectionId: string) {
@@ -155,6 +165,7 @@ beforeAll(async () => {
 afterAll(async () => {
   reconcile.release();
   await runtime?.shutdown();
+  vi.useRealTimers();
 });
 
 describe.skipIf(databaseUrl === null)(
@@ -191,7 +202,23 @@ describe.skipIf(databaseUrl === null)(
 describe.skipIf(databaseUrl === null)(
   'GithubReconcileWorkflows follow-ups',
   () => {
-    it('reads once more when GitHub reports a change while a read is running', async () => {
+    it('does not read again when nothing changed during the read', async () => {
+      const id = await Reads.connection('77');
+
+      await workflows.syncConnection({ connectionId: id });
+      await vi.waitFor(() => {
+        expect(Reads.of(id)).toHaveLength(1);
+      }, settle);
+      reconcile.release();
+      await vi.waitFor(async () => {
+        expect(await Reads.followUpsOf(id)).toHaveLength(1);
+      }, settle);
+
+      expect(Reads.of(id)).toHaveLength(1);
+    }, 60_000);
+
+    it('reads once more, a minute after the earlier read started, when GitHub reports changes while a read is running', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
       const id = await Reads.connection(acmeInstallation.externalId);
       const opened = {
         provider: 'github',
@@ -210,6 +237,14 @@ describe.skipIf(databaseUrl === null)(
       await pullRequests.handle({ ...opened, deliveryId: 'race-2' });
       reconcile.release();
 
+      await vi.waitFor(async () => {
+        expect(await Reads.followUpsOf(id)).toHaveLength(1);
+      }, settle);
+      await pullRequests.handle({ ...opened, deliveryId: 'race-3' });
+      expect(await Reads.waiting()).toHaveLength(1);
+      expect(Reads.of(id)).toHaveLength(1);
+
+      vi.advanceTimersByTime(minReadGapMs);
       await vi.waitFor(() => {
         expect(Reads.of(id)).toHaveLength(2);
       }, settle);
@@ -217,22 +252,13 @@ describe.skipIf(databaseUrl === null)(
       await vi.waitFor(async () => {
         expect(await Reads.followUpsOf(id)).toHaveLength(2);
       }, settle);
+      const starts = (await Reads.followUpsOf(id)).map(
+        (followUp) => followUp.startedAt,
+      );
       expect(Reads.of(id)).toHaveLength(2);
-    }, 60_000);
-
-    it('does not read again when nothing changed during the read', async () => {
-      const id = await Reads.connection('77');
-
-      await workflows.syncConnection({ connectionId: id });
-      await vi.waitFor(() => {
-        expect(Reads.of(id)).toHaveLength(1);
-      }, settle);
-      reconcile.release();
-      await vi.waitFor(async () => {
-        expect(await Reads.followUpsOf(id)).toHaveLength(1);
-      }, settle);
-
-      expect(Reads.of(id)).toHaveLength(1);
+      expect(Math.max(...starts) - Math.min(...starts)).toBeGreaterThanOrEqual(
+        minReadGapMs,
+      );
     }, 60_000);
   },
 );

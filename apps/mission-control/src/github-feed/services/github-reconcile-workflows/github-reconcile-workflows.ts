@@ -14,6 +14,8 @@ import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts'
 
 const queueName = 'github-reconcile';
 const scheduleName = 'github-reconcile-every-15-minutes';
+/** Least time from one read of a connection starting to a follow-up read of it starting, so steady webhook traffic neither spends the installation's GitHub rate limit nor keeps the queue's two slots busy. */
+const minReadGapMs = 60_000;
 
 const githubReconcileWorkflowsPropsSchema = z.object({
   reconcile: z.custom<GithubReconcile>(),
@@ -32,6 +34,9 @@ type FollowUpWorkflow = (props: {
   readWorkflowId: string;
   startedAt: number;
 }) => Promise<void>;
+type EnqueueOptions = NonNullable<
+  NonNullable<Parameters<typeof DBOS.startWorkflow>[1]>['enqueueOptions']
+>;
 type PersonWorkflow = (userId: string) => Promise<void>;
 type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
 
@@ -42,7 +47,8 @@ type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
  * GitHub. A connection whose read is still queued or running is not enqueued again; the later
  * request attaches to the earlier read. A change reported while a read runs may be missed by
  * it, so once each read has finished a follow-up checks for a change reported after the read
- * started, and enqueues one more read if there was one.
+ * started, and enqueues one more read if there was one. That read waits until a minute after the
+ * earlier one started, and requests made while it waits attach to it.
  */
 export class GithubReconcileWorkflows
   implements ConnectionReads, WorkflowModule
@@ -86,16 +92,7 @@ export class GithubReconcileWorkflows
   }
 
   async syncConnection(props: { connectionId: string }): Promise<void> {
-    if (this.registered === null) {
-      throw new ReconcileNotRegisteredError();
-    }
-    await DBOS.startWorkflow(this.registered.connection, {
-      queueName,
-      enqueueOptions: {
-        deduplicationID: `github-reconcile-${props.connectionId}`,
-      },
-      duplicationPolicy: 'return-existing',
-    })(props.connectionId);
+    await this.enqueueRead({ connectionId: props.connectionId, delayMs: 0 });
   }
 
   registerWorkflows(): void {
@@ -169,11 +166,36 @@ export class GithubReconcileWorkflows
           { name: 'githubSyncRequestedSince' },
         );
         if (changed) {
-          await this.syncConnection({ connectionId: props.connectionId });
+          const now = await DBOS.now();
+          await this.enqueueRead({
+            connectionId: props.connectionId,
+            delayMs: props.startedAt + minReadGapMs - now,
+          });
         }
       },
       { name: 'githubReconcileFollowUp' },
     );
+  }
+
+  /** Enqueues a read that waits `delayMs` before it can start, unless one is already waiting, queued or running. */
+  private async enqueueRead(props: {
+    connectionId: string;
+    delayMs: number;
+  }): Promise<void> {
+    if (this.registered === null) {
+      throw new ReconcileNotRegisteredError();
+    }
+    const enqueueOptions: EnqueueOptions = {
+      deduplicationID: `github-reconcile-${props.connectionId}`,
+    };
+    if (props.delayMs > 0) {
+      enqueueOptions.delaySeconds = props.delayMs / 1000;
+    }
+    await DBOS.startWorkflow(this.registered.connection, {
+      queueName,
+      enqueueOptions,
+      duplicationPolicy: 'return-existing',
+    })(props.connectionId);
   }
 
   private static log(props: {

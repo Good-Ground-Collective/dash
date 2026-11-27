@@ -15,12 +15,12 @@ import type { ConnectionRepository } from '#src/connections/repositories/connect
 import type { LinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 import { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
-import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
 import { ConnectableAccounts } from '#src/connections/services/connectable-accounts/connectable-accounts.ts';
 import {
   type ConnectState,
   SignedConnectState,
 } from '#src/connections/services/connect-state/connect-state.ts';
+import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
 import { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
 import { DbosSuspensionRecheck } from '#src/connections/services/suspension-recheck/suspension-recheck.ts';
 import { AesGcmTokenCipher } from '#src/connections/services/token-cipher/token-cipher.ts';
