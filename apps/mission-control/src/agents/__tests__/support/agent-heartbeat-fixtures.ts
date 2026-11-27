@@ -1,0 +1,42 @@
+import type { AgentHeartbeatMessage } from '#src/agents/contracts/agent-heartbeat.ts';
+import type { NewServiceAccount } from '#src/auth/contracts/service-account.ts';
+
+export const sessionId = '3b7e9f20-5c4a-4d1e-8a6b-2f9c0d1e3a4b';
+
+export const bench: NewServiceAccount = {
+  kind: 'bench',
+  name: 'Studio Mac',
+  benchId: 'studio-mac',
+  description: 'The desk machine',
+  scopes: ['heartbeat:write', 'telemetry:write'],
+};
+
+export const agent: NewServiceAccount = {
+  kind: 'agent',
+  name: 'CI reviewer',
+  agentName: 'ci-reviewer',
+  description: 'Runs in GitHub Actions',
+  scopes: ['heartbeat:write'],
+};
+
+/** `agent.heartbeat` 1.0 messages for tests. */
+export class AgentHeartbeatFixtures {
+  /** A `working` heartbeat from the session itself at `seq` 0, with `payload` laid over it. */
+  static message(
+    payload: Partial<AgentHeartbeatMessage['payload']> = {},
+  ): AgentHeartbeatMessage {
+    return {
+      schemaVersion: '1.0',
+      kind: 'agent.heartbeat',
+      id: crypto.randomUUID(),
+      emittedAt: '2026-11-27T09:30:00.000Z',
+      payload: {
+        sessionId,
+        seq: 0,
+        harness: 'claude-code',
+        status: 'working',
+        ...payload,
+      },
+    };
+  }
+}

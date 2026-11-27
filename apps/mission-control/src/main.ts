@@ -1,5 +1,6 @@
 import { AgentsModule } from '#src/agents/module.ts';
 import { DrizzleAgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
+import { DrizzleAgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
 import { AuthModule } from '#src/auth/module.ts';
 import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
@@ -82,6 +83,13 @@ const connections = new ConnectionsModule({
   listeners: [githubFeed, objectives],
 });
 const liveEvents = new InProcessLiveEvents();
+const agents = new AgentsModule({
+  authentication: auth.agentAuthentication,
+  identity: auth.identity,
+  heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
+  sessionRepository: new DrizzleAgentSessionRepository({ database }),
+  liveEvents,
+});
 const heartbeat = new HeartbeatModule({
   liveEvents,
   repository: new DrizzleHeartbeatRepository({ database }),
@@ -94,10 +102,7 @@ const platform = new PlatformModule({
   httpModules: [
     new HealthModule({ probes: [database, workflows], build: config.build }),
     auth,
-    new AgentsModule({
-      authentication: auth.agentAuthentication,
-      heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
-    }),
+    agents,
     connections,
     githubFeed,
     objectives,
@@ -109,7 +114,7 @@ const platform = new PlatformModule({
     new LiveModule({ liveEvents }),
     heartbeat,
   ],
-  workflowModules: [heartbeat, githubFeed, objectives, connections],
+  workflowModules: [heartbeat, agents, githubFeed, objectives, connections],
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

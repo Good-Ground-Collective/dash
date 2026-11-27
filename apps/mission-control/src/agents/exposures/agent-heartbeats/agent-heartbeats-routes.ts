@@ -1,59 +1,77 @@
+import { z } from 'zod';
+
 import {
-  agentHeartbeatBodySchema,
+  agentHeartbeatBatchResultsSchema,
+  agentHeartbeatBatchSchema,
+  agentHeartbeatMessageSchema,
   agentHeartbeatParamsSchema,
-  agentHeartbeatSchema,
+  storedAgentHeartbeatSchema,
 } from '#src/agents/contracts/agent-heartbeat.ts';
 import type { AgentHeartbeats } from '#src/agents/services/agent-heartbeats/agent-heartbeats.ts';
 import type { AgentAuthentication } from '#src/auth/exposures/api-key-authentication/api-key-authentication.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
-/** `POST /api/agents/:agentName/heartbeats`, for a service account key with `heartbeat:write`. An empty body is a heartbeat, even one sent as `application/json`, which Fastify's own parser would refuse. */
+const agentHeartbeatsRoutesPropsSchema = z.object({
+  authentication: z.custom<AgentAuthentication>(),
+  heartbeats: z.custom<AgentHeartbeats>(),
+});
+
+/**
+ * `POST /api/agents/:agentName/heartbeats` and its `/batch`, for a service account key with
+ * `heartbeat:write`. A new heartbeat answers 201 and a repeated `(sessionId, seq)` answers 200
+ * with the row already stored. A batch of up to 100 answers 200 with one result per heartbeat.
+ */
 export class AgentHeartbeatsRoutes {
   private readonly authentication: AgentAuthentication;
   private readonly heartbeats: AgentHeartbeats;
 
-  constructor(props: {
-    authentication: AgentAuthentication;
-    heartbeats: AgentHeartbeats;
-  }) {
-    this.authentication = props.authentication;
-    this.heartbeats = props.heartbeats;
+  constructor(props: z.input<typeof agentHeartbeatsRoutesPropsSchema>) {
+    const parsed = agentHeartbeatsRoutesPropsSchema.parse(props);
+    this.authentication = parsed.authentication;
+    this.heartbeats = parsed.heartbeats;
   }
 
   register(app: ZodFastifyInstance): void {
-    const parseJson = app.getDefaultJsonParser('error', 'error');
-    app.removeContentTypeParser('application/json');
-    app.addContentTypeParser(
-      'application/json',
-      { parseAs: 'string' },
-      (request, body, done) => {
-        const text = body.toString();
-        if (text === '') {
-          done(null, null);
-          return;
-        }
-        parseJson(request, text, done);
-      },
-    );
-
     app.post(
       '/api/agents/:agentName/heartbeats',
       {
         onRequest: this.authentication.require('heartbeat:write'),
         schema: {
           params: agentHeartbeatParamsSchema,
-          body: agentHeartbeatBodySchema,
-          response: { 201: agentHeartbeatSchema },
+          body: agentHeartbeatMessageSchema,
+          response: {
+            200: storedAgentHeartbeatSchema,
+            201: storedAgentHeartbeatSchema,
+          },
         },
       },
       async (request, reply) => {
-        const heartbeat = await this.heartbeats.report({
+        const { outcome, heartbeat } = await this.heartbeats.report({
           caller: this.authentication.caller(request),
           agentName: request.params.agentName,
-          body: request.body,
+          message: request.body,
         });
-        return reply.code(201).send(heartbeat);
+        return reply.code(outcome === 'created' ? 201 : 200).send(heartbeat);
       },
+    );
+
+    app.post(
+      '/api/agents/:agentName/heartbeats/batch',
+      {
+        onRequest: this.authentication.require('heartbeat:write'),
+        schema: {
+          params: agentHeartbeatParamsSchema,
+          body: agentHeartbeatBatchSchema,
+          response: { 200: agentHeartbeatBatchResultsSchema },
+        },
+      },
+      async (request) => ({
+        results: await this.heartbeats.reportBatch({
+          caller: this.authentication.caller(request),
+          agentName: request.params.agentName,
+          items: request.body.heartbeats,
+        }),
+      }),
     );
   }
 }
