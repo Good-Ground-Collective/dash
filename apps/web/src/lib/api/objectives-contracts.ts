@@ -86,12 +86,17 @@ export const objectivesSchema = z.object({
 });
 
 /** The body of `PATCH /objectives/:id/overlay`. Null clears a value. */
-export const overlayChangesSchema = z.strictObject({
-  parked: z.boolean().optional(),
-  manualProgress: z.number().int().min(0).max(100).nullable().optional(),
-  priority: prioritySchema.nullable().optional(),
-  dueDate: dateSchema.nullable().optional(),
-});
+export const overlayChangesSchema = z
+  .strictObject({
+    parked: z.boolean().optional(),
+    manualProgress: z.number().int().min(0).max(100).nullable().optional(),
+    priority: prioritySchema.nullable().optional(),
+    dueDate: dateSchema.nullable().optional(),
+  })
+  .refine((changes) => Object.keys(changes).length > 0, {
+    message:
+      'Change at least one of parked, manualProgress, priority or dueDate',
+  });
 
 /** What `PATCH /objectives/:id/overlay` answers. */
 export const overlaySchema = z.object({

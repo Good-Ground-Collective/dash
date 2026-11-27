@@ -72,4 +72,8 @@ describe('overlayChangesSchema', () => {
       false,
     );
   });
+
+  it('refuses an empty change, as Mission Control does', () => {
+    expect(overlayChangesSchema.safeParse({}).success).toBe(false);
+  });
 });
