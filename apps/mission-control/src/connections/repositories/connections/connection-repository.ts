@@ -1,17 +1,11 @@
-import type { Installation, Repository } from '@dash/integrations-core';
+import type { Installation } from '@dash/integrations-core';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { OwnedConnection } from '#src/connections/contracts/connections.ts';
 import { ConnectionNotStoredError } from '#src/connections/errors.ts';
 import { ConnectionRows } from '#src/connections/repositories/connections/connection-rows.ts';
-import {
-  connectionRepositoryTable,
-  connectionTable,
-} from '#src/connections/repositories/connections/connections-table.ts';
+import { connectionTable } from '#src/connections/repositories/connections/connections-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
-
-type RepositoryRow = typeof connectionRepositoryTable.$inferSelect;
-type Transaction = Parameters<Parameters<Database['orm']['transaction']>[0]>[0];
 
 export interface ConnectionRepository {
   /** Creates or refreshes the connection for `installation`, replacing its repositories. */
@@ -43,6 +37,16 @@ export interface ConnectionRepository {
     installationId: string;
     suspended: boolean;
   }): Promise<void>;
+  /** Moves a connection still recorded as suspended to the back of `listSuspended`. */
+  touchSuspended(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void>;
+  /** Suspended owned connections of `providers`, least recently updated first. */
+  listSuspended(props: {
+    providers: readonly string[];
+    limit: number;
+  }): Promise<{ provider: string; installationId: string }[]>;
   /** Deletes the connection for an installation that was uninstalled, and with it everything read through it. */
   removeInstallation(props: {
     provider: string;
@@ -93,12 +97,11 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
         throw new ConnectionNotStoredError();
       }
 
-      const repositories =
-        await DrizzleConnectionRepository.replaceRepositories({
-          transaction,
-          connectionId: row.id,
-          repositories: installation.repositories,
-        });
+      const repositories = await ConnectionRows.replaceRepositories({
+        transaction,
+        connectionId: row.id,
+        repositories: installation.repositories,
+      });
       return ConnectionRows.owned({ row, repositories });
     });
   }
@@ -129,7 +132,7 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
       if (row === undefined) {
         return false;
       }
-      await DrizzleConnectionRepository.replaceRepositories({
+      await ConnectionRows.replaceRepositories({
         transaction,
         connectionId: row.id,
         repositories: installation.repositories,
@@ -147,6 +150,45 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
       .update(connectionTable)
       .set({ suspended: props.suspended, updatedAt: new Date() })
       .where(this.installationIs(props));
+  }
+
+  async touchSuspended(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void> {
+    await this.database.orm
+      .update(connectionTable)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(this.installationIs(props), eq(connectionTable.suspended, true)),
+      );
+  }
+
+  async listSuspended(props: {
+    providers: readonly string[];
+    limit: number;
+  }): Promise<{ provider: string; installationId: string }[]> {
+    if (props.providers.length === 0) {
+      return [];
+    }
+    const rows = await this.database.orm
+      .select({
+        provider: connectionTable.provider,
+        installationId: connectionTable.installationId,
+      })
+      .from(connectionTable)
+      .where(
+        and(
+          inArray(connectionTable.provider, [...props.providers]),
+          eq(connectionTable.kind, 'owned'),
+          eq(connectionTable.suspended, true),
+        ),
+      )
+      .orderBy(asc(connectionTable.updatedAt))
+      .limit(props.limit);
+    return rows.flatMap(({ provider, installationId }) =>
+      installationId === null ? [] : [{ provider, installationId }],
+    );
   }
 
   async removeInstallation(props: {
@@ -169,19 +211,10 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
         ),
       )
       .orderBy(asc(connectionTable.accountLogin));
-    const repositories =
-      rows.length === 0
-        ? []
-        : await this.database.orm
-            .select()
-            .from(connectionRepositoryTable)
-            .where(
-              inArray(
-                connectionRepositoryTable.connectionId,
-                rows.map((row) => row.id),
-              ),
-            )
-            .orderBy(asc(connectionRepositoryTable.fullName));
+    const repositories = await ConnectionRows.repositoriesOf({
+      orm: this.database.orm,
+      connectionIds: rows.map((row) => row.id),
+    });
     return rows.map((row) =>
       ConnectionRows.owned({
         row,
@@ -256,32 +289,5 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
       eq(connectionTable.kind, 'owned'),
       eq(connectionTable.installationId, props.installationId),
     );
-  }
-
-  private static async replaceRepositories(props: {
-    transaction: Transaction;
-    connectionId: string;
-    repositories: readonly Repository[];
-  }): Promise<RepositoryRow[]> {
-    const { transaction, connectionId } = props;
-    await transaction
-      .delete(connectionRepositoryTable)
-      .where(eq(connectionRepositoryTable.connectionId, connectionId));
-    if (props.repositories.length === 0) {
-      return [];
-    }
-    return transaction
-      .insert(connectionRepositoryTable)
-      .values(
-        props.repositories.map((repository) => ({
-          connectionId,
-          externalId: repository.externalId,
-          fullName: repository.fullName,
-          url: repository.url,
-          defaultBranch: repository.defaultBranch,
-          archived: repository.archived,
-        })),
-      )
-      .returning();
   }
 }

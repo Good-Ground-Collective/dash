@@ -30,14 +30,15 @@ type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
 export interface SuspensionRecheck {
   /** Suspended owned connections to ask about, least recently updated first. */
   due(): Promise<SuspendedInstallation[]>;
-  /** Asks the provider again. Reads the installation and returns true once the suspension has lifted. */
+  /** Asks the provider again. Reads the installation and returns true once the suspension has lifted; a failed ask goes to the back of `due()`. */
   recheck(installation: SuspendedInstallation): Promise<boolean>;
 }
 
 /**
  * Every 15 minutes, asks the provider about each suspended connection in turn. A connection still
- * suspended is touched, so the next run asks about others first. One whose suspension has lifted
- * is read again and announced to the listener, so a lost unsuspend delivery heals by itself.
+ * suspended, or one the provider failed to answer for, is touched, so the next run asks about
+ * others first. One whose suspension has lifted is read again and announced to the listener, so
+ * a lost unsuspend delivery heals by itself.
  */
 export class DbosSuspensionRecheck
   implements SuspensionRecheck, WorkflowModule
@@ -55,40 +56,19 @@ export class DbosSuspensionRecheck
   }
 
   async due(): Promise<SuspendedInstallation[]> {
-    const owned = await Promise.all(
-      [...this.flows.keys()].map(async (provider) =>
-        this.connections.listOwned({ provider }),
-      ),
-    );
-    return owned
-      .flat()
-      .filter(({ suspended }) => suspended)
-      .toSorted((left, right) => left.updatedAt.localeCompare(right.updatedAt))
-      .slice(0, maxConnectionsPerRun)
-      .map(({ provider, installationId }) => ({ provider, installationId }));
+    return this.connections.listSuspended({
+      providers: [...this.flows.keys()],
+      limit: maxConnectionsPerRun,
+    });
   }
 
   async recheck(installation: SuspendedInstallation): Promise<boolean> {
-    const { provider, installationId } = installation;
-    const flow = this.flows.get(provider);
-    if (flow === undefined) {
-      return false;
+    try {
+      return await this.askProvider(installation);
+    } catch (error) {
+      await this.connections.touchSuspended(installation);
+      throw error;
     }
-    if (await flow.isInstallationSuspended({ installationId })) {
-      await this.connections.setSuspended({
-        provider,
-        installationId,
-        suspended: true,
-      });
-      return false;
-    }
-
-    const current = await flow.getInstallation({ installationId });
-    const refreshed = await this.connections.refreshOwned({
-      provider,
-      installation: current,
-    });
-    return refreshed && !current.suspended;
   }
 
   async activate(): Promise<void> {
@@ -137,6 +117,31 @@ export class DbosSuspensionRecheck
       );
       return false;
     }
+  }
+
+  private async askProvider(
+    installation: SuspendedInstallation,
+  ): Promise<boolean> {
+    const { provider, installationId } = installation;
+    const flow = this.flows.get(provider);
+    if (flow === undefined) {
+      return false;
+    }
+    if (await flow.isInstallationSuspended({ installationId })) {
+      await this.connections.setSuspended({
+        provider,
+        installationId,
+        suspended: true,
+      });
+      return false;
+    }
+
+    const current = await flow.getInstallation({ installationId });
+    const refreshed = await this.connections.refreshOwned({
+      provider,
+      installation: current,
+    });
+    return refreshed && !current.suspended;
   }
 
   /** A listener's failure is logged: the connection is readable again, and the next scheduled read catches up. */

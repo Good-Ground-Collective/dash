@@ -115,6 +115,31 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     }
   }
 
+  async touchSuspended(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void> {
+    const key = `${props.provider}:${props.installationId}`;
+    const existing = this.owned.get(key);
+    if (existing?.suspended === true) {
+      this.owned.set(key, { ...existing, updatedAt: new Date().toISOString() });
+    }
+  }
+
+  async listSuspended(props: {
+    providers: readonly string[];
+    limit: number;
+  }): Promise<{ provider: string; installationId: string }[]> {
+    return [...this.owned.values()]
+      .filter(
+        ({ provider, suspended }) =>
+          suspended && props.providers.includes(provider),
+      )
+      .toSorted((left, right) => left.updatedAt.localeCompare(right.updatedAt))
+      .slice(0, props.limit)
+      .map(({ provider, installationId }) => ({ provider, installationId }));
+  }
+
   async removeInstallation(props: {
     provider: string;
     installationId: string;

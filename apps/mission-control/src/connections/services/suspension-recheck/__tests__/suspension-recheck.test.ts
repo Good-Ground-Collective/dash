@@ -82,6 +82,30 @@ describe('DbosSuspensionRecheck due', () => {
   });
 });
 
+describe('DbosSuspensionRecheck rotation', () => {
+  it('moves connections the provider failed to answer for behind ones not yet asked about', async () => {
+    for (let id = 1; id <= 51; id += 1) {
+      await Stored.save({
+        installationId: String(id),
+        suspended: true,
+        updatedAt: `2026-11-01T00:00:${String(id).padStart(2, '0')}.000Z`,
+      });
+    }
+    flow.unavailableReads = 50;
+
+    for (const installation of await recheck.due()) {
+      await expect(recheck.recheck(installation)).rejects.toThrow(
+        ProviderUnavailableError,
+      );
+    }
+
+    expect((await recheck.due())[0]).toEqual({
+      provider: 'github',
+      installationId: '51',
+    });
+  });
+});
+
 describe('DbosSuspensionRecheck recheck', () => {
   it('reads the installation again once the provider no longer reports it suspended', async () => {
     await Stored.save({ installationId: '42', suspended: true });

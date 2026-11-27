@@ -15,7 +15,7 @@ import { DbosConnectionsFixture } from '#src/connections/__tests__/support/dbos-
 const databaseUrl = inject('databaseUrl');
 const settle = { timeout: 15_000, interval: 100 };
 const fixture = new DbosConnectionsFixture();
-const { harness, reconcile } = fixture;
+const { harness, listener } = fixture;
 
 beforeAll(async () => {
   if (databaseUrl !== null) {
@@ -38,8 +38,8 @@ describe.skipIf(databaseUrl === null)('Suspension recheck on DBOS', () => {
   const recheck = async () =>
     DBOS.triggerSchedule('connections-suspension-recheck-every-15-minutes');
 
-  it('reads a connection whose suspension lifted without a webhook saying so', async () => {
-    const { connectionId, installationId } = await fixture.owned({
+  it('reinstates a connection whose suspension lifted without a webhook saying so', async () => {
+    const { installationId } = await fixture.owned({
       suspended: true,
     });
 
@@ -51,12 +51,12 @@ describe.skipIf(databaseUrl === null)('Suspension recheck on DBOS', () => {
       });
     }, settle);
     await vi.waitFor(() => {
-      expect(reconcile.synced).toContain(connectionId);
+      expect(listener.reinstatedInstallations).toContain(installationId);
     }, settle);
   }, 30_000);
 
   it('keeps a suspension the provider still reports', async () => {
-    const { connectionId, installationId } = await fixture.owned({
+    const { installationId } = await fixture.owned({
       suspended: true,
     });
     harness.flow.suspendedInstallations.add(installationId);
@@ -72,6 +72,6 @@ describe.skipIf(databaseUrl === null)('Suspension recheck on DBOS', () => {
     expect(await fixture.connection(installationId)).toMatchObject({
       suspended: true,
     });
-    expect(reconcile.synced).not.toContain(connectionId);
+    expect(listener.reinstatedInstallations).not.toContain(installationId);
   }, 30_000);
 });

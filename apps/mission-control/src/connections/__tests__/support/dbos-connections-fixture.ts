@@ -35,27 +35,17 @@ class RecordingReconcile implements GithubReconcile {
   }
 }
 
-/** Reads a reinstated connection again, as the feed does. */
-class ReadingListener implements ConnectListener {
-  private readonly fixture: DbosConnectionsFixture;
-
-  constructor(fixture: DbosConnectionsFixture) {
-    this.fixture = fixture;
-  }
+/** Records each installation the suspension recheck reports reinstated. */
+class RecordingListener implements ConnectListener {
+  readonly reinstatedInstallations: string[] = [];
 
   async connected(): Promise<void> {
     await Promise.resolve();
   }
 
   async reinstated(props: { installationId: string }): Promise<void> {
-    const ids = await this.fixture.harness.connections.connectionIdsFor({
-      provider: 'github',
-      installationIds: [props.installationId],
-    });
-    const connectionId = ids.get(props.installationId);
-    if (connectionId !== undefined) {
-      await this.fixture.reconcileWorkflows.syncConnection({ connectionId });
-    }
+    this.reinstatedInstallations.push(props.installationId);
+    await Promise.resolve();
   }
 }
 
@@ -65,9 +55,8 @@ class ReadingListener implements ConnectListener {
  * a connection for a fresh installation, so tests don't share one.
  */
 export class DbosConnectionsFixture {
-  readonly harness = new ConnectionsHarness({
-    listener: new ReadingListener(this),
-  });
+  readonly listener = new RecordingListener();
+  readonly harness = new ConnectionsHarness({ listener: this.listener });
   readonly reconcile = new RecordingReconcile();
   readonly reconcileWorkflows: GithubReconcileWorkflows;
   private runtime: DbosWorkflowRuntime | undefined;

@@ -50,6 +50,8 @@ export class GithubFeedHarness {
   readonly records = new InMemoryGithubRecords();
   readonly linkedAccounts = new InMemoryLinkedAccountRepository();
   readonly webhookEvents = new InMemoryWebhookEventRegistry();
+  readonly connections = new InMemoryConnectionRepository();
+  readonly syncRequests = new InMemorySyncRequestRepository();
   readonly module: GithubFeedModule;
   private app: ZodFastifyInstance | undefined;
 
@@ -71,8 +73,8 @@ export class GithubFeedHarness {
       linkedAccounts: this.linkedAccounts,
       reader: this.records,
       writer: this.records,
-      connections: new InMemoryConnectionRepository(),
-      syncRequests: new InMemorySyncRequestRepository(),
+      connections: this.connections,
+      syncRequests: this.syncRequests,
       webhookEvents: this.webhookEvents,
     });
   }
