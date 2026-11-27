@@ -27,6 +27,8 @@ COPY --from=build /srv/mission-control/package.json ./package.json
 COPY --from=build /srv/mission-control/node_modules ./node_modules
 COPY --from=build /srv/mission-control/src ./src
 COPY --from=build /srv/mission-control/drizzle ./drizzle
+COPY --from=build --chmod=755 /repo/apps/mission-control/bin ./bin
+ENV PATH=/app/bin:$PATH
 ARG APP_VERSION=dev
 ARG APP_COMMIT=
 ENV APP_VERSION=${APP_VERSION} APP_COMMIT=${APP_COMMIT}

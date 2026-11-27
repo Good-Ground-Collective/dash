@@ -5,6 +5,7 @@ import {
   accountTable,
   apikeyTable,
   passkeyTable,
+  recoveryCodeTable,
   sessionTable,
   setupTokenTable,
   userTable,
@@ -15,7 +16,7 @@ import type { Database } from '#src/platform/services/database/database.ts';
 /** The storage Better Auth reads and writes through: Drizzle in Postgres, or Better Auth's memory adapter in tests. */
 export type AuthStorage = NonNullable<BetterAuthOptions['database']>;
 
-/** Where Better Auth keeps its models: users, sessions, accounts, verification values, passkeys, the setup token and API keys. */
+/** Where Better Auth keeps its models: users, sessions, accounts, verification values, passkeys, the setup token, API keys and recovery codes. */
 export interface AuthStore {
   readonly storage: AuthStorage;
 }
@@ -36,6 +37,7 @@ export class DrizzleAuthStore implements AuthStore {
         passkey: passkeyTable,
         setupToken: setupTokenTable,
         apikey: apikeyTable,
+        recoveryCode: recoveryCodeTable,
       },
     });
   }

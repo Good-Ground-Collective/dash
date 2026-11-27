@@ -1,5 +1,5 @@
 import cors from '@fastify/cors';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -25,6 +25,15 @@ export const httpServerConfigSchema = z.object({
 
 export type HttpServerConfig = z.input<typeof httpServerConfigSchema>;
 
+/** What a request log line says about the request. */
+type LoggedRequest = {
+  method: string;
+  url: string;
+  host: string;
+  remoteAddress: string;
+  remotePort: number;
+};
+
 /** Builds the Fastify app: pino logging, Zod schemas, the CORS allowlist and one scope per module. */
 export class HttpServer {
   private readonly props: {
@@ -44,11 +53,16 @@ export class HttpServer {
 
   async build(): Promise<ZodFastifyInstance> {
     const { environment, logLevel } = this.props.config;
+    const serializers = { req: this.loggedRequest };
     const app = Fastify({
       logger:
         environment === 'development'
-          ? { level: logLevel, transport: { target: 'pino-pretty' } }
-          : { level: logLevel },
+          ? {
+              level: logLevel,
+              serializers,
+              transport: { target: 'pino-pretty' },
+            }
+          : { level: logLevel, serializers },
     }).withTypeProvider<ZodTypeProvider>();
 
     app.setValidatorCompiler(validatorCompiler);
@@ -64,4 +78,15 @@ export class HttpServer {
     }
     return app;
   }
+
+  /** Logs the path without its query string, which can carry one-time credentials such as a passkey enrolment's `context`. */
+  private readonly loggedRequest = (
+    request: FastifyRequest,
+  ): LoggedRequest => ({
+    method: request.method,
+    url: request.url.split('?', 1)[0] ?? '',
+    host: request.host,
+    remoteAddress: request.ip,
+    remotePort: request.socket.remotePort ?? 0,
+  });
 }

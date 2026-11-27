@@ -8,12 +8,19 @@ import { z } from 'zod';
 
 import { principalKindSchema } from '#src/auth/contracts/principal.ts';
 import type { AuthStorage } from '#src/auth/repositories/auth-store/auth-store.ts';
-import { freshSessionSeconds } from '#src/auth/services/fresh-session/fresh-session.ts';
+import {
+  freshSessionSeconds,
+  MaxAgeFreshSession,
+} from '#src/auth/services/fresh-session/fresh-session.ts';
 import { WebAuthnPasskeys } from '#src/auth/services/passkeys/passkeys.ts';
 import {
   KindPrincipalGuard,
   type PrincipalGuard,
 } from '#src/auth/services/principal-guard/principal-guard.ts';
+import {
+  CodeRecovery,
+  type Recovery,
+} from '#src/auth/services/recovery/recovery.ts';
 import { type Setup, TokenSetup } from '#src/auth/services/setup/setup.ts';
 import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts';
 
@@ -76,6 +83,8 @@ export interface Identity {
   readonly guard: PrincipalGuard;
   /** Bootstraps the first person with a one-time setup token. */
   readonly setup: Setup;
+  /** Recovery codes and break-glass links, both ending in a new passkey. */
+  readonly recovery: Recovery;
   /** Run at boot: a setup token to log once while nobody has signed up, otherwise `null`. */
   issueSetupToken(): Promise<string | null>;
   /** Answers one request to a path under `basePath`. */
@@ -95,6 +104,7 @@ export class BetterAuthIdentity implements Identity {
   readonly basePath = '/api/auth';
   readonly guard: PrincipalGuard = new KindPrincipalGuard();
   readonly setup: Setup = new TokenSetup();
+  readonly recovery: Recovery;
 
   constructor(
     props: {
@@ -105,9 +115,15 @@ export class BetterAuthIdentity implements Identity {
   ) {
     const settings = identitySettingsSchema.parse(props);
     this.baseUrl = settings.baseUrl;
+    this.recovery = new CodeRecovery({
+      webOrigin: settings.webOrigin,
+      freshSession: new MaxAgeFreshSession({
+        maxAgeSeconds: freshSessionSeconds,
+      }),
+    });
     const passkeys = new WebAuthnPasskeys({
       guard: this.guard,
-      sources: [this.setup],
+      sources: [this.setup, this.recovery],
       webOrigin: settings.webOrigin,
       freshAgeSeconds: freshSessionSeconds,
     });
@@ -121,6 +137,7 @@ export class BetterAuthIdentity implements Identity {
       plugins: [
         this.guard.plugin,
         this.setup.plugin,
+        this.recovery.plugin,
         ...passkeys.plugins,
         ...(props.plugins ?? []),
       ],

@@ -24,7 +24,7 @@ jobs:
 
       - run: shellcheck -x infra/hosts/db/*.sh infra/hosts/db/remote/*.sh infra/hosts/db/files/bin/*
 
-      - run: shellcheck -x bin/deploy-gate bin/image bin/image-secret-scan bin/kamal bin/test-deploy-gate bin/test-image-secret-scan
+      - run: shellcheck -x bin/deploy-gate bin/image bin/image-secret-scan bin/kamal bin/test-deploy-gate bin/test-image-secret-scan apps/mission-control/bin/dash
 
       - run: bin/test-deploy-gate
 

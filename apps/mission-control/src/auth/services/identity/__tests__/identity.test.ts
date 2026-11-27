@@ -41,6 +41,7 @@ class IdentityFixture {
         verification: [],
         passkey: [],
         setupToken: [],
+        recoveryCode: [],
       }),
     });
   }

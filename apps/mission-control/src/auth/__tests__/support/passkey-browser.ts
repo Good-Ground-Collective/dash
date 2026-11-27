@@ -55,17 +55,27 @@ export class PasskeyBrowser {
     createSession?: boolean;
     name?: string;
   }): Promise<Response> {
+    const options = await this.registrationOptions(props);
+    if (!options.ok) {
+      return options;
+    }
+    return this.verifyRegistration(options, props);
+  }
+
+  /** The first half of registration: the ceremony options, which also bind the enrolment `context` to this browser's challenge. */
+  async registrationOptions(props: { context?: string }): Promise<Response> {
     const query =
       props.context === undefined
         ? ''
         : `?${new URLSearchParams({ context: props.context }).toString()}`;
-    const options = await this.get(
-      `/passkey/generate-register-options${query}`,
-    );
-    if (!options.ok) {
-      return options;
-    }
+    return this.get(`/passkey/generate-register-options${query}`);
+  }
 
+  /** The second half: answers `options` with this browser's authenticator. */
+  async verifyRegistration(
+    options: Response,
+    props: { createSession?: boolean; name?: string },
+  ): Promise<Response> {
     return this.post(
       '/passkey/verify-registration',
       JSON.stringify({

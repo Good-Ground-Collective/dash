@@ -22,6 +22,7 @@ class ServedAuth {
         verification: [],
         passkey: [],
         setupToken: [],
+        recoveryCode: [],
         apikey: [],
       }),
     },
@@ -164,5 +165,43 @@ describe('AuthModule requests', () => {
     });
 
     expect(response.statusCode).toBe(403);
+  });
+});
+
+describe('AuthModule recovery', () => {
+  it('serves the signed-in person’s recovery-code status', async () => {
+    const served = await ServedAuth.start();
+
+    const response = await served.app.inject({
+      url: '/api/auth/recovery-codes/status',
+      headers: { cookie: served.cookie, origin: webOrigin },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ confirmed: false, remaining: 0 });
+  });
+
+  it('passes the rate limit’s Retry-After through', async () => {
+    const served = await ServedAuth.start();
+    const redeem = async (): Promise<number | string | undefined> => {
+      const response = await served.app.inject({
+        method: 'POST',
+        url: '/api/auth/recovery/redeem',
+        headers: { origin: webOrigin, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          email: 'ada@example.com',
+          code: 'aaaa-aaaa',
+        }),
+      });
+      return response.statusCode === 429
+        ? response.headers['retry-after']?.toString()
+        : response.statusCode;
+    };
+    const attempts: (number | string | undefined)[] = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      attempts.push(await redeem());
+    }
+
+    expect(attempts).toEqual([401, 401, 401, 401, 401, '900']);
   });
 });
