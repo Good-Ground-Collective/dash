@@ -72,3 +72,11 @@ export class WebhookWorkflowsNotRegisteredError extends Error {
     super('Register the webhook workflows before using them');
   }
 }
+
+export class SuspensionRecheckNotRegisteredError extends Error {
+  override name = 'SuspensionRecheckNotRegisteredError';
+
+  constructor() {
+    super('Register the suspension recheck workflow before activating it');
+  }
+}

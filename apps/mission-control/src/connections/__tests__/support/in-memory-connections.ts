@@ -107,7 +107,11 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     const key = `${props.provider}:${props.installationId}`;
     const existing = this.owned.get(key);
     if (existing !== undefined) {
-      this.owned.set(key, { ...existing, suspended: props.suspended });
+      this.owned.set(key, {
+        ...existing,
+        suspended: props.suspended,
+        updatedAt: new Date().toISOString(),
+      });
     }
   }
 

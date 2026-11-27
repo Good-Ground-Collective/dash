@@ -22,6 +22,7 @@ import {
   SignedConnectState,
 } from '#src/connections/services/connect-state/connect-state.ts';
 import { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
+import { DbosSuspensionRecheck } from '#src/connections/services/suspension-recheck/suspension-recheck.ts';
 import { AesGcmTokenCipher } from '#src/connections/services/token-cipher/token-cipher.ts';
 import {
   DbosWebhookDispatch,
@@ -60,7 +61,8 @@ type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
 /**
  * `owned` connections: for every registered integration that offers a connect flow, the
  * install and OAuth callbacks, the connectable accounts and the webhook endpoint under
- * `/integrations/<provider>`, and the workflows that process and prune stored deliveries.
+ * `/integrations/<provider>`, the workflows that process and prune stored deliveries, and the
+ * one that lifts a suspension the provider no longer reports.
  * Provider-neutral: it reaches providers only through `connectFlowCapability`.
  */
 export class ConnectionsModule implements HttpModule, WorkflowModule {
@@ -78,22 +80,23 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
     const owned = new Map<string, OwnedConnections>();
     const routes: ProviderRoutes[] = [];
     const offered = props.registry.offering(connectFlowCapability);
+    const flows = new Map(
+      offered.map(({ integration, implementation }) => [
+        integration.provider,
+        implementation,
+      ]),
+    );
     const dispatch = new DbosWebhookDispatch({
       registry: props.webhookEvents,
       deliveries: props.deliveries,
       changes: new OwnedInstallationChanges({
-        flows: new Map(
-          offered.map(({ integration, implementation }) => [
-            integration.provider,
-            implementation,
-          ]),
-        ),
+        flows,
         connections: props.connections,
       }),
     });
     this.workflows = [
       dispatch,
-      new DbosWebhookRetention({ deliveries: props.deliveries }),
+      ...ConnectionsModule.scheduledWorkflows({ module: props, flows }),
     ];
 
     for (const { integration, implementation: flow } of offered) {
@@ -134,6 +137,20 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
     for (const workflows of this.workflows) {
       await workflows.activate();
     }
+  }
+
+  private static scheduledWorkflows(props: {
+    module: ConnectionsModuleProps;
+    flows: ReadonlyMap<string, ConnectFlow>;
+  }): WorkflowModule[] {
+    return [
+      new DbosWebhookRetention({ deliveries: props.module.deliveries }),
+      new DbosSuspensionRecheck({
+        flows: props.flows,
+        connections: props.module.connections,
+        listener: props.module.listener,
+      }),
+    ];
   }
 
   private static routesFor(props: {

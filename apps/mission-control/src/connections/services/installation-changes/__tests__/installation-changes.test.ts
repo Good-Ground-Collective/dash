@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   acmeInstallation,
   FakeConnectFlow,
+  ProviderUnavailableError,
 } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import { InMemoryConnectionRepository } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
@@ -31,6 +32,7 @@ class Stored {
 beforeEach(async () => {
   connections.owned.clear();
   flow.suspendedInstallations.clear();
+  flow.unavailableReads = 0;
   await connections.saveOwned({
     provider: 'github',
     connectedBy: adaId,
@@ -63,6 +65,22 @@ describe('OwnedInstallationChanges', () => {
       suspended: false,
       repositories: acmeInstallation.repositories,
     });
+  });
+});
+
+describe('OwnedInstallationChanges during a provider outage', () => {
+  it('fails with the outage and leaves the suspension recorded', async () => {
+    await connections.setSuspended({
+      provider: 'github',
+      installationId: '42',
+      suspended: true,
+    });
+    flow.unavailableReads = 1;
+
+    await expect(Changes.apply('unsuspended')).rejects.toThrow(
+      ProviderUnavailableError,
+    );
+    expect(await Stored.acme()).toMatchObject({ suspended: true });
   });
 });
 

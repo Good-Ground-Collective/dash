@@ -1,153 +1,45 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
-import pg from 'pg';
-import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-
 import {
-  adaId,
-  ConnectionsHarness,
-} from '#src/connections/__tests__/support/connections-harness.ts';
-import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
-import { InMemorySyncRequestRepository } from '#src/github-feed/__tests__/support/in-memory-sync-requests.ts';
-import { githubFeedEvents } from '#src/github-feed/definitions/feed-events/feed-events.ts';
-import { GithubFeedEventHandler } from '#src/github-feed/services/github-feed-event-handler/github-feed-event-handler.ts';
-import type {
-  GithubReconcile,
-  SyncOutcome,
-} from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
-import { GithubReconcileWorkflows } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
-import { RecordedGithubSyncRequests } from '#src/github-feed/services/github-sync-requests/github-sync-requests.ts';
-import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  inject,
+  it,
+  vi,
+} from 'vitest';
+
+import { DbosConnectionsFixture } from '#src/connections/__tests__/support/dbos-connections-fixture.ts';
 
 const databaseUrl = inject('databaseUrl');
 const settle = { timeout: 15_000, interval: 100 };
-
-class RecordingReconcile implements GithubReconcile {
-  readonly synced: string[] = [];
-
-  async dueConnectionIds(): Promise<string[]> {
-    return [];
-  }
-
-  async connectionIdsOf(): Promise<string[]> {
-    return [];
-  }
-
-  async syncConnection(props: { connectionId: string }): Promise<SyncOutcome> {
-    this.synced.push(props.connectionId);
-    return { status: 'synced' };
-  }
-}
-
-const harness = new ConnectionsHarness();
-const reconcile = new RecordingReconcile();
-const syncRequests = new RecordedGithubSyncRequests({
-  connections: harness.connections,
-  requests: new InMemorySyncRequestRepository(),
-});
-const reconcileWorkflows = new GithubReconcileWorkflows({
-  reconcile,
-  syncRequests,
-});
-for (const { event, actions } of githubFeedEvents) {
-  harness.webhookEvents.register(
-    new GithubFeedEventHandler({
-      event,
-      actions,
-      syncRequests,
-      workflows: reconcileWorkflows,
-    }),
-  );
-}
-let runtime: DbosWorkflowRuntime | undefined;
-let acmeId = '';
-
-class Deliveries {
-  static async send(props: {
-    delivery: string;
-    event: string;
-    action: string;
-  }): Promise<{ statusCode: number; body: unknown }> {
-    const body = JSON.stringify({
-      action: props.action,
-      installation: { id: 42 },
-    });
-    const response = await (
-      await harness.start()
-    ).inject({
-      method: 'POST',
-      url: '/integrations/github/webhooks',
-      headers: {
-        'content-type': 'application/json',
-        'x-signature': `signed:${body}`,
-        'x-delivery': props.delivery,
-        'x-event': props.event,
-      },
-      payload: body,
-    });
-    return { statusCode: response.statusCode, body: response.json() };
-  }
-
-  static stored(deliveryId: string) {
-    return harness.deliveries.deliveries.find(
-      (stored) => stored.deliveryId === deliveryId,
-    );
-  }
-
-  static async processed(deliveryId: string, attempt = 1) {
-    return DBOS.listWorkflows({
-      workflowIDs: [`webhook-github-${deliveryId}-${attempt}`],
-      status: 'SUCCESS',
-    });
-  }
-
-  static backdate(deliveryId: string): void {
-    const stored = Deliveries.stored(deliveryId);
-    if (stored !== undefined) {
-      stored.receivedAt = new Date(Date.now() - 2 * 60_000);
-    }
-  }
-}
+const fixture = new DbosConnectionsFixture();
+const { harness, reconcile } = fixture;
 
 beforeAll(async () => {
-  if (databaseUrl === null) {
-    return;
+  if (databaseUrl !== null) {
+    await fixture.launch({
+      databaseUrl,
+      database: 'dash_test_webhook_processing',
+    });
   }
-  const url = new URL(databaseUrl);
-  const server = new pg.Client({ connectionString: url.toString() });
-  await server.connect();
-  try {
-    await server.query(
-      'drop database if exists dash_test_webhook_processing with (force)',
-    );
-  } finally {
-    await server.end();
-  }
-  url.pathname = '/dash_test_webhook_processing';
+});
 
-  harness.module.registerWorkflows();
-  reconcileWorkflows.registerWorkflows();
-  runtime = new DbosWorkflowRuntime({
-    databaseUrl: url.toString(),
-    logLevel: 'error',
-  });
-  await runtime.launch();
-  await harness.module.activate();
-  await reconcileWorkflows.activate();
-  ({ id: acmeId } = await harness.connections.saveOwned({
-    provider: 'github',
-    connectedBy: adaId,
-    installation: acmeInstallation,
-  }));
+beforeEach(() => {
+  harness.flow.unavailableReads = 0;
 });
 
 afterAll(async () => {
-  await harness.stop();
-  await runtime?.shutdown();
+  await fixture.stop();
 });
 
 describe.skipIf(databaseUrl === null)('Webhook processing on DBOS', () => {
   it('reads the connection again for a signed pull request delivery', async () => {
-    const response = await Deliveries.send({
+    const { connectionId, installationId } = await fixture.owned();
+
+    const response = await fixture.send({
+      installationId,
       delivery: 'pr-1',
       event: 'pull_request',
       action: 'opened',
@@ -158,27 +50,27 @@ describe.skipIf(databaseUrl === null)('Webhook processing on DBOS', () => {
       body: { deliveryId: 'pr-1', status: 'recorded' },
     });
     await vi.waitFor(() => {
-      expect(reconcile.synced).toContain(acmeId);
+      expect(reconcile.synced).toContain(connectionId);
     }, settle);
-    expect(Deliveries.stored('pr-1')).toMatchObject({
-      dispatchPending: false,
-    });
+    expect(fixture.stored('pr-1')).toMatchObject({ dispatchPending: false });
   }, 30_000);
 });
 
 describe.skipIf(databaseUrl === null)('Webhook events nothing handles', () => {
   it('stores an event type nothing handles without processing it', async () => {
-    const before = reconcile.synced.length;
+    const { connectionId, installationId } = await fixture.owned();
 
     for (const [delivery, event, action] of [
       ['star-1', 'star', 'created'],
       ['label-1', 'pull_request', 'labeled'],
     ] as const) {
-      expect(await Deliveries.send({ delivery, event, action })).toEqual({
+      expect(
+        await fixture.send({ installationId, delivery, event, action }),
+      ).toEqual({
         statusCode: 202,
         body: { deliveryId: delivery, status: 'recorded' },
       });
-      expect(Deliveries.stored(delivery)).toMatchObject({
+      expect(fixture.stored(delivery)).toMatchObject({
         dispatchPending: false,
       });
       expect(
@@ -187,80 +79,75 @@ describe.skipIf(databaseUrl === null)('Webhook events nothing handles', () => {
         }),
       ).toEqual([]);
     }
-    expect(reconcile.synced).toHaveLength(before);
+    expect(reconcile.synced).not.toContain(connectionId);
   }, 30_000);
 });
 
 describe.skipIf(databaseUrl === null)('Webhook redispatch on DBOS', () => {
   it('processes a delivery stored before a crash kept its workflow from starting', async () => {
-    const before = reconcile.synced.length;
+    const { connectionId, installationId } = await fixture.owned();
     await harness.deliveries.record({
       provider: 'github',
       delivery: {
         deliveryId: 'crash-1',
         event: 'issues',
         action: 'assigned',
-        installationId: '42',
+        installationId,
         installationLifecycle: false,
         installationChange: null,
         payload: {},
       },
       dispatchPending: true,
     });
-    Deliveries.backdate('crash-1');
+    fixture.backdate('crash-1');
 
     await DBOS.triggerSchedule('webhook-redispatch-every-minute');
 
     await vi.waitFor(async () => {
-      expect(await Deliveries.processed('crash-1')).toHaveLength(1);
+      expect(await fixture.processed('crash-1')).toHaveLength(1);
     }, settle);
-    expect(Deliveries.stored('crash-1')).toMatchObject({
-      dispatchPending: false,
-    });
+    expect(fixture.stored('crash-1')).toMatchObject({ dispatchPending: false });
     await vi.waitFor(() => {
-      expect(reconcile.synced.length).toBeGreaterThan(before);
+      expect(reconcile.synced).toContain(connectionId);
     }, settle);
   }, 30_000);
 });
 
 describe.skipIf(databaseUrl === null)('Webhook retries on DBOS', () => {
   const unsuspend = async (delivery: string) => {
-    await harness.connections.setSuspended({
-      provider: 'github',
-      installationId: '42',
-      suspended: true,
-    });
-    await Deliveries.send({
+    const owned = await fixture.owned({ suspended: true });
+    await fixture.send({
+      installationId: owned.installationId,
       delivery,
       event: 'installation',
       action: 'unsuspend',
     });
+    return owned;
   };
 
   it('applies an installation change after the provider fails a read once', async () => {
-    const before = reconcile.synced.length;
     harness.flow.unavailableReads = 1;
 
-    await unsuspend('unsuspend-1');
+    const { connectionId, installationId } = await unsuspend('unsuspend-1');
 
     await vi.waitFor(async () => {
-      expect(await Deliveries.processed('unsuspend-1')).toHaveLength(1);
+      expect(await fixture.processed('unsuspend-1')).toHaveLength(1);
     }, settle);
-    expect(
-      await harness.connections.listOwned({ provider: 'github' }),
-    ).toMatchObject([{ suspended: false }]);
-    expect(Deliveries.stored('unsuspend-1')).toMatchObject({
+    expect(await fixture.connection(installationId)).toMatchObject({
+      suspended: false,
+    });
+    expect(fixture.stored('unsuspend-1')).toMatchObject({
       dispatchPending: false,
     });
     await vi.waitFor(() => {
-      expect(reconcile.synced.length).toBeGreaterThan(before);
+      expect(reconcile.synced).toContain(connectionId);
     }, settle);
   }, 30_000);
 
   it('starts another attempt at a delivery whose attempt failed', async () => {
     harness.flow.unavailableReads = 4;
 
-    await unsuspend('unsuspend-2');
+    const { installationId } = await unsuspend('unsuspend-2');
     await vi.waitFor(async () => {
       expect(
         await DBOS.listWorkflows({
@@ -269,19 +156,19 @@ describe.skipIf(databaseUrl === null)('Webhook retries on DBOS', () => {
         }),
       ).toHaveLength(1);
     }, settle);
-    expect(Deliveries.stored('unsuspend-2')).toMatchObject({
+    expect(fixture.stored('unsuspend-2')).toMatchObject({
       dispatchPending: true,
     });
-    Deliveries.backdate('unsuspend-2');
+    fixture.backdate('unsuspend-2');
     await DBOS.triggerSchedule('webhook-redispatch-every-minute');
 
     await vi.waitFor(async () => {
-      expect(await Deliveries.processed('unsuspend-2', 2)).toHaveLength(1);
+      expect(await fixture.processed('unsuspend-2', 2)).toHaveLength(1);
     }, settle);
-    expect(
-      await harness.connections.listOwned({ provider: 'github' }),
-    ).toMatchObject([{ suspended: false }]);
-    expect(Deliveries.stored('unsuspend-2')).toMatchObject({
+    expect(await fixture.connection(installationId)).toMatchObject({
+      suspended: false,
+    });
+    expect(fixture.stored('unsuspend-2')).toMatchObject({
       dispatchPending: false,
     });
   }, 60_000);
@@ -291,39 +178,41 @@ describe.skipIf(databaseUrl === null)(
   'Webhook installation changes on DBOS',
   () => {
     it('records a suspension and reads the connection so the feed can say why', async () => {
-      const before = reconcile.synced.length;
-      harness.flow.suspendedInstallations.add('42');
+      const { connectionId, installationId } = await fixture.owned();
+      harness.flow.suspendedInstallations.add(installationId);
 
-      await Deliveries.send({
+      await fixture.send({
+        installationId,
         delivery: 'suspend-1',
         event: 'installation',
         action: 'suspend',
       });
 
       await vi.waitFor(async () => {
-        expect(await Deliveries.processed('suspend-1')).toHaveLength(1);
+        expect(await fixture.processed('suspend-1')).toHaveLength(1);
       }, settle);
-      expect(
-        await harness.connections.listOwned({ provider: 'github' }),
-      ).toMatchObject([{ suspended: true }]);
+      expect(await fixture.connection(installationId)).toMatchObject({
+        suspended: true,
+      });
       await vi.waitFor(() => {
-        expect(reconcile.synced.length).toBeGreaterThan(before);
+        expect(reconcile.synced).toContain(connectionId);
       }, settle);
     }, 30_000);
 
     it('removes the connection when the app is uninstalled', async () => {
-      await Deliveries.send({
+      const { installationId } = await fixture.owned();
+
+      await fixture.send({
+        installationId,
         delivery: 'deleted-1',
         event: 'installation',
         action: 'deleted',
       });
 
       await vi.waitFor(async () => {
-        expect(await Deliveries.processed('deleted-1')).toHaveLength(1);
+        expect(await fixture.processed('deleted-1')).toHaveLength(1);
       }, settle);
-      expect(
-        await harness.connections.listOwned({ provider: 'github' }),
-      ).toEqual([]);
+      expect(await fixture.connection(installationId)).toBeUndefined();
     }, 30_000);
   },
 );

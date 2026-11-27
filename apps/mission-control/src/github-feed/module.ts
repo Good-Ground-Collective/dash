@@ -2,6 +2,7 @@ import {
   activityFeedCapability,
   type IntegrationRegistry,
 } from '@dash/integrations-core';
+import { DBOS } from '@dbos-inc/dbos-sdk';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -50,6 +51,7 @@ export class GithubFeedModule
   readonly plugin: FastifyPluginAsyncZod;
   readonly reconcile: GithubReconcile;
   private readonly workflows: GithubReconcileWorkflows;
+  private readonly syncRequests: RecordedGithubSyncRequests;
 
   constructor(input: z.input<typeof githubFeedModulePropsSchema>) {
     const props = githubFeedModulePropsSchema.parse(input);
@@ -72,6 +74,7 @@ export class GithubFeedModule
       connections: props.connections,
       requests: props.syncRequests,
     });
+    this.syncRequests = syncRequests;
     this.workflows = new GithubReconcileWorkflows({
       reconcile: this.reconcile,
       syncRequests,
@@ -98,6 +101,27 @@ export class GithubFeedModule
   async connected(props: { provider: string; userId: string }): Promise<void> {
     if (props.provider === 'github') {
       await this.workflows.syncPerson({ userId: props.userId });
+    }
+  }
+
+  /** Runs inside the workflow that reinstated the connection, like a webhook handler. */
+  async reinstated(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<void> {
+    if (props.provider !== 'github') {
+      return;
+    }
+    const connectionId = await DBOS.runStep(
+      () =>
+        this.syncRequests.request({
+          installationId: props.installationId,
+          requestedAt: new Date(),
+        }),
+      { name: 'githubRequestReinstatedSync' },
+    );
+    if (connectionId !== null) {
+      await this.workflows.syncConnection({ connectionId });
     }
   }
 

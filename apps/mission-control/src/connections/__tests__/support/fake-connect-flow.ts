@@ -16,6 +16,15 @@ import { z } from 'zod';
 
 export const providerHost = 'https://forge.test';
 
+/** The fake's stand-in for a provider outage. */
+export class ProviderUnavailableError extends Error {
+  override name = 'ProviderUnavailableError';
+
+  constructor() {
+    super('The provider is unavailable');
+  }
+}
+
 const deliveryBodySchema = z
   .string()
   .transform((text, context) => {
@@ -101,7 +110,7 @@ export const acmeUserInstallation: UserInstallation = {
  * `x-event`: `installation` (the default) or `pull_request`. Its
  * installation is the body's `installation.id`, read only after the signature checks out.
  * Installations in `suspendedInstallations` read as suspended, and the next `unavailableReads`
- * installation reads fail as a provider outage would.
+ * installation reads throw `ProviderUnavailableError`, as a provider outage would.
  */
 export class FakeConnectFlow implements ConnectFlow {
   readonly refreshed: string[] = [];
@@ -183,7 +192,9 @@ export class FakeConnectFlow implements ConnectFlow {
   async getInstallation(props: {
     installationId: string;
   }): Promise<Installation> {
-    this.failIfUnavailable();
+    if (this.takeUnavailableRead()) {
+      throw new ProviderUnavailableError();
+    }
     return {
       ...acmeInstallation,
       externalId: props.installationId,
@@ -194,7 +205,9 @@ export class FakeConnectFlow implements ConnectFlow {
   async isInstallationSuspended(props: {
     installationId: string;
   }): Promise<boolean> {
-    this.failIfUnavailable();
+    if (this.takeUnavailableRead()) {
+      throw new ProviderUnavailableError();
+    }
     return this.suspendedInstallations.has(props.installationId);
   }
 
@@ -233,10 +246,11 @@ export class FakeConnectFlow implements ConnectFlow {
     };
   }
 
-  private failIfUnavailable(): void {
-    if (this.unavailableReads > 0) {
-      this.unavailableReads -= 1;
-      throw new Error('The provider is unavailable');
+  private takeUnavailableRead(): boolean {
+    if (this.unavailableReads === 0) {
+      return false;
     }
+    this.unavailableReads -= 1;
+    return true;
   }
 }
