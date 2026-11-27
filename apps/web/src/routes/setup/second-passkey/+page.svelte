@@ -30,7 +30,7 @@
   let nameForm = $state<PasskeyNameForm>();
   let continueLink = $state<HTMLAnchorElement>();
 
-  /** Mounted from the start, so a screen reader announces each change to it. */
+  /** What the always-mounted status region says: empty until a passkey is added, so a screen reader announces each change. */
   let announcement = $derived.by(() => {
     if (current.step !== 'added') return '';
     return current.named
