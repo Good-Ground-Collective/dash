@@ -4,11 +4,14 @@
   let {
     title,
     lede,
+    step,
     children,
     footer,
   }: {
     title: string;
     lede: string;
+    /** Where this screen sits in a multi-screen flow, such as "Step 1 of 4", shown above the title. */
+    step?: string;
     children: Snippet;
     footer?: Snippet;
   } = $props();
@@ -35,6 +38,9 @@
         />
       </svg>
     </span>
+    {#if step}
+      <p class="step">{step}</p>
+    {/if}
     <h1 id="auth-title">{title}</h1>
     <p class="lede">{lede}</p>
     {@render children()}
@@ -71,6 +77,12 @@
     border-radius: var(--radius-control);
     background: var(--ink);
     color: var(--surface);
+  }
+
+  .step {
+    margin-bottom: calc(var(--space-2) * -1);
+    font-size: var(--font-size-xs);
+    color: var(--ink-muted);
   }
 
   h1 {

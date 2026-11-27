@@ -7,16 +7,10 @@ import {
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
+import { SetupStub } from './setup-stub.ts';
 import { StubRequest } from './stub-request.ts';
 
 const sessionCookie = 'better-auth.session_token';
-const stubSetupToken = 'stub-setup-token';
-
-const setupBeginSchema = z.object({
-  token: z.string(),
-  name: z.string(),
-  email: z.string(),
-});
 const credentialBodySchema = z.object({
   response: z.object({ id: z.string() }),
   name: z.string().optional(),
@@ -57,12 +51,12 @@ interface StubReply {
 export class MissionControlStub {
   private readonly webOrigin: string;
   private person: StubPerson | null = null;
-  private pendingSetup: StubPerson | null = null;
   private passkeys: StubPasskey[] = [];
   private sessions = new Set<string>();
   private sessionStale = false;
   private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
+  private readonly setup = new SetupStub();
 
   constructor(props: { webOrigin: string }) {
     this.webOrigin = props.webOrigin;
@@ -120,8 +114,10 @@ export class MissionControlStub {
         return this.getSession(session);
       case '/setup/status':
         return { status: 200, body: { open: this.person === null } };
+      case '/setup/check':
+        return this.setup.check({ body, signedUp: this.person !== null });
       case '/setup/begin':
-        return this.beginSetup(body);
+        return this.setup.begin({ body, signedUp: this.person !== null });
       case '/passkey/generate-register-options':
         return this.registrationOptions(session);
       case '/passkey/verify-registration':
@@ -165,7 +161,7 @@ export class MissionControlStub {
 
   private reset(): StubReply {
     this.person = null;
-    this.pendingSetup = null;
+    this.setup.reset();
     this.passkeys = [];
     this.sessions = new Set();
     this.sessionStale = false;
@@ -195,22 +191,8 @@ export class MissionControlStub {
     };
   }
 
-  private beginSetup(body: string): StubReply {
-    const input = setupBeginSchema.parse(JSON.parse(body || '{}'));
-    if (this.person !== null) return this.fail(403, 'SETUP_CLOSED');
-    if (input.token !== stubSetupToken) {
-      return this.fail(401, 'SETUP_TOKEN_REJECTED');
-    }
-    this.pendingSetup = {
-      id: randomUUID(),
-      name: input.name,
-      email: input.email,
-    };
-    return { status: 200, body: { enrolment: 'setup-enrolment:stub' } };
-  }
-
   private registrationOptions(session: string | null): StubReply {
-    const person = session === null ? this.pendingSetup : this.person;
+    const person = session === null ? this.setup.pending : this.person;
     if (person === null) return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
     return {
       status: 200,
@@ -239,7 +221,7 @@ export class MissionControlStub {
 
   private register(props: { session: string | null; body: string }): StubReply {
     const input = credentialBodySchema.parse(JSON.parse(props.body || '{}'));
-    const signedUp = props.session === null ? this.pendingSetup : null;
+    const signedUp = props.session === null ? this.setup.pending : null;
     if (props.session === null && signedUp === null) {
       return this.fail(401, 'PASSKEY_ENROLMENT_REJECTED');
     }
@@ -255,7 +237,7 @@ export class MissionControlStub {
     if (signedUp === null) return { status: 200, body: passkey };
 
     this.person = signedUp;
-    this.pendingSetup = null;
+    this.setup.reset();
     return { ...this.newSession(), body: passkey };
   }
 

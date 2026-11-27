@@ -14,6 +14,9 @@ import { principalKindSchema } from '#src/auth/contracts/principal.ts';
 import {
   type SetupBegin,
   setupBeginSchema,
+  type SetupCheck,
+  type SetupChecked,
+  setupCheckSchema,
   type SetupEnrolment,
   type SetupGrant,
   setupGrantSchema,
@@ -33,6 +36,9 @@ const enrolmentPrefix = 'setup-enrolment:';
 const enrolmentLifetimeMilliseconds = 10 * 60 * 1000;
 /** The only value `setup_token.slot` accepts, so at most one token exists at a time. */
 const tokenSlot = 'first-person';
+/** The endpoints that take a setup token, held to Better Auth's sign-in limit so the check can't be used to guess tokens quickly. */
+const tokenPaths = new Set(['/setup/check', '/setup/begin']);
+const tokenRateLimit = { window: 10, max: 3 };
 
 interface StoredSetupToken {
   id: string;
@@ -40,14 +46,15 @@ interface StoredSetupToken {
 }
 
 export interface Setup extends PasskeyEnrolmentSource {
-  /** Stores the token hash and serves `GET /setup/status` and `POST /setup/begin`. */
+  /** Stores the token hash and serves `GET /setup/status`, `POST /setup/check` and `POST /setup/begin`. */
   readonly plugin: BetterAuthPlugin;
   /** Run at boot. While nobody has signed up, replaces the token and returns the new one, to log once. Otherwise clears any leftover and returns `null`. The token table holds one row, so racing boots leave one token, logged by the boot that stored it. */
   issue(props: { context: AuthContext }): Promise<string | null>;
 }
 
 /**
- * Bootstraps the first person. Only the token's hash is stored. Beginning setup trades the token
+ * Bootstraps the first person. Only the token's hash is stored. Checking the token answers whether
+ * it's the current one without spending it. Beginning setup trades the token
  * for a short-lived enrolment, which the passkey registration then spends: in one transaction it
  * deletes the token, creates the person and stores the passkey. Every step refuses once anyone
  * has signed up.
@@ -67,11 +74,28 @@ export class TokenSetup implements Setup {
           },
         },
       },
+      rateLimit: [
+        {
+          pathMatcher: (path) => tokenPaths.has(path),
+          ...tokenRateLimit,
+        },
+      ],
       endpoints: {
         setupStatus: createAuthEndpoint(
           '/setup/status',
           { method: 'GET' },
           async (context) => context.json(await this.status(context.context)),
+        ),
+        checkSetup: createAuthEndpoint(
+          '/setup/check',
+          { method: 'POST', body: setupCheckSchema },
+          async (context) =>
+            context.json(
+              await this.check({
+                context: context.context,
+                input: context.body,
+              }),
+            ),
         ),
         beginSetup: createAuthEndpoint(
           '/setup/begin',
@@ -193,6 +217,18 @@ export class TokenSetup implements Setup {
       return true;
     });
     return issued ? token : null;
+  }
+
+  private async check(props: {
+    context: AuthContext;
+    input: SetupCheck;
+  }): Promise<SetupChecked> {
+    const input = setupCheckSchema.parse(props.input);
+    await this.assertOpen({
+      adapter: props.context.adapter,
+      tokenHash: this.hash(input.token),
+    });
+    return { valid: true };
   }
 
   private async begin(props: {

@@ -105,6 +105,41 @@ class Harness {
   }
 }
 
+describe('HttpPasskeyAuth setup token check', () => {
+  it('checks the token alone, without starting a ceremony', async () => {
+    const harness = new Harness({
+      answers: {
+        '/api/auth/setup/check': () => Response.json({ valid: true }),
+      },
+    });
+
+    await harness.auth.checkSetupToken({ token: 'token' });
+
+    expect(harness.missionControl.calls).toEqual([
+      {
+        url: '/api/auth/setup/check',
+        method: 'POST',
+        body: '{"token":"token"}',
+        credentials: 'include',
+      },
+    ]);
+    expect(harness.ceremonies.seen).toEqual([]);
+  });
+
+  it('reports a rejected token from the check with Mission Control’s code', async () => {
+    const harness = new Harness({
+      answers: {
+        '/api/auth/setup/check': () =>
+          Response.json({ code: 'SETUP_TOKEN_REJECTED' }, { status: 401 }),
+      },
+    });
+
+    await expect(
+      harness.auth.checkSetupToken({ token: 'guess' }),
+    ).rejects.toMatchObject({ code: 'SETUP_TOKEN_REJECTED', status: 401 });
+  });
+});
+
 describe('HttpPasskeyAuth setup', () => {
   it('trades the token for an enrolment and registers with it, signing in', async () => {
     const harness = new Harness({

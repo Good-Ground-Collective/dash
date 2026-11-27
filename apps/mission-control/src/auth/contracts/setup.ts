@@ -26,6 +26,20 @@ export const setupBeginSchema = z.object({
 
 export type SetupBegin = z.input<typeof setupBeginSchema>;
 
+export const setupCheckSchema = setupBeginSchema.pick({ token: true });
+
+export type SetupCheck = z.input<typeof setupCheckSchema>;
+
+export const setupCheckedSchema = z.object({
+  valid: z
+    .literal(true)
+    .describe(
+      'The token is the current one. Checking leaves it unspent; a rejected token answers an error instead.',
+    ),
+});
+
+export type SetupChecked = z.infer<typeof setupCheckedSchema>;
+
 export const setupEnrolmentSchema = z.object({
   enrolment: z
     .string()

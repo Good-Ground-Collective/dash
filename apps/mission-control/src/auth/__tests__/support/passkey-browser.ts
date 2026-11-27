@@ -33,6 +33,11 @@ export class PasskeyBrowser {
     });
   }
 
+  /** Checks a setup token without spending it. */
+  async checkSetup(props: { token: string }): Promise<Response> {
+    return this.post('/setup/check', JSON.stringify({ token: props.token }));
+  }
+
   /** Starts setup and returns the enrolment, or the failed response. */
   async beginSetup(props: {
     token: string;
