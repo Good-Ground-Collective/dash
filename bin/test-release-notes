@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+// Renders release notes through semantic-release's own notes generator with
+// the repo's preset, so a preset/writer version mismatch fails CI before it
+// reaches the release job on main. Usage: bin/test-release-notes
+import { createRequire } from 'node:module';
+
+const fromRoot = createRequire(`${process.cwd()}/package.json`);
+const fromSemanticRelease = createRequire(fromRoot.resolve('semantic-release'));
+const generatorPath = fromSemanticRelease.resolve(
+  '@semantic-release/release-notes-generator',
+);
+const { generateNotes } = await import(generatorPath);
+const { release } = fromRoot('./package.json');
+const [, config] = release.plugins.find(
+  (plugin) =>
+    Array.isArray(plugin) &&
+    plugin[0] === '@semantic-release/release-notes-generator',
+);
+
+const notes = await generateNotes(config, {
+  cwd: process.cwd(),
+  options: { repositoryUrl: 'https://github.com/Good-Ground-Collective/dash' },
+  lastRelease: {},
+  nextRelease: { version: '1.0.0', gitTag: 'v1.0.0' },
+  commits: [
+    {
+      hash: '0000000',
+      message: 'feat(ci): sample feature',
+      subject: 'feat(ci): sample feature',
+      body: '',
+      committerDate: new Date().toISOString(),
+    },
+  ],
+  logger: console,
+});
+
+if (!notes.includes('sample feature')) {
+  console.error('release notes did not render the sample commit');
+  process.exit(1);
+}
+console.log('ok: release notes render');

@@ -51,6 +51,7 @@ jobs:
       - run: corepack enable
 
       - run: pnpm install --frozen-lockfile
+      - run: bin/test-release-notes
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

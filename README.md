@@ -206,7 +206,7 @@ Mission Control migrates its database as the container boots, before it listens.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org), since they decide the next version.
 
-Dependabot updates npm packages and GitHub Actions weekly. To resolve preflight it reads GitHub Packages with the `DEPENDABOT_PACKAGES_TOKEN` Dependabot secret, a token with `read:packages`.
+Dependabot updates npm packages and GitHub Actions weekly. It skips major updates of `conventional-changelog-conventionalcommits`, because 10.x needs a newer changelog writer than semantic-release's notes generator ships; `bin/test-release-notes`, run in `verify`, fails if the two drift apart again. To resolve preflight it reads GitHub Packages with the `DEPENDABOT_PACKAGES_TOKEN` Dependabot secret, a token with `read:packages`.
 
 ## Tickets
 
