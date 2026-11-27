@@ -6,7 +6,7 @@ import {
 } from 'node:http';
 import { z } from 'zod';
 import { AppearanceStub } from './appearance-stub.ts';
-import { GithubStub } from './github-stub.ts';
+import { GithubStub } from './github/github-stub.ts';
 import { OnboardingStub } from './onboarding-stub.ts';
 import { PasskeysStub } from './passkeys-stub.ts';
 import { RecoveryCodesStub } from './recovery-codes-stub.ts';

@@ -106,7 +106,9 @@ test('the card goes away once everything is done', async () => {
   await page.goto('/');
 
   await expect(Card.region()).toHaveCount(0);
-  await expect(page.getByText('Nothing here yet')).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'GitHub', exact: true }),
+  ).toBeVisible();
 });
 
 test('a signed-out visitor sees no card', async () => {

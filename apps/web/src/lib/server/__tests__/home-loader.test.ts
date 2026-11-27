@@ -18,14 +18,25 @@ const checklist = {
   ],
 };
 
+const feed = {
+  connections: [],
+  reviewRequests: [],
+  myPullRequests: [],
+  failedRuns: [],
+  assignedIssues: [],
+};
+
 class HomeVisit {
   readonly requested: string[] = [];
   private readonly viewer: Viewer | null;
-  private readonly answer: (() => Response) | undefined;
+  private readonly answers: Record<string, () => Response>;
 
-  constructor(props: { viewer: Viewer | null; answer?: () => Response }) {
+  constructor(props: {
+    viewer: Viewer | null;
+    answers?: Record<string, () => Response>;
+  }) {
     this.viewer = props.viewer;
-    this.answer = props.answer;
+    this.answers = props.answers ?? {};
   }
 
   get event(): AuthPageLoadEvent {
@@ -34,9 +45,10 @@ class HomeVisit {
       fetch: async (input) => {
         const path = new URL(String(input)).pathname;
         this.requested.push(path);
-        return path === '/onboarding/checklist' && this.answer !== undefined
-          ? this.answer()
-          : new Response('down', { status: 503 });
+        const answer = this.answers[path];
+        return answer === undefined
+          ? new Response('down', { status: 503 })
+          : answer();
       },
     };
   }
@@ -51,14 +63,36 @@ afterEach(() => {
 });
 
 describe('MissionControlHomeLoader', () => {
-  it('reads the setup checklist in one call for a signed-in person', async () => {
+  it('reads the setup checklist and the GitHub feed for a signed-in person', async () => {
     const visit = new HomeVisit({
       viewer: ada,
-      answer: () => Response.json(checklist),
+      answers: {
+        '/onboarding/checklist': () => Response.json(checklist),
+        '/integrations/github/feed': () => Response.json(feed),
+      },
     });
 
-    await expect(loader.load(visit.event)).resolves.toEqual({ checklist });
-    expect(visit.requested).toEqual(['/onboarding/checklist']);
+    await expect(loader.load(visit.event)).resolves.toEqual({
+      checklist,
+      github: { status: 'loaded', feed },
+    });
+    expect(visit.requested.toSorted()).toEqual([
+      '/integrations/github/feed',
+      '/onboarding/checklist',
+    ]);
+  });
+
+  it('keeps the checklist when only the feed fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const visit = new HomeVisit({
+      viewer: ada,
+      answers: { '/onboarding/checklist': () => Response.json(checklist) },
+    });
+
+    await expect(loader.load(visit.event)).resolves.toEqual({
+      checklist,
+      github: { status: 'failed' },
+    });
   });
 
   it('asks nothing for a signed-out visitor', async () => {
@@ -66,17 +100,19 @@ describe('MissionControlHomeLoader', () => {
 
     await expect(loader.load(visit.event)).resolves.toEqual({
       checklist: null,
+      github: null,
     });
     expect(visit.requested).toEqual([]);
   });
 
-  it('leaves the card out when Mission Control is down', async () => {
+  it('leaves the card out and marks the feed failed when Mission Control is down', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const visit = new HomeVisit({ viewer: ada });
 
     await expect(loader.load(visit.event)).resolves.toEqual({
       checklist: null,
+      github: { status: 'failed' },
     });
-    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 });
