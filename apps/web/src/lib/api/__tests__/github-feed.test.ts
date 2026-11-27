@@ -92,6 +92,8 @@ describe('HttpGithubFeed', () => {
       fetch: new RecordingFetch({ response: () => Response.json(bad) }).fetch,
     });
 
-    await expect(feed.get()).rejects.toThrow();
+    await expect(feed.get()).rejects.toMatchObject({
+      issues: [expect.objectContaining({ path: ['assignedIssues', 0, 'url'] })],
+    });
   });
 });
