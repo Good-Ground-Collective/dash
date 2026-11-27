@@ -123,6 +123,22 @@ describe('GithubReconcile choosing connections', () => {
     ]);
   });
 
+  it('reaches an owned connection behind more guest connections than a run reads', async () => {
+    const harness = await Reconciling.linked();
+    for (let index = 0; index < 60; index += 1) {
+      harness.records.add(
+        GithubFeedFixtures.target({
+          connectionId: `30000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          kind: 'guest',
+        }),
+      );
+    }
+
+    expect(await harness.module.reconcile.dueConnectionIds()).toEqual([
+      ownedId,
+    ]);
+  });
+
   it('lists only the connections a person made', async () => {
     const harness = await Reconciling.linked();
     harness.records.add(

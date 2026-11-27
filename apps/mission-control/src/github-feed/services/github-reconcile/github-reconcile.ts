@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
-import type {
-  GithubSource,
-  GithubSyncTarget,
-} from '#src/github-feed/contracts/github-source.ts';
+import type { ConnectionKind } from '#src/github-feed/contracts/github-records.ts';
+import type { GithubSource } from '#src/github-feed/contracts/github-source.ts';
 import {
   InstallationSuspendedError,
   ViewerNotLinkedError,
@@ -43,22 +41,25 @@ export class GithubReconcile {
 
   async dueConnectionIds(): Promise<string[]> {
     const targets = await this.reader.syncTargets({
+      kinds: this.kinds(),
       limit: maxConnectionsPerRun,
     });
-    return this.readable(targets);
+    return targets.map(({ connectionId }) => connectionId);
   }
 
   async connectionIdsOf(props: { userId: string }): Promise<string[]> {
     const targets = await this.reader.syncTargets({
       connectedBy: props.userId,
+      kinds: this.kinds(),
       limit: maxConnectionsPerPerson,
     });
-    return this.readable(targets);
+    return targets.map(({ connectionId }) => connectionId);
   }
 
   async syncConnection(props: { connectionId: string }): Promise<SyncOutcome> {
     const [target] = await this.reader.syncTargets({
       connectionId: props.connectionId,
+      kinds: this.kinds(),
       limit: 1,
     });
     const source = this.sources.find(({ kind }) => kind === target?.kind);
@@ -76,6 +77,7 @@ export class GithubReconcile {
         connectionId: target.connectionId,
         viewerLogin: snapshot.viewerLogin,
         records: snapshot.records,
+        truncated: snapshot.truncated,
         syncedAt: attemptedAt,
       });
       return { status: applied ? 'synced' : 'stale' };
@@ -91,10 +93,8 @@ export class GithubReconcile {
     }
   }
 
-  private readable(targets: readonly GithubSyncTarget[]): string[] {
-    return targets
-      .filter((target) => this.sources.some(({ kind }) => kind === target.kind))
-      .map((target) => target.connectionId);
+  private kinds(): ConnectionKind[] {
+    return this.sources.map(({ kind }) => kind);
   }
 
   /** What the feed shows. Only Dash's own messages pass through; a provider's error could carry request details. */

@@ -81,24 +81,6 @@ describe('GET /integrations/github/feed', () => {
     expect(response.json()).toMatchObject({ code: 'SIGN_IN_REQUIRED' });
   });
 
-  it('answers the four groups and the connection’s freshness', async () => {
-    const feed = await Served.feedOf(await Served.synced(), adaId);
-
-    expect(feed.connections).toEqual([
-      {
-        id: ownedId,
-        accountLogin: 'acme',
-        kind: 'owned',
-        lastSyncedAt: fixedNow.toISOString(),
-        lastError: null,
-      },
-    ]);
-    expect(feed.reviewRequests.map(({ id }) => id)).toEqual(['PR_1']);
-    expect(feed.myPullRequests.map(({ id }) => id)).toEqual(['PR_2']);
-    expect(feed.failedRuns.map(({ id }) => id)).toEqual(['WFR_9']);
-    expect(feed.assignedIssues.map(({ id }) => id)).toEqual(['I_5']);
-  });
-
   it('gives every item its link, repository and connection', async () => {
     const feed = await Served.feedOf(await Served.synced(), adaId);
 
@@ -159,6 +141,7 @@ describe('GET /integrations/github/feed across connection kinds', () => {
         activity: GithubFeedFixtures.activity(),
         viewerLogin: 'ada',
       }),
+      truncated: false,
       syncedAt: fixedNow,
     });
 
@@ -169,5 +152,46 @@ describe('GET /integrations/github/feed across connection kinds', () => {
     ]);
     expect(guest.failedRuns[0]?.connectionId).toBe(guestId);
     expect(Served.comparable(guest)).toEqual(Served.comparable(owned));
+  });
+});
+
+describe('GET /integrations/github/feed connection freshness', () => {
+  it('answers the four groups and the connection’s freshness', async () => {
+    const feed = await Served.feedOf(await Served.synced(), adaId);
+
+    expect(feed.connections).toEqual([
+      {
+        id: ownedId,
+        accountLogin: 'acme',
+        kind: 'owned',
+        lastSyncedAt: fixedNow.toISOString(),
+        lastError: null,
+        truncated: false,
+      },
+    ]);
+    expect(feed.reviewRequests.map(({ id }) => id)).toEqual(['PR_1']);
+    expect(feed.myPullRequests.map(({ id }) => id)).toEqual(['PR_2']);
+    expect(feed.failedRuns.map(({ id }) => id)).toEqual(['WFR_9']);
+    expect(feed.assignedIssues.map(({ id }) => id)).toEqual(['I_5']);
+  });
+
+  it('says when the last read was cut short by a cap', async () => {
+    const harness = await new GithubFeedHarness().link({
+      userId: adaId,
+      login: 'ada',
+    });
+    running.push(harness);
+    harness.records.add(GithubFeedFixtures.target());
+    harness.feed.activity = {
+      ...GithubFeedFixtures.activity(),
+      truncated: true,
+    };
+    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
+
+    const feed = await Served.feedOf(harness, adaId);
+
+    expect(feed.connections).toEqual([
+      expect.objectContaining({ id: ownedId, truncated: true }),
+    ]);
   });
 });

@@ -1,4 +1,7 @@
-import type { GithubRecords } from '#src/github-feed/contracts/github-records.ts';
+import type {
+  ConnectionKind,
+  GithubRecords,
+} from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.ts';
 import type {
   ConnectionRecords,
@@ -11,6 +14,7 @@ interface StoredSync {
   lastSyncedAt: Date | null;
   lastAttemptedAt: Date;
   lastError: string | null;
+  truncated: boolean | null;
   records: GithubRecords | null;
 }
 
@@ -29,6 +33,7 @@ export class InMemoryGithubRecords
   async syncTargets(props: {
     connectionId?: string;
     connectedBy?: string;
+    kinds: readonly ConnectionKind[];
     limit: number;
   }): Promise<GithubSyncTarget[]> {
     const attempted = (target: GithubSyncTarget) =>
@@ -39,7 +44,8 @@ export class InMemoryGithubRecords
           (props.connectionId === undefined ||
             target.connectionId === props.connectionId) &&
           (props.connectedBy === undefined ||
-            target.connectedBy === props.connectedBy),
+            target.connectedBy === props.connectedBy) &&
+          props.kinds.includes(target.kind),
       )
       .toSorted((left, right) => attempted(left) - attempted(right))
       .slice(0, props.limit);
@@ -59,6 +65,7 @@ export class InMemoryGithubRecords
           viewerLogin: sync?.viewerLogin ?? null,
           lastSyncedAt: sync?.lastSyncedAt?.toISOString() ?? null,
           lastError: sync?.lastError ?? null,
+          truncated: sync?.truncated ?? null,
           records: sync?.records ?? InMemoryGithubRecords.empty(),
         };
       });
@@ -68,6 +75,7 @@ export class InMemoryGithubRecords
     connectionId: string;
     viewerLogin: string;
     records: GithubRecords;
+    truncated: boolean;
     syncedAt: Date;
   }): Promise<{ applied: boolean }> {
     const stored = this.syncs.get(props.connectionId);
@@ -83,6 +91,7 @@ export class InMemoryGithubRecords
       lastSyncedAt: props.syncedAt,
       lastAttemptedAt: props.syncedAt,
       lastError: null,
+      truncated: props.truncated,
       records: props.records,
     });
     return { applied: true };
@@ -94,11 +103,23 @@ export class InMemoryGithubRecords
     attemptedAt: Date;
   }): Promise<void> {
     const stored = this.syncs.get(props.connectionId);
+    if (
+      stored?.lastSyncedAt !== null &&
+      stored?.lastSyncedAt !== undefined &&
+      stored.lastSyncedAt > props.attemptedAt
+    ) {
+      return;
+    }
+    const attemptedAt = Math.max(
+      stored?.lastAttemptedAt.getTime() ?? 0,
+      props.attemptedAt.getTime(),
+    );
     this.syncs.set(props.connectionId, {
       viewerLogin: stored?.viewerLogin ?? null,
       lastSyncedAt: stored?.lastSyncedAt ?? null,
-      lastAttemptedAt: props.attemptedAt,
+      lastAttemptedAt: new Date(attemptedAt),
       lastError: props.error,
+      truncated: stored?.truncated ?? null,
       records: stored?.records ?? null,
     });
   }

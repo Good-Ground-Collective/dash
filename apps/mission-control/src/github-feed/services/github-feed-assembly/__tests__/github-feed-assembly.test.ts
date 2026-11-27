@@ -18,6 +18,7 @@ class Connections {
       viewerLogin: 'ada',
       lastSyncedAt: '2026-11-26T12:00:00.000Z',
       lastError: null,
+      truncated: false,
       records: ActivityRecords.from({
         activity: GithubFeedFixtures.activity(),
         viewerLogin: 'ada',

@@ -75,4 +75,12 @@ describe('OwnedGithubSource', () => {
       source.read(GithubFeedFixtures.target({ installationId: null })),
     ).rejects.toThrow(ConnectionNotReadableError);
   });
+
+  it('names the missing connector when nobody made the connection', async () => {
+    const { source } = await new Source().linked('ada');
+
+    await expect(
+      source.read(GithubFeedFixtures.target({ connectedBy: null })),
+    ).rejects.toThrow(/no connecting person/u);
+  });
 });
