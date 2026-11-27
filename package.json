@@ -19,12 +19,42 @@
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
+    "conventional-changelog-conventionalcommits": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "prettier-plugin-svelte": "catalog:",
+    "semantic-release": "catalog:",
     "svelte": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "tagFormat": "v${version}",
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      [
+        "@semantic-release/release-notes-generator",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "successComment": false,
+          "failComment": false,
+          "releasedLabels": false
+        }
+      ]
+    ]
   }
 }
