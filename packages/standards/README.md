@@ -95,21 +95,21 @@ In 1.45.0 the core registry marks the GenAI attributes as moved to the [semantic
 
 ### Mapping
 
-| Attribute                                  | Stability   | What it means for Dash                                        |
-| ------------------------------------------ | ----------- | ------------------------------------------------------------- |
-| `gen_ai.provider.name`                     | Development | The model provider, such as `anthropic` or `openai`           |
-| `gen_ai.request.model`                     | Development | The model an agent asked for                                  |
-| `gen_ai.response.model`                    | Development | The model that answered, which can differ from the request    |
-| `gen_ai.operation.name`                    | Development | What the agent was doing, such as `chat` or `execute_tool`    |
-| `gen_ai.conversation.id`                   | Development | The harness session, such as a Claude Code session ID         |
-| `gen_ai.agent.id`                          | Development | The agent's unique ID                                         |
-| `gen_ai.agent.name`                        | Development | The agent's human-readable name                               |
-| `gen_ai.tool.name`                         | Development | The tool an agent called                                      |
-| `gen_ai.usage.input_tokens`                | Development | Input tokens, including cached ones                           |
-| `gen_ai.usage.output_tokens`               | Development | Output tokens                                                 |
-| `gen_ai.usage.cache_read.input_tokens`     | Development | Input tokens served from the provider's prompt cache          |
-| `gen_ai.usage.cache_creation.input_tokens` | Development | Input tokens written to the provider's prompt cache           |
-| `dash.usage.cost_usd`                      | Dash        | What the usage cost, in US dollars; semconv has no cost field |
+| Attribute                                  | Stability in semantic-conventions-genai | What it means for Dash                                        |
+| ------------------------------------------ | --------------------------------------- | ------------------------------------------------------------- |
+| `gen_ai.provider.name`                     | Development                             | The model provider, such as `anthropic` or `openai`           |
+| `gen_ai.request.model`                     | Development                             | The model an agent asked for                                  |
+| `gen_ai.response.model`                    | Development                             | The model that answered, which can differ from the request    |
+| `gen_ai.operation.name`                    | Development                             | What the agent was doing, such as `chat` or `execute_tool`    |
+| `gen_ai.conversation.id`                   | Development                             | The harness session, such as a Claude Code session ID         |
+| `gen_ai.agent.id`                          | Development                             | The agent's unique ID                                         |
+| `gen_ai.agent.name`                        | Development                             | The agent's human-readable name                               |
+| `gen_ai.tool.name`                         | Development                             | The tool an agent called                                      |
+| `gen_ai.usage.input_tokens`                | Development                             | Input tokens, including cached ones                           |
+| `gen_ai.usage.output_tokens`               | Development                             | Output tokens                                                 |
+| `gen_ai.usage.cache_read.input_tokens`     | Development                             | Input tokens served from the provider's prompt cache          |
+| `gen_ai.usage.cache_creation.input_tokens` | Development                             | Input tokens written to the provider's prompt cache           |
+| `dash.usage.cost_usd`                      | Dash                                    | What the usage cost, in US dollars; semconv has no cost field |
 
 What gets reported, and when, belongs to the heartbeat and telemetry discussions.
 
