@@ -24,4 +24,7 @@ Two tracks run side by side. Design doesn't wait on the stack, because mocks don
 | ✓ | 11 Objectives: concluded in #22 → #52–#55 (initiative → epic → ticket as a read-only lens over GitHub Projects and sub-issues, Jira later; providers behind `integrations/core` interfaces) | |
 | ✓ | 03 Onboarding: concluded in #3 → epic #70 with #71–#77 (bootstrap only, required recovery codes, skippable GitHub connect for your account and every org, a setup checklist on the empty home) | |
 | ✓ | 07 Communication standards: concluded in #7 → epic #78 with #80–#84 (`@good-ground/agentic-communication-standards` on npm; Zod 4 → JSON Schema → Go with a drift check; `schemaVersion` on every message; OpenTelemetry GenAI attribute names) | |
-| later | [08 Agent heartbeats](./08-agent-heartbeats.md) → [09 Benches and the daemon](./09-benches-and-daemon.md) | Slices 2 and 3. Start once slice 1 is building. |
+| ✓ | 08 Agent heartbeats: concluded in #8 → epic #87 with #88–#99 (Claude Code hooks writing a JSONL outbox and relaying it, dedupe on `(sessionId, seq)`, usage from OTLP, stale after 10 minutes and lost after 30, Needs you plus web push) | |
+| ✓ | 09 Benches and the daemon: concluded in #9 → epic #100 with #15 and #101–#110 (device-code pairing approved with a passkey and a keychain-held key, watch list pulled from Dash, no provider secrets in Dash, harness updates from a fixed allowlist) | |
+
+No discussions are open. Start a new file here when the next decision needs a working session.
