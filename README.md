@@ -138,10 +138,10 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
 
 1. `shellcheck`, `verify` (including every end-to-end test) and `tofu` must all pass.
 2. `release` runs [semantic-release](https://semantic-release.gitbook.io) over the conventional commits since the last `vX.Y.Z` tag. `feat` cuts a minor, `fix` and `perf` a patch, and a `!` or `BREAKING CHANGE` footer a major. It pushes the tag and a GitHub release with notes, and commits nothing back to `main`. The whole repository shares one version. Commits that need no release (`docs`, `chore`, `test` and so on) stop the pipeline here.
-3. `images` builds, scans and pushes both images with `bin/image --push --tag vX.Y.Z`, using the job's `GITHUB_TOKEN`.
+3. `images` runs in the `production` environment, so its scan can check the production secrets, and builds, scans and pushes both images with `bin/image --push --tag vX.Y.Z`, using the job's `GITHUB_TOKEN`.
 4. `deploy` runs in the `production` environment, one at a time (`concurrency: production`, never cancelled). It joins the tailnet as an ephemeral `tag:ci` node, deploys Mission Control first (it migrates at boot), then web, both with `--skip-push --version vX.Y.Z`, then checks both `/healthz` endpoints. The box logs in to GHCR with the job's `GITHUB_TOKEN`, which expires when the job ends.
 
-Until the deploy secrets below exist, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on.
+`images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. Until it also holds the Tailscale and SSH secrets below, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on.
 
 ### One-time deploy setup
 
@@ -163,15 +163,18 @@ Until the deploy secrets below exist, `deploy` posts a notice and skips; release
 
    The prefix must match `deploy_key_options` in `infra/tofu/main.tf`. Also add the public key to `deploy_ssh_public_keys` in `infra/tofu/variables.tf`, so a rebuilt `dash-app` gets it from cloud-init with those options. Running boxes ignore the change, so no apply is needed.
 
-5. Under Settings, Environments, create `production` and limit its deployment branches to `main`. Give it three secrets, then delete the private key file. Deploys also read the existing `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` repository secrets, and `images` fails without them, because its scan must prove neither leaked into an image:
+5. Under Settings, Environments, create `production` and limit its deployment branches to `main`. Give it all five secrets the pipeline reads, then delete the private key file. `images` runs in the environment too and fails without the two `DASH_*` secrets, because its scan must prove neither leaked into an image:
 
    ```sh
    gh secret set TS_OAUTH_CLIENT_ID --env production
    gh secret set TS_OAUTH_SECRET --env production
    gh secret set DASH_DEPLOY_SSH_KEY --env production < dash-ci-deploy
+   gh secret set DASH_BETTER_AUTH_SECRET --env production
+   gh secret set DASH_DATABASE_URL --env production
    ```
 
 6. In each GHCR package's settings, under Manage Actions access, give this repository the Write role, so the workflow's `GITHUB_TOKEN` can push and pull.
+7. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
 
 ### Deploying by hand
 

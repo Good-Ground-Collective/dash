@@ -156,6 +156,7 @@ jobs:
     if: needs.release.outputs.version != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: production
     permissions:
       contents: read
       packages: write
@@ -169,7 +170,7 @@ jobs:
 
       - run: |
           if [[ -z $DASH_BETTER_AUTH_SECRET || -z $DASH_DATABASE_URL ]]; then
-            echo "::error::DASH_BETTER_AUTH_SECRET and DASH_DATABASE_URL must be set so the image scan covers them"
+            echo "::error::The production environment needs DASH_BETTER_AUTH_SECRET and DASH_DATABASE_URL so the image scan covers them. See README.md, Deploys."
             exit 1
           fi
           bin/image "$APP" --push --tag "$VERSION"
