@@ -4,6 +4,7 @@ import {
   type ShellLoadEvent,
 } from '#lib/server/shell-loader.ts';
 import type { ThemePreference } from '#lib/theme/theme-preference-reader.ts';
+import { RecordingCookies } from '#lib/theme/__tests__/support/recording-cookies.ts';
 
 class CountingFetch {
   calls = 0;
@@ -16,20 +17,6 @@ class CountingFetch {
   readonly fetch: typeof fetch = async () => {
     this.calls += 1;
     return this.response();
-  };
-}
-
-class RecordingCookies {
-  readonly written = new Map<string, string>();
-  private readonly values: Map<string, string>;
-
-  constructor(values: Record<string, string> = {}) {
-    this.values = new Map(Object.entries(values));
-  }
-
-  readonly get = (name: string): string | undefined => this.values.get(name);
-  readonly set = (name: string, value: string): void => {
-    this.written.set(name, value);
   };
 }
 
@@ -101,7 +88,7 @@ describe('ShellLoader appearance', () => {
           },
         }),
     });
-    const cookies = new RecordingCookies({ 'dash-mode': 'light' });
+    const cookies = new RecordingCookies({ values: { 'dash-mode': 'light' } });
     const event = loadEvent({
       fetch: counter.fetch,
       hasSessionCookie: true,
