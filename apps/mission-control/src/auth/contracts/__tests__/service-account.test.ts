@@ -32,3 +32,26 @@ describe('newServiceAccountSchema identifiers', () => {
     },
   );
 });
+
+describe('newServiceAccountSchema hues', () => {
+  it.each(['#ff0000', 'rgb(255 0 0)', 'red'])(
+    'refuses %s, because a character stores a hue name',
+    (hue) => {
+      const parsed = newServiceAccountSchema.safeParse({
+        ...ciAgent,
+        agentName: 'rook',
+        hue,
+      });
+      expect(parsed.success).toBe(false);
+    },
+  );
+
+  it('accepts a hue name', () => {
+    const parsed = newServiceAccountSchema.safeParse({
+      ...ciAgent,
+      agentName: 'rook',
+      hue: 'violet',
+    });
+    expect(parsed.success).toBe(true);
+  });
+});

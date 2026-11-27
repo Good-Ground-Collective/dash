@@ -4,6 +4,10 @@ import {
   apiKeyScopeSchema,
   storedApiKeyScopesSchema,
 } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+import {
+  characterHueSchema,
+  storedCharacterHueSchema,
+} from '#src/auth/definitions/character-hues/character-hues.ts';
 
 export const principalKindSchema = z
   .enum(['user', 'service'])
@@ -33,6 +37,9 @@ export const newServicePrincipalSchema = z
       .optional()
       .describe('Set for an agent account. Unset for a bench account.'),
     description: z.string().trim().min(1),
+    hue: characterHueSchema
+      .optional()
+      .describe('Unset picks one from the bench id or agent name.'),
     scopes: z
       .array(apiKeyScopeSchema)
       .default([])
@@ -58,6 +65,7 @@ export const servicePrincipalSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  hue: storedCharacterHueSchema,
   scopes: storedApiKeyScopesSchema,
   createdAt: z.iso.datetime({ offset: true }),
 });

@@ -238,7 +238,7 @@
     padding: var(--space-1) 0.375rem;
     border-radius: var(--radius-control);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-size-2xs);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     color: var(--ink-muted);

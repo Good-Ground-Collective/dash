@@ -1,7 +1,7 @@
 <script lang="ts">
   import '@fontsource-variable/geist';
   import '@fontsource-variable/geist-mono';
-  import '#lib/theme/characters.css';
+  import '#lib/theme/themes/characters.css';
   import '#lib/theme/base.css';
   import { onMount } from 'svelte';
   import { API_BASE_URL } from '$app/env/public';
@@ -10,7 +10,7 @@
     MissionControlSessionRenewer,
     type SessionRenewer,
   } from '#lib/session/session-renewer.ts';
-  import AppShell from '#lib/shell/AppShell.svelte';
+  import ThemeRoot from '#lib/theme-ui/ThemeRoot.svelte';
   import type { LayoutProps } from './$types';
 
   let { data, children }: LayoutProps = $props();
@@ -27,6 +27,6 @@
   });
 </script>
 
-<AppShell viewer={data.viewer} build={data.build}>
+<ThemeRoot saved={data.appearance} viewer={data.viewer} build={data.build}>
   {@render children()}
-</AppShell>
+</ThemeRoot>

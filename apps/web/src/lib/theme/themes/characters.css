@@ -4,6 +4,7 @@
   --font-body: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-body);
   --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --font-size-2xs: 0.6875rem;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.8125rem;
   --font-size-md: 0.875rem;
@@ -21,6 +22,9 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
   --space-7: 3rem;
+  --density-panel: var(--space-5);
+  --density-row-block: var(--space-3);
+  --density-row-inline: var(--space-4);
   --content-width: 72rem;
   --touch-target: 44px;
   --radius-panel: 14px;
@@ -39,6 +43,9 @@
   --ok: #1b7046;
   --warn: #a14c06;
   --bad: #b42318;
+  --ok-surface: #e3f3e9;
+  --warn-surface: #fbeedd;
+  --bad-surface: #fbe4e1;
   --focus-ring: var(--ink);
   --char-amber-bg: #fde9b8;
   --char-amber-fg: #7a4e00;
@@ -73,6 +80,9 @@
   --ok: #6bd39c;
   --warn: #f2ae6b;
   --bad: #ff9a8b;
+  --ok-surface: #1d3328;
+  --warn-surface: #3a2c1c;
+  --bad-surface: #3d2422;
   --char-amber-bg: #4a3810;
   --char-amber-fg: #f7cf73;
   --char-green-bg: #173d2b;

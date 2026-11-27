@@ -7,8 +7,16 @@ const serviceAccountsPort = 4321;
 const serviceAccountsStubPort = 59997;
 const serviceAccountsWebUrl = `http://localhost:${serviceAccountsPort}`;
 const serviceAccountsStubUrl = `http://localhost:${serviceAccountsStubPort}`;
-const accountMenuPort = 4322;
-const accountMenuStubPort = 59996;
+const appearancePort = 4322;
+const appearanceStubPort = 59996;
+const appearanceWebUrl = `http://localhost:${appearancePort}`;
+const appearanceStubUrl = `http://localhost:${appearanceStubPort}`;
+const visualPort = 4323;
+const visualStubPort = 59995;
+const visualWebUrl = `http://localhost:${visualPort}`;
+const visualStubUrl = `http://localhost:${visualStubPort}`;
+const accountMenuPort = 4324;
+const accountMenuStubPort = 59994;
 const accountMenuWebUrl = `http://localhost:${accountMenuPort}`;
 const accountMenuStubUrl = `http://localhost:${accountMenuStubPort}`;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
@@ -27,6 +35,8 @@ export default defineConfig({
       testIgnore: [
         '**/passkeys.e2e.test.ts',
         '**/service-accounts.e2e.test.ts',
+        '**/appearance.e2e.test.ts',
+        '**/visual.e2e.test.ts',
         '**/account-menu.e2e.test.ts',
       ],
       use: {
@@ -49,6 +59,18 @@ export default defineConfig({
       testMatch: '**/service-accounts.e2e.test.ts',
       metadata: { missionControlUrl: serviceAccountsStubUrl },
       use: { ...devices['Desktop Chrome'], baseURL: serviceAccountsWebUrl },
+    },
+    {
+      name: 'appearance',
+      testMatch: '**/appearance.e2e.test.ts',
+      metadata: { missionControlUrl: appearanceStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: appearanceWebUrl },
+    },
+    {
+      name: 'visual',
+      testMatch: '**/visual.e2e.test.ts',
+      metadata: { missionControlUrl: visualStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: visualWebUrl },
     },
     {
       name: 'account-menu',
@@ -110,6 +132,26 @@ export default defineConfig({
       url: `${accountMenuStubUrl}/api/auth/setup/status`,
       reuseExistingServer: false,
     },
+    ...[
+      { port: appearancePort, stubPort: appearanceStubPort },
+      { port: visualPort, stubPort: visualStubPort },
+    ].flatMap(({ port, stubPort }) => [
+      {
+        command: 'node build',
+        url: `http://localhost:${port}`,
+        reuseExistingServer: false,
+        env: {
+          HOST: 'localhost',
+          PORT: String(port),
+          API_BASE_URL: `http://localhost:${stubPort}`,
+        },
+      },
+      {
+        command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${stubPort} http://localhost:${port}`,
+        url: `http://localhost:${stubPort}/api/auth/setup/status`,
+        reuseExistingServer: false,
+      },
+    ]),
     ...(liveMissionControl === undefined
       ? [
           {

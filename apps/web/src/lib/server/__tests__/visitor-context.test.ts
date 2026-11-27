@@ -21,6 +21,8 @@ class RecordingRender {
   };
 }
 
+const lightCharacters = { theme: 'characters', mode: 'light' } as const;
+
 const visitorContext = new CookieVisitorContext({
   apiBaseUrl: 'https://api.example.test',
 });
@@ -33,6 +35,7 @@ describe('VisitorContext', () => {
     ]);
     const locals: App.Locals = {
       hasSessionCookie: false,
+      themePreference: lightCharacters,
     };
     const renderer = new RecordingRender({ contentType: 'text/html' });
 
@@ -48,7 +51,29 @@ describe('VisitorContext', () => {
     );
     expect(locals).toEqual({
       hasSessionCookie: true,
+      themePreference: { theme: 'characters', mode: 'dark' },
     });
+  });
+
+  it('renders the preference the layout settled on, not the request’s', async () => {
+    const locals: App.Locals = {
+      hasSessionCookie: true,
+      themePreference: lightCharacters,
+    };
+    let html = '';
+
+    await visitorContext.visit({
+      cookies: { get: () => undefined },
+      headers: new Headers(),
+      locals,
+      render: async (transformPageChunk) => {
+        locals.themePreference = { theme: 'characters', mode: 'dark' };
+        html = transformPageChunk({ html: '<html data-mode="%dash.mode%">' });
+        return new Response(html, { headers: { 'content-type': 'text/html' } });
+      },
+    });
+
+    expect(html).toBe('<html data-mode="dark">');
   });
 });
 
@@ -59,6 +84,7 @@ describe('VisitorContext client hints', () => {
       headers: new Headers({ 'sec-ch-prefers-color-scheme': 'dark' }),
       locals: {
         hasSessionCookie: false,
+        themePreference: lightCharacters,
       },
       render: new RecordingRender({ contentType: 'text/html; charset=utf-8' })
         .render,
@@ -81,6 +107,7 @@ describe('VisitorContext client hints', () => {
       headers: new Headers(),
       locals: {
         hasSessionCookie: false,
+        themePreference: lightCharacters,
       },
       render: new RecordingRender({ contentType: 'application/json' }).render,
     });

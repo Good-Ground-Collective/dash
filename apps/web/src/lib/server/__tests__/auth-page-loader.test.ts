@@ -10,6 +10,8 @@ const ada: Viewer = {
   id: 'u1',
   name: 'Ada Lovelace',
   email: 'ada@example.com',
+  theme: 'characters',
+  colorMode: null,
 };
 
 class PageVisit {

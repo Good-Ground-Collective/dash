@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { apiKeyScopeSchema } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+import { characterHueSchema } from '#src/auth/definitions/character-hues/character-hues.ts';
 
 /** A bench id or agent name: it appears in URLs, so it is a slug. */
 export const agentIdentifierSchema = z
@@ -30,6 +31,11 @@ const scopesSchema = z
 const accountDetailsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(500),
+  hue: characterHueSchema
+    .optional()
+    .describe(
+      'The colour Dash draws it in. Unset picks one from the bench id or agent name.',
+    ),
   scopes: scopesSchema.describe(
     'What the account’s keys may do, now and when rotated.',
   ),
@@ -93,6 +99,7 @@ export const serviceAccountSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  hue: characterHueSchema,
   scopes: z.array(apiKeyScopeSchema),
   createdAt: z.iso.datetime({ offset: true }),
   keys: z.array(apiKeySummarySchema),

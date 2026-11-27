@@ -29,7 +29,13 @@ describe('HttpMissionControl', () => {
       respond: async () =>
         Response.json({
           session: { id: 's1' },
-          user: { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com' },
+          user: {
+            id: 'u1',
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            theme: 'characters',
+            colorMode: 'dark',
+          },
         }),
     });
     const missionControl = new HttpMissionControl({
@@ -41,6 +47,8 @@ describe('HttpMissionControl', () => {
       id: 'u1',
       name: 'Ada Lovelace',
       email: 'ada@example.com',
+      theme: 'characters',
+      colorMode: 'dark',
     });
     expect(recorder.calls[0]?.url).toBe(
       'https://api.example.test/api/auth/get-session',
@@ -77,6 +85,20 @@ describe('HttpMissionControl', () => {
 });
 
 describe('HttpMissionControl failures', () => {
+  it('rejects a 200 answer whose body is not JSON, rather than reporting no viewer', async () => {
+    const recorder = new RecordingFetch({
+      respond: async () => new Response('<html>proxy</html>', { status: 200 }),
+    });
+    const missionControl = new HttpMissionControl({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    await expect(missionControl.getViewer()).rejects.toBeInstanceOf(
+      MissionControlError,
+    );
+  });
+
   it('throws a MissionControlError for a non-2xx answer', async () => {
     const recorder = new RecordingFetch({
       respond: async () => new Response('nope', { status: 503 }),

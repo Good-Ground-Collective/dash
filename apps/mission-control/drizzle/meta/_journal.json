@@ -29,6 +29,13 @@
       "when": 1795721079501,
       "tag": "0003_service_accounts_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795743341996,
+      "tag": "0004_appearance_character_hues",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reportedCharacterHueSchema } from '#lib/theme/character-hue.ts';
 
 export const apiKeyScopeSchema = z.enum(['heartbeat:write', 'telemetry:write']);
 
@@ -28,6 +29,7 @@ export const serviceAccountSchema = z.object({
   benchId: z.string().nullable(),
   agentName: z.string().nullable(),
   description: z.string(),
+  hue: reportedCharacterHueSchema,
   scopes: reportedScopesSchema.describe(
     'Every key the account is issued gets these.',
   ),
