@@ -52,6 +52,8 @@ export const appConfigSchema = z
         'Expected at least 32 characters, for example from `openssl rand -base64 32`',
       ),
     BETTER_AUTH_URL: webOriginSchema,
+    APP_VERSION: z.string().optional(),
+    APP_COMMIT: z.string().optional(),
   })
   .refine(
     (env) =>
@@ -95,6 +97,10 @@ export const appConfigSchema = z
     devWebOrigin: env.DEV_WEB_ORIGIN,
     authSecret: env.BETTER_AUTH_SECRET,
     authBaseUrl: env.BETTER_AUTH_URL,
+    build: {
+      version: env.APP_VERSION?.trim() || 'dev',
+      commit: env.APP_COMMIT?.trim() || null,
+    },
   }));
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -107,6 +113,8 @@ export class AppConfig {
   /** Set in production so the session cookie reaches the web app's server on the parent domain. Host-only elsewhere. */
   readonly authCookieDomain: string | undefined;
   readonly authSecret: string;
+  /** The release tag and commit `bin/image` bakes in. Unset, the version is `dev` and the commit null. */
+  readonly build: { version: string; commit: string | null };
   readonly corsOrigins: readonly string[];
   readonly databaseUrl: string;
   readonly environment: Environment;
@@ -132,6 +140,7 @@ export class AppConfig {
     this.databaseUrl = config.databaseUrl;
     this.authSecret = config.authSecret;
     this.authBaseUrl = config.authBaseUrl;
+    this.build = config.build;
     this.secureCookies = config.environment === 'production';
     this.apiKeyPrefix =
       config.environment === 'production' ? 'dash_live_' : 'dash_dev_';

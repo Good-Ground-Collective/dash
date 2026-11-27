@@ -134,7 +134,7 @@ test('setup creates the first account with a passkey', async () => {
     .click();
 
   await expect(
-    page.getByRole('img', { name: 'Signed in as Ada Lovelace' }),
+    page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
   ).toBeVisible();
   await expect(page).toHaveURL('/');
 });
@@ -149,7 +149,10 @@ test('a signed-in page load renews the session from the browser', async () => {
 
 test('settings adds, renames and removes passkeys, keeping the last', async () => {
   const { page } = device;
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await page
+    .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
+    .click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
   const passkeys = page.getByRole('list', { name: 'Your passkeys' });
 
   await expect(passkeys.getByRole('listitem')).toHaveCount(1);
@@ -205,7 +208,7 @@ test('signs back in through passkey autofill, without a prompt', async () => {
   await page.goto('/sign-in');
 
   await expect(
-    page.getByRole('img', { name: 'Signed in as Ada Lovelace' }),
+    page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
   ).toBeVisible();
   await expect(page).toHaveURL('/');
 });

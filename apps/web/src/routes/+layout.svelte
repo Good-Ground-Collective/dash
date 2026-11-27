@@ -27,6 +27,6 @@
   });
 </script>
 
-<ThemeRoot saved={data.appearance} viewer={data.viewer}>
+<ThemeRoot saved={data.appearance} viewer={data.viewer} build={data.build}>
   {@render children()}
 </ThemeRoot>

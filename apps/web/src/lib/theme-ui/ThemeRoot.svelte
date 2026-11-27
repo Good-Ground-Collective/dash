@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Viewer } from '#lib/api/mission-control.ts';
+  import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import {
     setThemeContext,
     type ThemeContext,
@@ -15,11 +16,13 @@
   let {
     saved,
     viewer,
+    build,
     children,
   }: {
     /** The appearance the server rendered the page in. */
     saved: ThemePreference;
     viewer: Viewer | null;
+    build: BuildStamp;
     children: Snippet;
   } = $props();
 
@@ -51,6 +54,6 @@
   });
 </script>
 
-<Layout {viewer}>
+<Layout {viewer} {build}>
   {@render children()}
 </Layout>

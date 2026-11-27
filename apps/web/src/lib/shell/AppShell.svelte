@@ -1,13 +1,17 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Viewer } from '#lib/api/mission-control.ts';
+  import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import NeedsYou from '#lib/shell/NeedsYou.svelte';
   import PrimaryNav from '#lib/shell/PrimaryNav.svelte';
   import SearchButton from '#lib/shell/SearchButton.svelte';
   import ViewerAvatar from '#lib/shell/ViewerAvatar.svelte';
 
-  let { viewer, children }: { viewer: Viewer | null; children: Snippet } =
-    $props();
+  let {
+    viewer,
+    build,
+    children,
+  }: { viewer: Viewer | null; build: BuildStamp; children: Snippet } = $props();
 </script>
 
 <div class="shell">
@@ -17,7 +21,7 @@
       <PrimaryNav />
       <div class="actions">
         <SearchButton />
-        <ViewerAvatar {viewer} />
+        <ViewerAvatar {viewer} {build} />
       </div>
     </div>
   </header>

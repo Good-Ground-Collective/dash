@@ -15,6 +15,10 @@ const visualPort = 4323;
 const visualStubPort = 59995;
 const visualWebUrl = `http://localhost:${visualPort}`;
 const visualStubUrl = `http://localhost:${visualStubPort}`;
+const accountMenuPort = 4324;
+const accountMenuStubPort = 59994;
+const accountMenuWebUrl = `http://localhost:${accountMenuPort}`;
+const accountMenuStubUrl = `http://localhost:${accountMenuStubPort}`;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -33,6 +37,7 @@ export default defineConfig({
         '**/service-accounts.e2e.test.ts',
         '**/appearance.e2e.test.ts',
         '**/visual.e2e.test.ts',
+        '**/account-menu.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -66,6 +71,12 @@ export default defineConfig({
       testMatch: '**/visual.e2e.test.ts',
       metadata: { missionControlUrl: visualStubUrl },
       use: { ...devices['Desktop Chrome'], baseURL: visualWebUrl },
+    },
+    {
+      name: 'account-menu',
+      testMatch: '**/account-menu.e2e.test.ts',
+      metadata: { missionControlUrl: accountMenuStubUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: accountMenuWebUrl },
     },
   ],
   webServer: [
@@ -102,6 +113,23 @@ export default defineConfig({
     {
       command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${serviceAccountsStubPort} ${serviceAccountsWebUrl}`,
       url: `${serviceAccountsStubUrl}/api/auth/setup/status`,
+      reuseExistingServer: false,
+    },
+    {
+      command: 'node build',
+      url: accountMenuWebUrl,
+      reuseExistingServer: false,
+      env: {
+        HOST: 'localhost',
+        PORT: String(accountMenuPort),
+        API_BASE_URL: accountMenuStubUrl,
+        APP_VERSION: 'v1.1.1',
+        APP_COMMIT: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+      },
+    },
+    {
+      command: `node src/routes/__tests__/support/serve-mission-control-stub.ts ${accountMenuStubPort} ${accountMenuWebUrl}`,
+      url: `${accountMenuStubUrl}/api/auth/setup/status`,
       reuseExistingServer: false,
     },
     ...[

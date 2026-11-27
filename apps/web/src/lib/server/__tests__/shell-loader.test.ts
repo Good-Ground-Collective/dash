@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EnvironmentBuildStamp } from '#lib/build/build-stamp.ts';
 import {
   MissionControlShellLoader,
   type ShellLoadEvent,
@@ -20,10 +21,16 @@ class CountingFetch {
   };
 }
 
+const build = EnvironmentBuildStamp.from({
+  version: 'v1.1.1',
+  commit: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+});
+
 const lightCharacters: ThemePreference = { theme: 'characters', mode: 'light' };
 
 const shellLoader = new MissionControlShellLoader({
   apiBaseUrl: 'https://api.example.test',
+  build,
 });
 
 class ShellVisit {
@@ -51,7 +58,11 @@ describe('ShellLoader', () => {
       shellLoader.load(
         ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: false }),
       ),
-    ).resolves.toEqual({ viewer: null, appearance: lightCharacters });
+    ).resolves.toEqual({
+      viewer: null,
+      appearance: lightCharacters,
+      build,
+    });
     expect(counter.calls).toBe(0);
   });
 
@@ -68,6 +79,7 @@ describe('ShellLoader', () => {
     ).resolves.toEqual({
       viewer: { ...viewer, theme: 'characters', colorMode: null },
       appearance: lightCharacters,
+      build,
     });
   });
 });
@@ -116,13 +128,17 @@ describe('ShellLoader failures', () => {
       shellLoader.load(
         ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
       ),
-    ).resolves.toEqual({ viewer: null, appearance: lightCharacters });
+    ).resolves.toEqual({
+      viewer: null,
+      appearance: lightCharacters,
+      build,
+    });
     expect(counter.calls).toBe(1);
   });
 
   it('refuses an API base URL that is not a URL', () => {
     expect(
-      () => new MissionControlShellLoader({ apiBaseUrl: 'not a url' }),
+      () => new MissionControlShellLoader({ apiBaseUrl: 'not a url', build }),
     ).toThrow();
   });
 });

@@ -1,9 +1,11 @@
 import type { Component, Snippet } from 'svelte';
 import type { Viewer } from '#lib/api/mission-control.ts';
+import type { BuildStamp } from '#lib/build/build-stamp.ts';
 import type { ThemeName } from '#lib/theme/theme-preference-reader.ts';
 
 export interface ThemeLayoutProps {
   viewer: Viewer | null;
+  build: BuildStamp;
   children: Snippet;
 }
 

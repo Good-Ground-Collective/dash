@@ -5,6 +5,7 @@ import {
   missionControlBaseUrlSchema,
   type Viewer,
 } from '#lib/api/mission-control.ts';
+import { type BuildStamp, buildStampSchema } from '#lib/build/build-stamp.ts';
 import {
   type ThemeCookieMirror,
   themeCookieMirror,
@@ -13,6 +14,7 @@ import type { ThemePreference } from '#lib/theme/theme-preference-reader.ts';
 
 export const shellLoaderPropsSchema = z.object({
   apiBaseUrl: missionControlBaseUrlSchema,
+  build: buildStampSchema,
 });
 
 export type ShellLoaderProps = z.input<typeof shellLoaderPropsSchema>;
@@ -21,6 +23,7 @@ export interface ShellData {
   viewer: Viewer | null;
   /** The theme and mode the page rendered in. */
   appearance: ThemePreference;
+  build: BuildStamp;
 }
 
 /** Runs for every route through the root layout, so it must stay cheap for anonymous visitors. */
@@ -32,13 +35,16 @@ export type ShellLoadEvent = Pick<ServerLoadEvent, 'fetch' | 'locals'> & {
   cookies: Pick<Cookies, 'get' | 'set'>;
 };
 
-/** Asks Mission Control for the viewer and renders in their saved appearance. The shell still renders when Mission Control is unreachable. */
+/** Asks Mission Control for the viewer, renders in their saved appearance and adds the build stamp. The shell still renders when Mission Control is unreachable. */
 export class MissionControlShellLoader implements ShellLoader {
   private readonly apiBaseUrl: string;
+  private readonly build: BuildStamp;
   private readonly cookieMirror: ThemeCookieMirror = themeCookieMirror;
 
   constructor(props: ShellLoaderProps) {
-    this.apiBaseUrl = shellLoaderPropsSchema.parse(props).apiBaseUrl;
+    const valid = shellLoaderPropsSchema.parse(props);
+    this.apiBaseUrl = valid.apiBaseUrl;
+    this.build = valid.build;
   }
 
   readonly load = async (event: ShellLoadEvent): Promise<ShellData> => {
@@ -48,7 +54,11 @@ export class MissionControlShellLoader implements ShellLoader {
       requested: event.locals.themePreference,
       saved: viewer,
     });
-    return { viewer, appearance: event.locals.themePreference };
+    return {
+      viewer,
+      appearance: event.locals.themePreference,
+      build: this.build,
+    };
   };
 
   private async viewer(event: ShellLoadEvent): Promise<Viewer | null> {

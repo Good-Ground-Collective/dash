@@ -153,3 +153,28 @@ describe('AppConfig auth secret', () => {
     ]);
   });
 });
+
+describe('AppConfig build', () => {
+  it('reads the version and commit bin/image bakes in', () => {
+    const config = new AppConfig({
+      ...productionEnv,
+      APP_VERSION: 'v1.1.1',
+      APP_COMMIT: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+    });
+
+    expect(config.build).toEqual({
+      version: 'v1.1.1',
+      commit: '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d',
+    });
+  });
+
+  it.each([
+    ['unset', {}],
+    ['blank', { APP_VERSION: ' ', APP_COMMIT: '' }],
+  ])('falls back to dev and no commit when %s', (_label, build) => {
+    expect(new AppConfig({ ...developmentEnv, ...build }).build).toEqual({
+      version: 'dev',
+      commit: null,
+    });
+  });
+});

@@ -108,3 +108,46 @@ describe('HealthModule probe timeout', () => {
     });
   });
 });
+
+describe('HealthModule build fields', () => {
+  let app: ZodFastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  const healthz = async (build: { version: string; commit: string | null }) => {
+    app = await new HttpServer({
+      config: { corsOrigins: [], environment: 'test', logLevel: 'silent' },
+      modules: [
+        new HealthModule({
+          probes: [new StubProbe({ name: 'database', healthy: true })],
+          build,
+        }),
+      ],
+    }).build();
+    return app.inject({ url: '/healthz' });
+  };
+
+  it('reports the version and commit it was given', async () => {
+    const commit = '7615036f0c2b9a8e1d4f5a6b7c8d9e0f1a2b3c4d';
+    const response = await healthz({ version: 'v1.1.1', commit });
+
+    expect(response.json()).toEqual({
+      status: 'ok',
+      checks: { database: 'ok' },
+      version: 'v1.1.1',
+      commit,
+    });
+  });
+
+  it('leaves out an unknown commit', async () => {
+    const response = await healthz({ version: 'dev', commit: null });
+
+    expect(response.json()).toEqual({
+      status: 'ok',
+      checks: { database: 'ok' },
+      version: 'dev',
+    });
+  });
+});
