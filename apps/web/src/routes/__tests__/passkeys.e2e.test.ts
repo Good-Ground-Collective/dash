@@ -203,19 +203,18 @@ test('setup goes token, account, passkey, codes, second passkey, then GitHub, wi
   await page.getByLabel('Setup token').fill(setupToken);
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await expect(
-    page.getByRole('heading', { name: 'Create your account' }),
-  ).toBeFocused();
-  await expect(
-    page.getByRole('heading', { name: 'Create your account' }),
-  ).toHaveAccessibleDescription('Step 2 of 4');
+  const account = page.getByRole('heading', { name: 'Create your account' });
+  await expect(account).toBeFocused();
+  await expect(account).toHaveAccessibleDescription('Step 2 of 4');
   await expect(page).toHaveURL('/setup');
   await page.getByLabel('Display name').fill('Ada Lovelace');
   await page.getByLabel('Email').fill('ada@example.com');
   await page.getByRole('button', { name: 'Register passkey' }).click();
 
+  await expect(page).toHaveURL('/setup/recovery-codes?onboarding');
   await page.getByLabel('I’ve saved these codes somewhere safe').check();
   await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page).toHaveURL('/setup/second-passkey');
   await page.getByRole('link', { name: 'Skip for now' }).click();
   await expect(page).toHaveURL('/setup/github');
   await page.getByRole('link', { name: 'Skip for now' }).click();
