@@ -1,0 +1,14 @@
+{
+  "name": "dash",
+  "description": "Claude Code plugins that report to Dash",
+  "owner": {
+    "name": "Good Ground Collective"
+  },
+  "plugins": [
+    {
+      "name": "dash-heartbeats",
+      "source": "./plugins/dash-heartbeats",
+      "description": "Writes an agent.heartbeat line to the local Dash outbox on each session event"
+    }
+  ]
+}

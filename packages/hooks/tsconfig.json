@@ -1,0 +1,10 @@
+{
+  "extends": "@dash/config/tsconfig/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "erasableSyntaxOnly": true,
+    "types": ["node"],
+    "customConditions": ["@good-ground-collective/dash-hooks-source"]
+  },
+  "include": ["src", "vitest.config.ts"]
+}

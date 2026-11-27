@@ -10,7 +10,9 @@ Open questions live in [discussions](./discussions). Each one is a conversation 
 apps/web              SvelteKit web app
 apps/mission-control  Fastify server with Drizzle and DBOS on Postgres
 packages/standards    Zod message schemas shared between components, published as @good-ground-collective/agentic-communication-standards
+packages/hooks        Claude Code hooks that write agent heartbeats to a local outbox, published as @good-ground-collective/dash-hooks
 packages/config       Shared tsconfig, ESLint and Stylelint config
+plugins/dash-heartbeats  Claude Code plugin that installs and registers the hooks; .claude-plugin/marketplace.json lists it
 ```
 
 The workspace uses pnpm and Turborepo, on Node 24 LTS.
@@ -173,6 +175,8 @@ Every push to `main` runs the full CI, then releases and deploys whatever passed
 
 If publishing or the GitHub release fails after `standards-vX.Y.Z` was pushed, a re-run finds the tag on the commit and releases nothing. Delete the `standards-vX.Y.Z` tag and any GitHub release for it, then re-run `release-standards`.
 
+`packages/hooks` releases the same way as `@good-ground-collective/dash-hooks`, tagged `dash-hooks-vX.Y.Z`, from `release-hooks`, which reuses the standards package's commit filter. It runs after `release-standards`, so a standards release on the same push is tagged first. Before packing, it sets the workspace standards package to the newest `standards-vX.Y.Z` tag, so the published dependency on it reads `^X.Y.Z` rather than the in-repo `0.0.0`. The `dash-heartbeats` plugin pins a `dash-hooks` range in its own `package.json`; raise it there when a release should reach plugin users.
+
 Pull requests run `image-check` for each app, so a broken image fails before merge rather than after release. When the pull request touches anything an image is built from (`apps/`, `packages/`, `integrations/`, a Dockerfile, `.dockerignore`, the root package and workspace files, the lockfile, `bin/image` or `ci.yml`), it builds the image with `bin/image` without pushing, which runs the same secret scan, then boots it: Mission Control against a throwaway Postgres, with a throwaway GitHub App and a freshly generated key, until `/healthz` answers, and web until its `/healthz` does. Otherwise it posts a notice and skips its steps, so the job still passes and can be a required check. It needs no environment or secrets beyond the job's `GITHUB_TOKEN`, and keeps BuildKit layers in the GitHub Actions cache through `IMAGE_CACHE_FROM` and `IMAGE_CACHE_TO`.
 
 `images` fails until `production` holds `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL`. It also scans for the GitHub App's secrets when `production` holds them. Until it also holds the Tailscale and SSH secrets below, and the host key variable is set, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on. `deploy` only ships the newest `vX.Y.Z` tag, so re-running an older run posts a notice and skips instead of rolling production back; roll back by hand as below.
@@ -255,7 +259,7 @@ Mission Control migrates its database as the container boots, before it listens.
 
 ## CI
 
-`.github/workflows/ci.yml` runs shellcheck on the host and deploy scripts, tests `bin/deploy-gate` with `bin/test-deploy-gate`, and runs `tofu fmt` and `tofu validate` on `infra/tofu`. The `verify` job installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything, then release and deploy as described under [Release pipeline](#release-pipeline). Each job gets only the permissions it needs: `release` can push tags, `release-standards` can push tags and publish the standards package, `images` can write packages, and the rest read. The repository needs Actions read access to the preflight package, granted in the package's settings.
+`.github/workflows/ci.yml` runs shellcheck on the host and deploy scripts, tests `bin/deploy-gate` with `bin/test-deploy-gate`, and runs `tofu fmt` and `tofu validate` on `infra/tofu`. The `verify` job installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything, then release and deploy as described under [Release pipeline](#release-pipeline). Each job gets only the permissions it needs: `release` can push tags, `release-standards` and `release-hooks` can push tags and publish their packages, `images` can write packages, and the rest read. The repository needs Actions read access to the preflight package, granted in the package's settings.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org), since they decide the next version.
 

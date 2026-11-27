@@ -1,0 +1,190 @@
+import { randomUUID } from 'node:crypto';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
+import path from 'node:path';
+
+import {
+  type AgentHeartbeat,
+  agentHeartbeat,
+} from '@good-ground-collective/agentic-communication-standards';
+
+import type { HooksConfig } from '#src/config/hooks-config.js';
+import { jsonLineSchema } from '#src/contracts/json-line.js';
+import { FileLock } from '#src/services/file-lock/file-lock.js';
+import type { HeartbeatPlan } from '#src/services/heartbeat-mapper/heartbeat-plan.js';
+import { LineFitter } from '#src/services/line-fitter/line-fitter.js';
+import { OutboxTail } from '#src/services/session-ledger/outbox-tail.js';
+import {
+  mainAgentKey,
+  type SessionState,
+  sessionStateSchema,
+} from '#src/services/session-ledger/session-state.js';
+
+const sessionStateFileSchema = jsonLineSchema.pipe(sessionStateSchema);
+
+/** Numbers each session's heartbeats and appends them to the session's outbox file. */
+export interface SessionLedger {
+  /** Writes the planned heartbeat if its condition holds, and returns it; `undefined` when the condition skipped it. */
+  record(plan: HeartbeatPlan, now: Date): Promise<AgentHeartbeat | undefined>;
+}
+
+/**
+ * A `SessionLedger` on the local disk. The parent agent and its subagents run hooks as separate
+ * processes at the same moment, so the counter is read, incremented and written back, and the
+ * line appended, all under one per-session lock: no two heartbeats share a `seq`, and lines land
+ * in `seq` order.
+ */
+export class FileSessionLedger implements SessionLedger {
+  private readonly config: HooksConfig;
+
+  constructor(props: { config: HooksConfig }) {
+    this.config = props.config;
+  }
+
+  async record(
+    plan: HeartbeatPlan,
+    now: Date,
+  ): Promise<AgentHeartbeat | undefined> {
+    const stem = FileSessionLedger.fileStem(plan.draft.sessionId);
+    const statePath = path.join(this.config.sessionsDirectory, `${stem}.json`);
+    const outboxPath = path.join(this.config.outboxDirectory, `${stem}.jsonl`);
+
+    await mkdir(this.config.sessionsDirectory, { recursive: true });
+    await mkdir(this.config.outboxDirectory, { recursive: true });
+
+    return FileLock.hold(`${statePath}.lock`, async () => {
+      const state = await this.load(statePath, outboxPath);
+      if (!this.shouldWrite(plan, state, now)) {
+        return undefined;
+      }
+
+      const heartbeat = FileSessionLedger.number(plan, state, now);
+      await appendFile(outboxPath, `${LineFitter.fit(heartbeat)}\n`);
+      await FileSessionLedger.save(
+        statePath,
+        FileSessionLedger.advance(plan, state, now),
+      );
+      return heartbeat;
+    });
+  }
+
+  private shouldWrite(
+    plan: HeartbeatPlan,
+    state: SessionState,
+    now: Date,
+  ): boolean {
+    const key = plan.draft.agentId ?? mainAgentKey;
+
+    if (plan.condition === 'known-subagent') {
+      return key in state.agents;
+    }
+    if (plan.condition === 'liveness') {
+      return this.livenessDue(key, state, now);
+    }
+
+    return true;
+  }
+
+  /**
+   * A liveness heartbeat goes out when the agent has been quiet for the interval, or when it last
+   * reported something other than `working` that a finished tool call disproves, such as an
+   * approved permission prompt. It never follows a finished turn, since a late tool hook is out of
+   * order there, nor an AskUserQuestion still waiting on its answer.
+   */
+  private livenessDue(key: string, state: SessionState, now: Date): boolean {
+    const last = state.agents[key];
+    if (last === 'complete' || last === 'failed' || last === 'error') {
+      return false;
+    }
+    if (last === 'question') {
+      return !state.awaitingAnswer.includes(key);
+    }
+    if (last === 'working') {
+      return (
+        now.getTime() - state.lastWrittenAt >= this.config.livenessIntervalMs
+      );
+    }
+
+    return true;
+  }
+
+  /** The session's counter file, or a fresh one that continues after the outbox's last `seq` if the file is missing or damaged. */
+  private async load(
+    statePath: string,
+    outboxPath: string,
+  ): Promise<SessionState> {
+    const text = await readFile(statePath, 'utf8').catch(() => undefined);
+    const parsed = sessionStateFileSchema.safeParse(text);
+    if (parsed.success) {
+      return parsed.data;
+    }
+
+    const lastSeq = await OutboxTail.lastSeq(outboxPath);
+    return sessionStateSchema.parse({
+      nextSeq: lastSeq === undefined ? 0 : lastSeq + 1,
+    });
+  }
+
+  /** Session IDs are UUIDs, but anything else is made safe to use as a file name. */
+  static fileStem(sessionId: string): string {
+    return sessionId.replaceAll(/[^\w-]/g, '_');
+  }
+
+  /** The heartbeat with its `seq`, envelope and the session's model, checked against the standards schema. */
+  private static number(
+    plan: HeartbeatPlan,
+    state: SessionState,
+    now: Date,
+  ): AgentHeartbeat {
+    const model = plan.sessionModel ?? state.model;
+    const isMainAgent = plan.draft.agentId === undefined;
+    const agent =
+      isMainAgent && model !== undefined
+        ? { ...plan.draft.agent, model }
+        : plan.draft.agent;
+
+    return agentHeartbeat.schema.parse({
+      schemaVersion: agentHeartbeat.version,
+      kind: agentHeartbeat.kind,
+      id: randomUUID(),
+      emittedAt: now.toISOString(),
+      payload: { ...plan.draft, agent, seq: state.nextSeq },
+    });
+  }
+
+  private static advance(
+    plan: HeartbeatPlan,
+    state: SessionState,
+    now: Date,
+  ): SessionState {
+    const key = plan.draft.agentId ?? mainAgentKey;
+    const awaitingAnswer = state.awaitingAnswer.filter(
+      (agent) => agent !== key,
+    );
+
+    return {
+      nextSeq: state.nextSeq + 1,
+      lastWrittenAt: now.getTime(),
+      agents: { ...state.agents, [key]: plan.draft.status },
+      awaitingAnswer: plan.awaitsAnswer
+        ? [...awaitingAnswer, key]
+        : awaitingAnswer,
+      model: plan.sessionModel ?? state.model,
+    };
+  }
+
+  /** Writes to a temporary file and renames it, so a reader never sees half a counter file. */
+  private static async save(
+    statePath: string,
+    state: SessionState,
+  ): Promise<void> {
+    const temporary = `${statePath}.${process.pid}.tmp`;
+    await writeFile(temporary, JSON.stringify(state));
+    await rename(temporary, statePath);
+  }
+}
