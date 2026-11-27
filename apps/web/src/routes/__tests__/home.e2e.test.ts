@@ -47,21 +47,17 @@ test.beforeAll(async ({ browser, baseURL }, testInfo) => {
   await Progress.addPasskey('this-computer');
 });
 
-test('a fresh account sees every item open, with where to do it', async () => {
+test('a fresh account sees GitHub open, with where to connect it', async () => {
   await page.goto('/');
 
-  await expect(Card.region()).toContainText('0 of 2 done');
+  await expect(Card.region()).toContainText('0 of 1 done');
   await expect(Card.region()).toContainText(
     'This list disappears once everything is done.',
   );
   await expect(
     Card.row('Connect GitHub').getByRole('link', { name: 'Connect GitHub' }),
   ).toHaveAttribute('href', '/setup/github');
-  await expect(
-    Card.row('Add a second passkey').getByRole('link', {
-      name: 'Add a passkey',
-    }),
-  ).toHaveAttribute('href', '/settings#passkeys-title');
+  await expect(Card.region().getByRole('listitem')).toHaveCount(1);
   await expect(page.getByText('Nothing here yet')).toHaveCount(0);
 });
 
@@ -79,30 +75,8 @@ test('the card fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
-test('the passkey item opens the passkeys panel in settings', async () => {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Add a passkey' }).click();
-
-  await expect(page).toHaveURL('/settings#passkeys-title');
-  await expect(
-    page.getByRole('heading', { name: 'Passkeys', level: 2 }),
-  ).toBeInViewport();
-});
-
-test('connecting GitHub ticks its item off', async () => {
+test('connecting GitHub takes the card away', async () => {
   await Progress.connectGitHub();
-  await page.goto('/');
-
-  await expect(Card.region()).toContainText('1 of 2 done');
-  await expect(Card.row('Connect GitHub')).toContainText('Done');
-  await expect(
-    Card.row('Connect GitHub').getByRole('link', { name: 'Connect GitHub' }),
-  ).toHaveCount(0);
-  await expect(Card.row('Add a second passkey')).not.toContainText('Done');
-});
-
-test('the card goes away once everything is done', async () => {
-  await Progress.addPasskey('phone');
   await page.goto('/');
 
   await expect(Card.region()).toHaveCount(0);

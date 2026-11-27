@@ -241,9 +241,6 @@ test('when the feed fails, home still renders with an inline error', async () =>
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await expect(
-    page.getByRole('region', { name: 'Finish setting up' }),
-  ).toBeVisible();
-  await expect(
     Feed.panel()
       .getByRole('status')
       .filter({ hasText: 'GitHub activity didn’t load' }),

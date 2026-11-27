@@ -11,12 +11,7 @@ const ada: Viewer = {
   colorMode: null,
 };
 
-const checklist = {
-  items: [
-    { id: 'connectGitHub', done: true },
-    { id: 'secondPasskey', done: false },
-  ],
-};
+const checklist = { items: [{ id: 'connectGitHub', done: false }] };
 
 const feed = {
   connections: [],

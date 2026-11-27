@@ -57,7 +57,6 @@ export class MissionControlStub {
   private readonly setup = new SetupStub();
   private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
   private readonly onboarding = new OnboardingStub({
-    passkeys: () => this.passkeys.all.length,
     githubConnected: () => this.github.connected(),
   });
   private readonly recovery = new RecoveryStub({
