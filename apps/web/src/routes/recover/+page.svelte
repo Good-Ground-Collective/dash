@@ -21,13 +21,15 @@
   let waiting = $state(false);
   let codeInput = $state<HTMLInputElement>();
   let card = $state<AuthCard>();
+  let passkeyForm = $state<RecoveryPasskey>();
+  let retryButton = $state<HTMLButtonElement>();
 
   const problem = $derived(current.step === 'code' ? current.problem : null);
 
   /**
    * Runs one step. A refused code puts focus back in the code field; a move to a new screen
-   * focuses its title, so the new screen is announced. Once done, the page stays busy until home
-   * loads.
+   * focuses its title, so the new screen is announced; staying on a screen after a failure puts
+   * focus back on its button. Once done, the page stays busy until home loads.
    */
   const advance = async (next: () => Promise<RecoveryStep>): Promise<void> => {
     const before = current.step;
@@ -49,21 +51,27 @@
       codeInput?.select();
     } else if (current.step !== before) {
       card?.focusTitle();
+    } else if (current.step === 'passkey') {
+      passkeyForm?.focusButton();
+    } else {
+      retryButton?.focus();
     }
   };
 
   /** After too many tries, holds the button until Mission Control's wait is over, then clears the message. */
-  $effect(() => {
+  const holdUntilRetryAllowed = (): (() => void) | undefined => {
     const wait = RecoveryFlow.waitMs(current, Date.now());
     waiting = wait > 0;
-    if (!waiting) return;
+    if (!waiting) return undefined;
     const timer = setTimeout(() => {
       current = RecoveryFlow.start();
     }, wait);
     return () => {
       clearTimeout(timer);
     };
-  });
+  };
+
+  $effect(holdUntilRetryAllowed);
 </script>
 
 <svelte:head>
@@ -78,11 +86,30 @@
     lede="Your code was accepted. Register a passkey on this device to finish signing in."
   >
     <RecoveryPasskey
+      bind:this={passkeyForm}
       account={passkey.prepared.account}
       error={passkey.error}
       {busy}
       onRegister={() => void advance(async () => flow.register(passkey))}
     />
+  </AuthCard>
+{:else if current.step === 'unavailable'}
+  {@const unavailable = current}
+  <AuthCard
+    bind:this={card}
+    title="Can’t continue yet"
+    lede="Your code was accepted, but Dash couldn’t get the passkey prompt ready. Your code hasn’t been used."
+  >
+    <p class="auth-error" role="alert">{unavailable.error}</p>
+    <button
+      class="auth-button"
+      type="button"
+      disabled={busy}
+      bind:this={retryButton}
+      onclick={() => void advance(async () => flow.retry(unavailable))}
+    >
+      Try again
+    </button>
   </AuthCard>
 {:else}
   <AuthCard

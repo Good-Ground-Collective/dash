@@ -193,20 +193,97 @@ test('too many tries holds the form until the wait is over', async ({
   await expect(page.getByRole('alert')).toBeHidden();
 });
 
-test('a break-glass link names the account, leaves the address bar and signs in', async ({
+test('a failed passkey prompt keeps the person on the button', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/recover');
+  await RecoverPage.submit(page, { email, code: codes[0] ?? '' });
+  await page.getByRole('button', { name: 'Register passkey' }).click();
+  await expect(page).toHaveURL('/');
+  await context.clearCookies();
+
+  await page.goto('/recover');
+  await RecoverPage.submit(page, { email, code: codes[1] ?? '' });
+  const register = page.getByRole('button', { name: 'Register passkey' });
+  await register.click();
+
+  await expect(page.getByRole('alert')).toHaveText(
+    'This device already has a passkey for Dash.',
+  );
+  await expect(register).toBeFocused();
+});
+
+test('a break-glass link names the account, leaves no trace of the enrolment and signs in', async ({
   page,
   request,
 }) => {
-  await page.goto(await Stub.breakGlassLink(request));
+  const link = await Stub.breakGlassLink(request);
+  const enrolment = new URLSearchParams(new URL(link).hash.slice(1)).get(
+    'enrolment',
+  );
+  const carried: string[] = [];
+  page.on('request', (sent) => {
+    const url = new URL(sent.url());
+    const referer = sent.headers()['referer'] ?? '';
+    const asContext =
+      url.pathname === '/api/auth/passkey/generate-register-options' &&
+      url.searchParams.get('context') === enrolment;
+    const inUrl =
+      !asContext && decodeURIComponent(sent.url()).includes(enrolment ?? '');
+    if (inUrl || decodeURIComponent(referer).includes(enrolment ?? '')) {
+      carried.push(sent.url());
+    }
+  });
+  await page.goto('/sign-in');
 
+  await page.goto(link);
   await expect(page.getByText(email)).toBeVisible();
   expect(new URL(page.url()).hash).toBe('');
   await page.getByRole('button', { name: 'Register passkey' }).click();
-
   await expect(page).toHaveURL('/');
   await expect(
     page.getByRole('button', { name: 'Account, signed in as Ada Lovelace' }),
   ).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL('/recover/passkey');
+  expect(new URL(page.url()).hash).toBe('');
+  await expect(
+    page.getByRole('heading', { name: 'This link is incomplete' }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL('/sign-in');
+  expect(carried).toEqual([]);
+});
+
+test('a break-glass link waits for a signed-in person to sign out', async ({
+  page,
+  request,
+}) => {
+  const link = await Stub.breakGlassLink(request);
+  await page.request.post(`${missionControl}/api/auth/__stub/sign-in`);
+  const optionsRequests: string[] = [];
+  page.on('request', (sent) => {
+    if (sent.url().includes('/passkey/generate-register-options')) {
+      optionsRequests.push(sent.url());
+    }
+  });
+
+  await page.goto(link);
+  await expect(
+    page.getByRole('heading', { name: 'You’re signed in' }),
+  ).toBeFocused();
+  await expect(
+    page.getByText(`You’re signed in as ${email}.`, { exact: false }),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('');
+  expect(optionsRequests).toEqual([]);
+
+  await page.getByRole('button', { name: 'Sign out and continue' }).click();
+  await expect(page.getByText(email)).toBeVisible();
+  await page.getByRole('button', { name: 'Register passkey' }).click();
+  await expect(page).toHaveURL('/');
 });
 
 test('an expired or incomplete break-glass link says what to do', async ({

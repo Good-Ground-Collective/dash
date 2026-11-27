@@ -13,6 +13,13 @@
     busy: boolean;
     onRegister: () => void;
   } = $props();
+
+  let button = $state<HTMLButtonElement>();
+
+  /** Puts focus back on the button after a failed or cancelled prompt, so keyboard and screen reader users can try again. */
+  export function focusButton(): void {
+    button?.focus();
+  }
 </script>
 
 <form
@@ -30,7 +37,16 @@
   {#if error}
     <p class="auth-error" role="alert">{error}</p>
   {/if}
-  <button class="auth-button" type="submit" disabled={busy}>
+  <p class="visually-hidden" role="status">
+    {busy ? 'Waiting for your passkey…' : ''}
+  </p>
+  <button
+    class="auth-button"
+    type="submit"
+    disabled={busy}
+    aria-busy={busy}
+    bind:this={button}
+  >
     {#if busy}
       Waiting for your passkey…
     {:else}

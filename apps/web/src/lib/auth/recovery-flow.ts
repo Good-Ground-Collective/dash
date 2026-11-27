@@ -14,7 +14,12 @@ export interface RecoveryProblem {
   retryAt: number | null;
 }
 
-/** Where `/recover` and `/recover/passkey` are. The enrolment lives only in page state. */
+/**
+ * Where `/recover` and `/recover/passkey` are. The enrolment lives only in page state. `signed-in`
+ * means someone is already signed in, so a link waits until they sign out and Mission Control
+ * hasn't heard about it yet. `unavailable` means Mission Control couldn't give options for an
+ * enrolment it accepted, which is kept to try again.
+ */
 export type RecoveryStep =
   | { step: 'code'; problem: RecoveryProblem | null }
   | { step: 'opening' }
@@ -25,16 +30,24 @@ export type RecoveryStep =
       prepared: PreparedEnrolment;
       error: string | null;
     }
+  | { step: 'signed-in'; account: string; enrolment: string }
+  | {
+      step: 'unavailable';
+      source: RecoverySource;
+      enrolment: string;
+      error: string;
+    }
   | { step: 'link-expired' }
   | { step: 'link-missing' }
-  | { step: 'link-unavailable'; enrolment: string; error: string }
   | { step: 'done' };
 
 export type PasskeyStep = Extract<RecoveryStep, { step: 'passkey' }>;
+export type UnavailableStep = Extract<RecoveryStep, { step: 'unavailable' }>;
+export type SignedInStep = Extract<RecoveryStep, { step: 'signed-in' }>;
 
 type RecoveryAuth = Pick<
   PasskeyAuth,
-  'redeemRecoveryCode' | 'prepareEnrolment' | 'enrol'
+  'redeemRecoveryCode' | 'prepareEnrolment' | 'enrol' | 'signOut'
 >;
 
 /**
@@ -72,22 +85,51 @@ export class RecoveryFlow {
     return this.prepare({ source: 'code', enrolment, error: null });
   }
 
-  /** Reads the enrolment from a break-glass link's fragment, such as `#enrolment=recovery-enrolment%3A…`. */
-  async openLink(props: { hash: string }): Promise<RecoveryStep> {
+  /**
+   * Reads the enrolment from a break-glass link's fragment, such as `#enrolment=recovery-enrolment%3A…`.
+   * With someone signed in (`viewer` is their email) it stops before asking Mission Control, since a
+   * session would decide whose account the passkey joins.
+   */
+  async openLink(props: {
+    hash: string;
+    viewer: string | null;
+  }): Promise<RecoveryStep> {
     const enrolment = new URLSearchParams(props.hash.replace(/^#/u, '')).get(
       'enrolment',
     );
     if (enrolment === null || enrolment.trim() === '') {
       return { step: 'link-missing' };
     }
+    if (props.viewer !== null) {
+      return { step: 'signed-in', account: props.viewer, enrolment };
+    }
     return this.prepare({ source: 'link', enrolment, error: null });
   }
 
-  /** Tries a link's enrolment again after Mission Control couldn't be reached. The fragment is gone by then, so the enrolment comes from page state. */
-  async retryLink(props: { enrolment: string }): Promise<RecoveryStep> {
+  /** Signs the current person out, then carries on with the link's enrolment from page state. */
+  async signOutAndContinue(current: SignedInStep): Promise<RecoveryStep> {
+    try {
+      await this.auth.signOut();
+    } catch (cause) {
+      return {
+        step: 'unavailable',
+        source: 'link',
+        enrolment: current.enrolment,
+        error: this.wording.explain(cause),
+      };
+    }
     return this.prepare({
       source: 'link',
-      enrolment: props.enrolment,
+      enrolment: current.enrolment,
+      error: null,
+    });
+  }
+
+  /** Asks for options again after Mission Control couldn't give them. The enrolment comes from page state, so a code isn't redeemed twice. */
+  async retry(current: UnavailableStep): Promise<RecoveryStep> {
+    return this.prepare({
+      source: current.source,
+      enrolment: current.enrolment,
       error: null,
     });
   }
@@ -129,13 +171,11 @@ export class RecoveryFlow {
       if (RecoveryFlow.enrolmentRejected(cause)) {
         return this.expired(props.source);
       }
-      const error = this.wording.explain(cause);
-      if (props.source === 'link') {
-        return { step: 'link-unavailable', enrolment: props.enrolment, error };
-      }
       return {
-        step: 'code',
-        problem: { message: error, rejected: false, retryAt: null },
+        step: 'unavailable',
+        source: props.source,
+        enrolment: props.enrolment,
+        error: this.wording.explain(cause),
       };
     }
   }

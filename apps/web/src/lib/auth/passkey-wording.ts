@@ -17,6 +17,10 @@ const messages: ReadonlyMap<string, string> = new Map([
   ],
   ['PASSKEY_NOT_FOUND', 'That passkey isn’t registered with Dash.'],
   [
+    'ENROLMENT_ACCOUNT_MISSING',
+    'Mission Control didn’t say which account this is for, so Dash won’t register a passkey. Try again.',
+  ],
+  [
     'RECOVERY_REJECTED',
     'That email and recovery code don’t match an unused code. Check both, or try another code.',
   ],

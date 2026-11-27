@@ -16,6 +16,11 @@ export const setupCheckedSchema = z.object({ valid: z.literal(true) });
 
 export const recoveryEnrolmentSchema = z.object({ enrolment: z.string() });
 
+/** The account an enrolment's registration options are for. Without a name, the page can't show whose passkey it is, so it doesn't continue. */
+export const enrolmentAccountSchema = z.object({
+  user: z.object({ name: z.string().trim().min(1) }),
+});
+
 const acknowledgedSchema = z.looseObject({});
 
 export const missionControlFailureSchema = z.object({
@@ -126,7 +131,15 @@ export class HttpPasskeyAuth implements PasskeyAuth {
     const options = await this.registrationOptions({
       context: props.enrolment,
     });
-    return { account: options.user.name, options };
+    const named = enrolmentAccountSchema.safeParse(options);
+    if (!named.success) {
+      throw new PasskeyAuthError({
+        code: 'ENROLMENT_ACCOUNT_MISSING',
+        message: 'Mission Control’s registration options named no account.',
+        status: 0,
+      });
+    }
+    return { account: named.data.user.name, options };
   }
 
   async enrol(props: { prepared: PreparedEnrolment }): Promise<void> {

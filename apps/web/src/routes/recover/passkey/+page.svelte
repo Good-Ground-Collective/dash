@@ -1,24 +1,36 @@
 <script lang="ts">
   import '#lib/auth-ui/auth-form.css';
   import { onMount, tick } from 'svelte';
-  import { goto, replaceState } from '$app/navigation';
+  import { goto, invalidateAll, replaceState } from '$app/navigation';
   import { API_BASE_URL } from '$app/env/public';
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
-  import { RecoveryFlow, type RecoveryStep } from '#lib/auth/recovery-flow.ts';
+  import {
+    RecoveryFlow,
+    type RecoveryStep,
+    type SignedInStep,
+  } from '#lib/auth/recovery-flow.ts';
   import AuthCard from '#lib/auth-ui/AuthCard.svelte';
   import RecoveryPasskey from '#lib/auth-ui/RecoveryPasskey.svelte';
+  import type { PageProps } from './$types';
 
   const flow = new RecoveryFlow({
     auth: HttpPasskeyAuth.inBrowser({ baseUrl: API_BASE_URL }),
     wording: passkeyWording,
   });
 
+  let { data }: PageProps = $props();
+
   let current = $state<RecoveryStep>(RecoveryFlow.opening());
   let busy = $state(false);
   let card = $state<AuthCard>();
+  let passkeyForm = $state<RecoveryPasskey>();
+  let retryButton = $state<HTMLButtonElement>();
 
-  /** Runs one step and focuses the new screen's title, so it is announced. Once done, the page stays busy until home loads. */
+  /**
+   * Runs one step and focuses the new screen's title, so it is announced; staying on a screen after
+   * a failure puts focus back on its button. Once done, the page stays busy until home loads.
+   */
   const advance = async (next: () => Promise<RecoveryStep>): Promise<void> => {
     const before = current.step;
     busy = true;
@@ -35,14 +47,28 @@
     busy = false;
     await tick();
     if (current.step !== before) card?.focusTitle();
+    else if (current.step === 'passkey') passkeyForm?.focusButton();
+    else retryButton?.focus();
   };
 
-  /** The enrolment arrives in the fragment, which browsers never send. Take it, then drop it from the address bar and history. */
-  onMount(() => {
+  /**
+   * The enrolment arrives in the fragment, which browsers never send. Take it, then drop it from the
+   * address bar and history. Someone already signed in is asked to sign out before Mission Control
+   * hears about the enrolment.
+   */
+  const takeEnrolmentFromAddressBar = (): void => {
     const { hash, pathname, search } = window.location;
     replaceState(`${pathname}${search}`, {});
-    void advance(async () => flow.openLink({ hash }));
-  });
+    const viewer = data.viewer?.email ?? null;
+    void advance(async () => flow.openLink({ hash, viewer }));
+  };
+
+  const signOutAndContinue = async (current: SignedInStep): Promise<void> => {
+    await advance(async () => flow.signOutAndContinue(current));
+    await invalidateAll();
+  };
+
+  onMount(takeEnrolmentFromAddressBar);
 </script>
 
 <svelte:head>
@@ -57,6 +83,7 @@
     lede="This one-time link signs you in. Register a passkey on this device to finish."
   >
     <RecoveryPasskey
+      bind:this={passkeyForm}
       account={passkey.prepared.account}
       error={passkey.error}
       {busy}
@@ -85,7 +112,26 @@
       <a class="auth-button quiet" href="/sign-in">Back to sign in</a>
     </div>
   </AuthCard>
-{:else if current.step === 'link-unavailable'}
+{:else if current.step === 'signed-in'}
+  {@const signedIn = current}
+  <AuthCard
+    bind:this={card}
+    title="You’re signed in"
+    lede="You’re signed in as {signedIn.account}. Sign out to use this recovery link."
+  >
+    <div class="actions">
+      <button
+        class="auth-button"
+        type="button"
+        disabled={busy}
+        onclick={() => void signOutAndContinue(signedIn)}
+      >
+        Sign out and continue
+      </button>
+      <a class="auth-button quiet" href="/">Go home</a>
+    </div>
+  </AuthCard>
+{:else if current.step === 'unavailable'}
   {@const unavailable = current}
   <AuthCard
     bind:this={card}
@@ -97,10 +143,8 @@
       class="auth-button"
       type="button"
       disabled={busy}
-      onclick={() =>
-        void advance(async () =>
-          flow.retryLink({ enrolment: unavailable.enrolment }),
-        )}
+      bind:this={retryButton}
+      onclick={() => void advance(async () => flow.retry(unavailable))}
     >
       Try again
     </button>
