@@ -9,6 +9,8 @@
 # Usage: bin/image <web|mission-control> [--push] [--tag <tag>]...
 # Pushing reads GHCR_PUSH_USERNAME and GHCR_PUSH_TOKEN (write:packages), and
 # falls back to the gh CLI's login and token.
+# IMAGE_CACHE_FROM and IMAGE_CACHE_TO, when set, pass through to buildx as
+# --cache-from and --cache-to (CI uses type=gha).
 set -euo pipefail
 
 usage='usage: bin/image <web|mission-control> [--push] [--tag <tag>]...'
@@ -56,7 +58,11 @@ if [[ -z ${NODE_AUTH_TOKEN:-} ]]; then
 fi
 export NODE_AUTH_TOKEN
 
-docker buildx build --platform linux/amd64 --load \
+cache=()
+[[ -z ${IMAGE_CACHE_FROM:-} ]] || cache+=(--cache-from "$IMAGE_CACHE_FROM")
+[[ -z ${IMAGE_CACHE_TO:-} ]] || cache+=(--cache-to "$IMAGE_CACHE_TO")
+
+docker buildx build --platform linux/amd64 --load ${cache[@]+"${cache[@]}"} \
   --secret id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN \
   --build-arg APP_VERSION="$app_version" --build-arg APP_COMMIT="$version" \
   --file "$dockerfile" --tag "$repository:$version" .

@@ -116,6 +116,83 @@ jobs:
 
       - run: tofu validate
 
+  image-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, mission-control]
+    services:
+      postgres:
+        image: ${{ matrix.app == 'mission-control' && 'postgres:18-alpine' || '' }}
+        env:
+          POSTGRES_USER: dash
+          POSTGRES_PASSWORD: dash
+          POSTGRES_DB: mission_control
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dash -d mission_control"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      APP: ${{ matrix.app }}
+      BOOT_DATABASE_URL: postgres://dash:dash@127.0.0.1:5432/mission_control
+      BOOT_AUTH_SECRET: image-check-throwaway-secret-not-for-deploys
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Check for image changes
+        id: changes
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          pattern='^(apps|packages|integrations)/|(^|/)Dockerfile$|^\.dockerignore$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|tsconfig\.json)$|^bin/(image|lib/)|^\.github/workflows/ci\.yml$'
+          if grep -qE "$pattern" <<<"$changed"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Image check skipped::No change in this pull request can affect the $APP image."
+          fi
+
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+        if: steps.changes.outputs.build == 'true'
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.changes.outputs.build == 'true'
+
+      - name: Build and scan
+        if: steps.changes.outputs.build == 'true'
+        run: bin/image "$APP"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_CACHE_FROM: type=gha,scope=image-${{ matrix.app }}
+          IMAGE_CACHE_TO: type=gha,mode=max,scope=image-${{ matrix.app }}
+          DASH_BETTER_AUTH_SECRET: ${{ env.BOOT_AUTH_SECRET }}
+          DASH_DATABASE_URL: ${{ env.BOOT_DATABASE_URL }}
+
+      - name: Boot
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          args=(--detach --name "$APP" --network host)
+          if [[ $APP == mission-control ]]; then
+            args+=(-e DATABASE_URL="$BOOT_DATABASE_URL" -e BETTER_AUTH_SECRET="$BOOT_AUTH_SECRET" -e BETTER_AUTH_URL=https://api.dash.doublel.studio -e PGSSLMODE=disable)
+          else
+            args+=(-e ORIGIN=http://127.0.0.1:3000 -e API_BASE_URL=https://api.dash.doublel.studio)
+          fi
+          docker run "${args[@]}" "ghcr.io/good-ground-collective/dash-$APP:$(git rev-parse HEAD)"
+          if curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors --max-time 5 http://127.0.0.1:3000/healthz; then
+            echo
+            echo "$APP /healthz ok"
+          else
+            docker logs "$APP"
+            exit 1
+          fi
+
   release:
     needs: [shellcheck, verify, tofu]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
