@@ -3,10 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "customConditions": ["source"],
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "customConditions": ["@good-ground-collective/standards-source"],
+    "declaration": true
   },
   "include": ["src"],
   "exclude": ["src/**/__tests__"]

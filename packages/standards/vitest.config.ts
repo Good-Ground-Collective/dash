@@ -3,7 +3,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   ssr: {
     resolve: {
-      conditions: ['source', 'module', 'node', 'development|production'],
+      conditions: [
+        '@good-ground-collective/standards-source',
+        'module',
+        'node',
+        'development|production',
+      ],
     },
   },
   test: {
