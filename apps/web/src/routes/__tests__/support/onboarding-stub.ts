@@ -3,16 +3,11 @@ interface OnboardingReply {
   body: object;
 }
 
-/** Mission Control's `GET /onboarding/checklist` for `MissionControlStub`, worked out from the stub's own passkeys and GitHub state as Mission Control does. */
+/** Mission Control's `GET /onboarding/checklist` for `MissionControlStub`, worked out from the stub's own GitHub state as Mission Control does. */
 export class OnboardingStub {
-  private readonly passkeys: () => number;
   private readonly githubConnected: () => boolean;
 
-  constructor(props: {
-    passkeys: () => number;
-    githubConnected: () => boolean;
-  }) {
-    this.passkeys = props.passkeys;
+  constructor(props: { githubConnected: () => boolean }) {
     this.githubConnected = props.githubConnected;
   }
 
@@ -23,10 +18,7 @@ export class OnboardingStub {
     return {
       status: 200,
       body: {
-        items: [
-          { id: 'connectGitHub', done: this.githubConnected() },
-          { id: 'secondPasskey', done: this.passkeys() >= 2 },
-        ],
+        items: [{ id: 'connectGitHub', done: this.githubConnected() }],
       },
     };
   }

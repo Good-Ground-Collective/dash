@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-export const setupChecklistItemIdSchema = z.enum([
-  'connectGitHub',
-  'secondPasskey',
-]);
+export const setupChecklistItemIdSchema = z.enum(['connectGitHub']);
 
 export const setupChecklistItemSchema = z.object({
   id: setupChecklistItemIdSchema,

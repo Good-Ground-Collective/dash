@@ -175,10 +175,7 @@ describe('HttpMissionControl configuration', () => {
 
 describe('HttpMissionControl setup checklist', () => {
   it('reads the checklist from /onboarding/checklist with credentials', async () => {
-    const items = [
-      { id: 'connectGitHub', done: true },
-      { id: 'secondPasskey', done: false },
-    ];
+    const items = [{ id: 'connectGitHub', done: false }];
     const recorder = new RecordingFetch({
       respond: async () => Response.json({ items }),
     });
