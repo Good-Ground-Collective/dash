@@ -61,6 +61,20 @@ describe('GithubFeedView status', () => {
 
     expect(view.status).toBe('ready');
   });
+
+  it('is first-sync when the filtered account has not been read yet', () => {
+    const fresh = SampleFeed.connection({
+      id: 'c-fresh',
+      accountLogin: 'fresh-org',
+      lastSyncedAt: null,
+    });
+    const both = SampleFeed.feed({ connections: [acme, fresh] });
+
+    expect(
+      new GithubFeedView({ feed: both, account: 'fresh-org' }).status,
+    ).toBe('first-sync');
+    expect(new GithubFeedView({ feed: both }).status).toBe('ready');
+  });
 });
 
 describe('GithubFeedView groups', () => {

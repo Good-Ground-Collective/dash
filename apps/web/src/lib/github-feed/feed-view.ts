@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type {
   GithubFeed,
   GithubFeedConnection,
@@ -67,6 +68,19 @@ const groupCopy: readonly Omit<FeedGroup, 'rows'>[] = [
   },
 ];
 
+export const githubFeedViewPropsSchema = z.object({
+  feed: z.custom<GithubFeed>(),
+  account: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .transform((value) => (value === '' ? null : value))
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+export type GithubFeedViewProps = z.input<typeof githubFeedViewPropsSchema>;
+
 /** The feed as the home panel and the GitHub page show it, narrowed to one account when `account` names one. */
 export class GithubFeedView {
   readonly connections: readonly GithubFeedConnection[];
@@ -75,21 +89,24 @@ export class GithubFeedView {
   readonly unknownAccount: string | null;
   private readonly feed: GithubFeed;
 
-  constructor(props: { feed: GithubFeed; account?: string | null }) {
-    this.feed = props.feed;
-    const wanted = props.account?.trim().toLowerCase() || null;
-    const matching = props.feed.connections.filter(
+  constructor(props: GithubFeedViewProps) {
+    const valid = githubFeedViewPropsSchema.parse(props);
+    this.feed = valid.feed;
+    const wanted = valid.account;
+    const matching = valid.feed.connections.filter(
       (connection) => connection.accountLogin.toLowerCase() === wanted,
     );
+
     const filtered = wanted !== null && matching.length > 0;
-    this.connections = filtered ? matching : props.feed.connections;
+    this.connections = filtered ? matching : valid.feed.connections;
     this.account = filtered ? (matching[0]?.accountLogin ?? null) : null;
     this.unknownAccount = wanted !== null && !filtered ? wanted : null;
   }
 
   get status(): FeedStatus {
     if (this.feed.connections.length === 0) return 'not-connected';
-    const synced = this.feed.connections.some(
+
+    const synced = this.connections.some(
       (connection) => connection.lastSyncedAt !== null,
     );
     return synced ? 'ready' : 'first-sync';
@@ -103,6 +120,7 @@ export class GithubFeedView {
       items
         .filter((item) => ids.has(item.connectionId))
         .toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
     const rows = {
       reviewRequests: mine(this.feed.reviewRequests).map((pull) =>
         FeedRows.reviewRequest(pull),
@@ -117,6 +135,7 @@ export class GithubFeedView {
         FeedRows.assignedIssue(issue),
       ),
     } satisfies Record<FeedGroupKey, FeedRow[]>;
+
     return groupCopy.map((copy) => ({ ...copy, rows: rows[copy.key] }));
   }
 
