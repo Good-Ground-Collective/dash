@@ -128,9 +128,9 @@ Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequ
 
 Production is one Linode box, `dash-app`, running both apps under [Kamal 2](https://kamal-deploy.org) behind kamal-proxy, which gets Let's Encrypt certificates: web at `https://dash.doublel.studio` and Mission Control at `https://api.dash.doublel.studio`. Each app has its own config in `deploy/`. Kamal reaches the box over the tailnet as `dash`.
 
-Images are public on GHCR as `ghcr.io/good-ground-collective/dash-web` and `ghcr.io/good-ground-collective/dash-mission-control`, tagged with the commit SHA and, when CI releases them, with the version (`v1.2.0`). They are built for linux/amd64 with Node 24 slim, run as the `node` user, and get the GitHub Packages token only as a BuildKit secret in a build stage that never ships. `bin/image` builds an app's image, then runs `bin/image-secret-scan`, which fails if the image history, config or filesystem holds a token, a private key, a `.npmrc` or `.env` file, or the value of any production secret. Only then does `--push` publish it, with one more tag per `--tag`. `bin/test-image-secret-scan` checks the scan itself against a canary image with planted credentials.
+Images live on GHCR as `ghcr.io/good-ground-collective/dash-web` and `ghcr.io/good-ground-collective/dash-mission-control`, tagged with the commit SHA and, when CI releases them, with the version (`v1.2.0`). They are built for linux/amd64 with Node 24 slim, run as the `node` user, and get the GitHub Packages token only as a BuildKit secret in a build stage that never ships. `bin/image` builds an app's image, then runs `bin/image-secret-scan`, which fails if the image history, config or filesystem holds a token, a private key, a `.npmrc` or `.env` file, or the value of any production secret. Only then does `--push` publish it, with one more tag per `--tag`. `bin/test-image-secret-scan` checks the scan itself against a canary image with planted credentials.
 
-`bin/kamal` runs Kamal from its pinned official image, so you need Docker but not Ruby. Secrets come from the environment through `.kamal/secrets`, which names variables and holds no values. Locally, the wrapper fills unset ones from the `DASH_*` lines of `~/.config/dash/infra.env` and, if `gh` is logged in, from `gh`. Kamal logs the server in to GHCR on every deploy, and the wrapper logs it out afterwards. Set `KAMAL_REGISTRY_PASSWORD` to a token with only `read:packages` so a broad `gh` token never lands on the box, even briefly. `bin/image --push` uses `GHCR_PUSH_TOKEN` instead, which needs `write:packages` and defaults to the `gh` token.
+`bin/kamal` runs Kamal from its pinned official image, so you need Docker but not Ruby. Secrets come from the environment through `.kamal/secrets`, which names variables and holds no values. Locally, the wrapper fills unset ones from the `DASH_*` lines of `~/.config/dash/infra.env` and, if `gh` is logged in, from `gh`. Kamal logs the server in to GHCR on every deploy, and the wrapper logs it out afterwards. The box pulls with that login, so it works whether the packages are public or private. Set `KAMAL_REGISTRY_PASSWORD` to a token with only `read:packages` so a broad `gh` token never lands on the box, even briefly. `bin/image --push` uses `GHCR_PUSH_TOKEN` instead, which needs `write:packages` and defaults to the `gh` token.
 
 ### Release pipeline
 
@@ -161,9 +161,9 @@ Until the deploy secrets below exist, `deploy` posts a notice and skips; release
      | ssh dash@dash-app 'cat >> ~/.ssh/authorized_keys'
    ```
 
-   Also add the public key to `deploy_ssh_public_keys` in `infra/tofu/variables.tf`, so a rebuilt `dash-app` gets it from cloud-init. Running boxes ignore the change, so no apply is needed.
+   The prefix must match `deploy_key_options` in `infra/tofu/main.tf`. Also add the public key to `deploy_ssh_public_keys` in `infra/tofu/variables.tf`, so a rebuilt `dash-app` gets it from cloud-init with those options. Running boxes ignore the change, so no apply is needed.
 
-5. Under Settings, Environments, create `production` and limit its deployment branches to `main`. Give it three secrets, then delete the private key file:
+5. Under Settings, Environments, create `production` and limit its deployment branches to `main`. Give it three secrets, then delete the private key file. Deploys also read the existing `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` repository secrets, and `images` fails without them, because its scan must prove neither leaked into an image:
 
    ```sh
    gh secret set TS_OAUTH_CLIENT_ID --env production

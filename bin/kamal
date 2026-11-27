@@ -6,8 +6,8 @@
 # filled from the DASH_* lines of $DASH_INFRA_ENV (default
 # ~/.config/dash/infra.env) and, when the gh CLI is logged in, from gh. CI sets
 # them all itself and needs neither. Kamal logs the server in to the registry on
-# every deploy, so afterwards the server is logged out again: the images are
-# public, and the deployer's token shouldn't stay on the box. Set
+# every deploy, so afterwards the server is logged out again: the deployer's token
+# shouldn't stay on the box once the pull is done. Set
 # KAMAL_REGISTRY_PASSWORD to a read:packages token to avoid lending it a broad one.
 set -euo pipefail
 

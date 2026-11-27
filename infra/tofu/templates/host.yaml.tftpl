@@ -15,7 +15,7 @@ users:
       - ${jsonencode(key)}
 %{ endfor ~}
 %{ for key in deploy_ssh_public_keys ~}
-      - ${jsonencode("from=\"100.64.0.0/10,fd7a:115c:a1e0::/48\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding ${key}")}
+      - ${jsonencode("${deploy_key_options} ${key}")}
 %{ endfor ~}
 
 package_update: true

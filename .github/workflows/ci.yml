@@ -139,7 +139,7 @@ jobs:
 
       - run: corepack enable
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -167,7 +167,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: bin/image "$APP" --push --tag "$VERSION"
+      - run: |
+          if [[ -z $DASH_BETTER_AUTH_SECRET || -z $DASH_DATABASE_URL ]]; then
+            echo "::error::DASH_BETTER_AUTH_SECRET and DASH_DATABASE_URL must be set so the image scan covers them"
+            exit 1
+          fi
+          bin/image "$APP" --push --tag "$VERSION"
         env:
           APP: ${{ matrix.app }}
           VERSION: ${{ needs.release.outputs.version }}
@@ -193,11 +198,11 @@ jobs:
       packages: read
     env:
       VERSION: ${{ needs.release.outputs.version }}
-      READY: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && secrets.DASH_DEPLOY_SSH_KEY != '' }}
+      READY: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && secrets.DASH_DEPLOY_SSH_KEY != '' && secrets.DASH_BETTER_AUTH_SECRET != '' && secrets.DASH_DATABASE_URL != '' }}
     steps:
       - name: Skip without deploy secrets
         if: env.READY != 'true'
-        run: echo "::notice title=Deploy skipped::$VERSION is released and its images are pushed, but the production environment lacks TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET or DASH_DEPLOY_SSH_KEY. See README.md, Deploys."
+        run: echo "::notice title=Deploy skipped::$VERSION is released and its images are pushed, but the production environment lacks one of TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET, DASH_DEPLOY_SSH_KEY, DASH_BETTER_AUTH_SECRET or DASH_DATABASE_URL. See README.md, Deploys."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.READY == 'true'

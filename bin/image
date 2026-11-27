@@ -17,19 +17,21 @@ esac
 push=
 extra_tags=()
 while (($#)); do
-  case $1 in
-    --push) push=--push && shift ;;
-    --tag)
-      if [[ ! ${2:-} =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
-        echo "$usage" >&2
-        exit 2
-      fi
-      extra_tags+=("$2")
-      shift 2
-      ;;
-    *) echo "$usage" >&2 && exit 2 ;;
-  esac
+  if [[ $1 == --push ]]; then
+    push=--push
+    shift
+  elif [[ $1 == --tag && ${2:-} =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+    extra_tags+=("$2")
+    shift 2
+  else
+    echo "$usage" >&2
+    exit 2
+  fi
 done
+if [[ -z $push && ${#extra_tags[@]} -gt 0 ]]; then
+  echo "--tag needs --push: $usage" >&2
+  exit 2
+fi
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
