@@ -65,19 +65,17 @@ export interface ConnectState {
  */
 export class SignedConnectState implements ConnectState {
   private readonly key: Buffer;
-  private readonly now: () => Date;
 
-  constructor(props: { secret: string; now?: (() => Date) | undefined }) {
+  constructor(props: { secret: string }) {
     this.key = Buffer.from(
       hkdfSync('sha256', props.secret, Buffer.alloc(0), keyInfo, 32),
     );
-    this.now = props.now ?? (() => new Date());
   }
 
   issue(request: ConnectStateRequest): string {
     const payload: ConnectStatePayload = {
       ...request,
-      expiresAt: Math.floor(this.now().getTime() / 1000) + lifetimeSeconds,
+      expiresAt: Math.floor(Date.now() / 1000) + lifetimeSeconds,
       nonce: randomBytes(16).toString('base64url'),
     };
     const body = Buffer.from(JSON.stringify(payload), 'utf8').toString(
@@ -108,7 +106,7 @@ export class SignedConnectState implements ConnectState {
       !parsed.success ||
       parsed.data.userId !== props.userId ||
       parsed.data.provider !== props.provider ||
-      parsed.data.expiresAt * 1000 <= this.now().getTime()
+      parsed.data.expiresAt * 1000 <= Date.now()
     ) {
       return null;
     }

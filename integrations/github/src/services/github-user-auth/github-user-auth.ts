@@ -1,4 +1,8 @@
-import type { AuthorizedUser, UserGrant } from '@dash/integrations-core';
+import {
+  type AuthorizedUser,
+  GrantRevokedError,
+  type UserGrant,
+} from '@dash/integrations-core';
 import { z } from 'zod';
 
 import { githubAccountSchema } from '#src/contracts/github-account.ts';
@@ -10,22 +14,44 @@ const tokenUrl = 'https://github.com/login/oauth/access_token';
 
 /** GitHub answers 200 with an `error` field when it refuses a token request. */
 const tokenResponseSchema = z.union([
-  z.object({
-    error: z.string(),
-    error_description: z.string().optional(),
-  }),
-  z.object({
-    access_token: z.string().min(1),
-    expires_in: z.number().optional(),
-    refresh_token: z.string().min(1).optional(),
-    refresh_token_expires_in: z.number().optional(),
-  }),
+  z
+    .object({
+      error: z.string(),
+      error_description: z.string().optional(),
+    })
+    .transform((refusal) => ({
+      refused: true as const,
+      code: refusal.error,
+      description: refusal.error_description,
+    })),
+  z
+    .object({
+      access_token: z.string().min(1),
+      expires_in: z.number().optional(),
+      refresh_token: z.string().min(1).optional(),
+      refresh_token_expires_in: z.number().optional(),
+    })
+    .transform((token) => ({
+      refused: false as const,
+      accessToken: token.access_token,
+      expiresIn: token.expires_in,
+      refreshToken: token.refresh_token,
+      refreshTokenExpiresIn: token.refresh_token_expires_in,
+    })),
 ]);
 
-const userInstallationsSchema = z.object({
-  total_count: z.number(),
-  installations: z.array(z.object({ id: z.number() })),
-});
+const userInstallationsSchema = z
+  .object({
+    total_count: z.number(),
+    installations: z.array(z.object({ id: z.number() })),
+  })
+  .transform((page) => ({
+    totalCount: page.total_count,
+    installationIds: page.installations.map(({ id }) => String(id)),
+  }));
+
+/** How `@octokit/request` reports a refused token. */
+const unauthorizedSchema = z.object({ status: z.literal(401) });
 
 /**
  * The App's OAuth web flow: a person authorizes the App, and Dash gets a user token that acts
@@ -36,18 +62,15 @@ export class GithubUserAuth {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly request: GithubRequest;
-  private readonly now: () => Date;
 
   constructor(props: {
     clientId: string;
     clientSecret: string;
     request: GithubRequest;
-    now: () => Date;
   }) {
     this.clientId = props.clientId;
     this.clientSecret = props.clientSecret;
     this.request = props.request;
-    this.now = props.now;
   }
 
   authorizeUrl(props: { state: string; redirectUrl: string }): string {
@@ -72,14 +95,38 @@ export class GithubUserAuth {
     return { account: githubAccountSchema.parse(data), grant };
   }
 
+  /** GitHub answers `bad_refresh_token` when the refresh token was revoked, has expired or was already spent by another refresh. */
   async refreshGrant(props: { refreshToken: string }): Promise<UserGrant> {
-    return this.requestToken({
-      grant_type: 'refresh_token',
-      refresh_token: props.refreshToken,
-    });
+    try {
+      return await this.requestToken({
+        grant_type: 'refresh_token',
+        refresh_token: props.refreshToken,
+      });
+    } catch (error) {
+      if (
+        error instanceof GithubOAuthError &&
+        error.code === 'bad_refresh_token'
+      ) {
+        throw new GrantRevokedError({ provider: 'github', cause: error });
+      }
+      throw error;
+    }
   }
 
   async listInstallationIds(props: {
+    accessToken: string;
+  }): Promise<readonly string[]> {
+    try {
+      return await this.readInstallationIds(props);
+    } catch (error) {
+      if (unauthorizedSchema.safeParse(error).success) {
+        throw new GrantRevokedError({ provider: 'github', cause: error });
+      }
+      throw error;
+    }
+  }
+
+  private async readInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]> {
     const ids: string[] = [];
@@ -90,10 +137,10 @@ export class GithubUserAuth {
         page,
       });
       const parsed = userInstallationsSchema.parse(data);
-      ids.push(...parsed.installations.map(({ id }) => String(id)));
+      ids.push(...parsed.installationIds);
       if (
-        parsed.installations.length < pageSize ||
-        ids.length >= parsed.total_count
+        parsed.installationIds.length < pageSize ||
+        ids.length >= parsed.totalCount
       ) {
         return ids;
       }
@@ -103,7 +150,7 @@ export class GithubUserAuth {
   private async requestToken(
     parameters: Readonly<Record<string, string>>,
   ): Promise<UserGrant> {
-    const issuedAt = this.now().getTime();
+    const issuedAt = Date.now();
     const { data } = await this.request(`POST ${tokenUrl}`, {
       headers: { accept: 'application/json' },
       client_id: this.clientId,
@@ -111,10 +158,10 @@ export class GithubUserAuth {
       ...parameters,
     });
     const token = tokenResponseSchema.parse(data);
-    if ('error' in token) {
+    if (token.refused) {
       throw new GithubOAuthError({
-        code: token.error,
-        description: token.error_description,
+        code: token.code,
+        description: token.description,
       });
     }
 
@@ -123,10 +170,10 @@ export class GithubUserAuth {
         ? null
         : new Date(issuedAt + seconds * 1000).toISOString();
     return {
-      accessToken: token.access_token,
-      accessTokenExpiresAt: expiry(token.expires_in),
-      refreshToken: token.refresh_token ?? null,
-      refreshTokenExpiresAt: expiry(token.refresh_token_expires_in),
+      accessToken: token.accessToken,
+      accessTokenExpiresAt: expiry(token.expiresIn),
+      refreshToken: token.refreshToken ?? null,
+      refreshTokenExpiresAt: expiry(token.refreshTokenExpiresIn),
     };
   }
 }

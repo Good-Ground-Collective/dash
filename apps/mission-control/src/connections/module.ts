@@ -38,12 +38,10 @@ export class ConnectionsModule implements HttpModule {
     secret: string;
     baseUrl: string;
     webOrigin: string;
-    now?: (() => Date) | undefined;
   }) {
     const cipher = new AesGcmTokenCipher({ secret: props.secret });
     const state: ConnectState = new SignedConnectState({
       secret: props.secret,
-      now: props.now,
     });
     const owned = new Map<string, OwnedConnections>();
     const routes: (ConnectRoutes | WebhookRoutes)[] = [];
@@ -57,7 +55,6 @@ export class ConnectionsModule implements HttpModule {
         connections: props.connections,
         linkedAccounts: props.linkedAccounts,
         cipher,
-        now: props.now,
       });
       owned.set(integration.provider, connections);
       routes.push(
@@ -72,6 +69,7 @@ export class ConnectionsModule implements HttpModule {
         new WebhookRoutes({
           provider: integration.provider,
           flow,
+          connections: props.connections,
           deliveries: props.deliveries,
         }),
       );

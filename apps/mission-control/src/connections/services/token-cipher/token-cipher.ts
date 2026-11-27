@@ -10,6 +10,7 @@ import { SealedTokenError } from '#src/connections/errors.ts';
 const version = 'v1';
 const keyInfo = 'dash/connections/token-cipher/v1';
 const ivBytes = 12;
+const authTagLength = 16;
 
 /** Encrypts provider tokens before they reach the database. */
 export interface TokenCipher {
@@ -36,7 +37,9 @@ export class AesGcmTokenCipher implements TokenCipher {
 
   seal(props: { plaintext: string; context: string }): string {
     const iv = randomBytes(ivBytes);
-    const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    const cipher = createCipheriv('aes-256-gcm', this.key, iv, {
+      authTagLength,
+    });
     cipher.setAAD(Buffer.from(props.context, 'utf8'));
     const ciphertext = Buffer.concat([
       cipher.update(props.plaintext, 'utf8'),
@@ -64,6 +67,7 @@ export class AesGcmTokenCipher implements TokenCipher {
         'aes-256-gcm',
         this.key,
         Buffer.from(iv, 'base64url'),
+        { authTagLength },
       );
       decipher.setAAD(Buffer.from(props.context, 'utf8'));
       decipher.setAuthTag(Buffer.from(tag, 'base64url'));

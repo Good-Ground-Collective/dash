@@ -50,6 +50,17 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     );
   }
 
+  async hasInstallation(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<boolean> {
+    return [...this.owned.values()].some(
+      (connection) =>
+        connection.provider === props.provider &&
+        connection.installationId === props.installationId,
+    );
+  }
+
   async recordInstallRequest(request: StoredInstallRequest): Promise<void> {
     this.installRequests.push(request);
   }

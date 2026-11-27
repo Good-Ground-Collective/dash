@@ -11,7 +11,6 @@ import {
 import { z } from 'zod';
 
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
-import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubConnectFlow } from '#src/services/github-connect-flow/github-connect-flow.ts';
 import { GithubProjectFields } from '#src/services/github-project-fields/github-project-fields.ts';
 import { GithubSourceControl } from '#src/services/github-source-control/github-source-control.ts';
@@ -34,8 +33,6 @@ export class GithubIntegration implements Integration {
     props: z.input<typeof githubIntegrationPropsSchema> & {
       /** The registered App. Without it, the connect flow isn't offered. */
       app?: GithubAppConfig | undefined;
-      /** Defaults to `@octokit/request`. Tests pass one with a stubbed `fetch`. */
-      request?: GithubRequest | undefined;
     },
   ) {
     this.id = githubIntegrationPropsSchema.parse(props).id;
@@ -48,10 +45,7 @@ export class GithubIntegration implements Integration {
         ? capabilities
         : capabilities.with(
             connectFlowCapability,
-            new GithubConnectFlow({
-              config: props.app,
-              request: props.request,
-            }),
+            new GithubConnectFlow({ config: props.app }),
           );
   }
 

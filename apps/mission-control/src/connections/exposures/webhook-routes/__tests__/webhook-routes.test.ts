@@ -1,12 +1,25 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ConnectionsHarness } from '#src/connections/__tests__/support/connections-harness.ts';
+import {
+  adaId,
+  ConnectionsHarness,
+} from '#src/connections/__tests__/support/connections-harness.ts';
+import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 
 const harness = new ConnectionsHarness();
 const payload = '{ "action": "created",  "installation": { "id": 42 } }';
 
+beforeEach(async () => {
+  await harness.connections.saveOwned({
+    provider: 'github',
+    connectedBy: adaId,
+    installation: acmeInstallation,
+  });
+});
+
 afterEach(async () => {
   harness.deliveries.deliveries.splice(0);
+  harness.connections.owned.clear();
   await harness.stop();
 });
 
@@ -14,6 +27,7 @@ class Deliveries {
   static async send(props: {
     signature: string;
     delivery: string;
+    body?: string;
   }): Promise<{ statusCode: number; body: unknown }> {
     const app = await harness.start();
     const response = await app.inject({
@@ -24,7 +38,7 @@ class Deliveries {
         'x-signature': props.signature,
         'x-delivery': props.delivery,
       },
-      payload,
+      payload: props.body ?? payload,
     });
     return { statusCode: response.statusCode, body: response.json() };
   }
@@ -39,7 +53,7 @@ describe('ConnectionsModule webhooks', () => {
 
     expect(response).toEqual({
       statusCode: 202,
-      body: { deliveryId: 'delivery-1', duplicate: false },
+      body: { deliveryId: 'delivery-1', status: 'recorded' },
     });
     expect(harness.deliveries.deliveries).toEqual([
       {
@@ -61,11 +75,29 @@ describe('ConnectionsModule webhooks', () => {
 
     expect(again).toEqual({
       statusCode: 202,
-      body: { deliveryId: 'd-2', duplicate: true },
+      body: { deliveryId: 'd-2', status: 'duplicate' },
     });
     expect(harness.deliveries.deliveries).toHaveLength(1);
   });
 
+  it('acknowledges a delivery for an installation Dash has no connection for without storing it', async () => {
+    const stranger = '{ "action": "created", "installation": { "id": 7 } }';
+
+    const response = await Deliveries.send({
+      signature: `signed:${stranger}`,
+      delivery: 'd-4',
+      body: stranger,
+    });
+
+    expect(response).toEqual({
+      statusCode: 202,
+      body: { deliveryId: 'd-4', status: 'ignored' },
+    });
+    expect(harness.deliveries.deliveries).toEqual([]);
+  });
+});
+
+describe('ConnectionsModule webhook rejections', () => {
   it('rejects a bad signature and records nothing', async () => {
     const response = await Deliveries.send({
       signature: 'signed:something else',
@@ -76,6 +108,32 @@ describe('ConnectionsModule webhooks', () => {
       statusCode: 401,
       body: { code: 'WEBHOOK_SIGNATURE_REJECTED' },
     });
+    expect(harness.deliveries.deliveries).toEqual([]);
+  });
+
+  it('checks the signature before parsing, so malformed JSON with a bad signature is a 401', async () => {
+    const response = await Deliveries.send({
+      signature: 'signed:something else',
+      delivery: 'd-5',
+      body: '{"action":',
+    });
+
+    expect(response).toMatchObject({
+      statusCode: 401,
+      body: { code: 'WEBHOOK_SIGNATURE_REJECTED' },
+    });
+  });
+
+  it('refuses a body over the limit before reading it', async () => {
+    const oversized = `{"padding":"${'x'.repeat(5 * 1024 * 1024)}"}`;
+
+    const response = await Deliveries.send({
+      signature: `signed:${oversized}`,
+      delivery: 'd-6',
+      body: oversized,
+    });
+
+    expect(response.statusCode).toBe(413);
     expect(harness.deliveries.deliveries).toEqual([]);
   });
 });

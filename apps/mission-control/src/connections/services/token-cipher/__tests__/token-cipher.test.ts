@@ -47,4 +47,19 @@ describe('AesGcmTokenCipher', () => {
       cipher.open({ sealed: [version, iv, flipped, tag].join('.'), context }),
     ).toThrow(SealedTokenError);
   });
+
+  it('refuses a truncated authentication tag', () => {
+    const sealed = cipher.seal({ plaintext: 'ghu_token', context });
+    const [version, iv, body, tag = ''] = sealed.split('.');
+    const truncated = Buffer.from(tag, 'base64url')
+      .subarray(0, 4)
+      .toString('base64url');
+
+    expect(() =>
+      cipher.open({
+        sealed: [version, iv, body, truncated].join('.'),
+        context,
+      }),
+    ).toThrow(SealedTokenError);
+  });
 });

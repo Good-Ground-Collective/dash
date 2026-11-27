@@ -24,7 +24,7 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 /**
  * A provider's connect flow under `/integrations/<provider>`:
  * - `GET /connect`: the install and authorize URLs for the web's “Connect” button, the linked account and the owned connections. Needs a session.
- * - `GET /setup`: the provider's install callback (`installation_id`, `setup_action` of install, update or request).
+ * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request).
  * - `GET /callback`: the OAuth callback, which links the account and finishes an install that was waiting for it.
  *
  * Both callbacks end with a redirect to the web app's `returnTo` path, carrying `connect=<outcome>` and, on failure, `reason`.
@@ -98,7 +98,7 @@ export class ConnectRoutes {
   }
 
   private async setup(props: {
-    request: FastifyRequest<{ Querystring: z.infer<typeof setupQuerySchema> }>;
+    request: FastifyRequest<{ Querystring: z.output<typeof setupQuerySchema> }>;
     reply: FastifyReply;
   }): Promise<FastifyReply> {
     const { request, reply } = props;
@@ -117,7 +117,7 @@ export class ConnectRoutes {
           });
     const returnTo = state?.returnTo ?? this.defaultReturnTo();
 
-    if (query.setup_action === 'request') {
+    if (query.setupAction === 'request') {
       if (state?.targetAccountId !== undefined) {
         await this.connections.recordInstallRequest({
           userId,
@@ -126,7 +126,7 @@ export class ConnectRoutes {
       }
       return this.finish({ reply, returnTo, outcome: 'requested' });
     }
-    if (query.installation_id === undefined) {
+    if (query.installationId === undefined) {
       return this.finish({
         reply,
         returnTo,
@@ -139,13 +139,13 @@ export class ConnectRoutes {
       reply,
       userId,
       returnTo,
-      installationId: query.installation_id,
+      installationId: query.installationId,
     });
   }
 
   private async callback(props: {
     request: FastifyRequest<{
-      Querystring: z.infer<typeof callbackQuerySchema>;
+      Querystring: z.output<typeof callbackQuerySchema>;
     }>;
     reply: FastifyReply;
   }): Promise<FastifyReply> {
@@ -186,7 +186,7 @@ export class ConnectRoutes {
       return this.fail({ request, reply, returnTo, error });
     }
 
-    const installationId = state.installationId ?? query.installation_id;
+    const installationId = state.installationId ?? query.installationId;
     return installationId === undefined
       ? this.finish({ reply, returnTo, outcome: 'linked' })
       : this.install({ request, reply, userId, returnTo, installationId });

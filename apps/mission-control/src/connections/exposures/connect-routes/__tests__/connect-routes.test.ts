@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   adaId,
@@ -6,6 +6,7 @@ import {
   webOrigin,
 } from '#src/connections/__tests__/support/connections-harness.ts';
 import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
+import { CapturedLog } from '#src/platform/exposures/http/__tests__/support/captured-log.ts';
 
 const running: ConnectionsHarness[] = [];
 
@@ -43,8 +44,13 @@ class Served {
   }
 }
 
+beforeEach(() => {
+  ConnectionsHarness.freezeClock();
+});
+
 afterEach(async () => {
   await Promise.all(running.splice(0).map(async (harness) => harness.stop()));
+  vi.useRealTimers();
 });
 
 describe('ConnectionsModule install callback', () => {
@@ -138,6 +144,43 @@ describe('ConnectionsModule install before authorizing', () => {
   });
 });
 
+describe('ConnectionsModule install with a refused grant', () => {
+  it('sends the person to authorize again when the provider refuses their token', async () => {
+    const harness = await Served.linked();
+    harness.flow.revoked.add('access-1');
+
+    const response = await (
+      await harness.start()
+    ).inject({
+      url: '/integrations/github/setup?installation_id=42&setup_action=install',
+      headers: ConnectionsHarness.cookie(adaId),
+    });
+
+    expect(Served.query(response.headers.location).path).toBe(
+      'https://forge.test/authorize',
+    );
+    expect(harness.connections.owned.size).toBe(0);
+  });
+
+  it('sends the person to authorize again when the provider refuses the refresh', async () => {
+    const harness = await Served.linked();
+    harness.flow.refusesRefresh = true;
+    vi.setSystemTime(new Date('2026-11-26T21:00:00Z'));
+
+    const response = await (
+      await harness.start()
+    ).inject({
+      url: '/integrations/github/setup?installation_id=42&setup_action=install',
+      headers: ConnectionsHarness.cookie(adaId),
+    });
+
+    expect(Served.query(response.headers.location).path).toBe(
+      'https://forge.test/authorize',
+    );
+    expect(harness.flow.refreshed).toEqual(['refresh-1']);
+  });
+});
+
 describe('ConnectionsModule install requests', () => {
   it('records which account an owner was asked to install on', async () => {
     const harness = await Served.fresh();
@@ -159,5 +202,31 @@ describe('ConnectionsModule install requests', () => {
     expect(harness.connections.installRequests).toEqual([
       { userId: adaId, provider: 'github', accountExternalId: '9919' },
     ]);
+  });
+});
+
+describe('ConnectionsModule callback logs', () => {
+  it('keeps the authorization code and state out of the request log', async () => {
+    const harness = new ConnectionsHarness({ logLevel: 'info' });
+    running.push(harness);
+    const state = await harness.issuedState({
+      userId: adaId,
+      url: 'authorizeUrl',
+    });
+    const app = await harness.start();
+    const log = new CapturedLog();
+    log.attach(app);
+
+    const response = await app.inject({
+      url: `/integrations/github/callback?code=good&state=${state}`,
+      headers: ConnectionsHarness.cookie(adaId),
+    });
+
+    expect(Served.query(response.headers.location)).toMatchObject({
+      connect: 'linked',
+    });
+    expect(log.text()).toContain('"url":"/integrations/github/callback"');
+    expect(log.text()).not.toContain(state);
+    expect(log.text()).not.toContain('code=');
   });
 });

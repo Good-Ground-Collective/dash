@@ -10,7 +10,6 @@ import { request as octokitRequest } from '@octokit/request';
 
 import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
-import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubInstallations } from '#src/services/github-installations/github-installations.ts';
 import { GithubUserAuth } from '#src/services/github-user-auth/github-user-auth.ts';
 import { GithubWebhooks } from '#src/services/github-webhooks/github-webhooks.ts';
@@ -21,14 +20,9 @@ export class GithubConnectFlow implements ConnectFlow {
   private readonly users: GithubUserAuth;
   private readonly webhooks: GithubWebhooks;
 
-  constructor(props: {
-    config: GithubAppConfig;
-    /** Defaults to `@octokit/request`. */
-    request?: GithubRequest | undefined;
-    now?: () => Date;
-  }) {
+  constructor(props: { config: GithubAppConfig }) {
     const config = githubAppConfigSchema.parse(props.config);
-    const request = (props.request ?? octokitRequest).defaults({
+    const request = octokitRequest.defaults({
       headers: { 'user-agent': 'dash-mission-control' },
     });
     this.installations = new GithubInstallations({
@@ -41,7 +35,6 @@ export class GithubConnectFlow implements ConnectFlow {
       clientId: config.clientId,
       clientSecret: config.clientSecret,
       request,
-      now: props.now ?? (() => new Date()),
     });
     this.webhooks = new GithubWebhooks({ secret: config.webhookSecret });
   }
@@ -79,7 +72,7 @@ export class GithubConnectFlow implements ConnectFlow {
 
   async verifyWebhook(props: {
     headers: WebhookHeaders;
-    body: string;
+    body: Uint8Array;
   }): Promise<WebhookDelivery | null> {
     return this.webhooks.verify(props);
   }

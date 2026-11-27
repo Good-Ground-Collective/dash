@@ -7,6 +7,8 @@ import {
   type Integration,
 } from '@dash/integrations-core';
 
+import { vi } from 'vitest';
+
 import type { PrincipalSession } from '#src/auth/services/identity/identity.ts';
 import { FakeConnectFlow } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import {
@@ -44,7 +46,10 @@ class FakeIntegration implements Integration {
   }
 }
 
-/** The connections module over in-memory storage and a fake provider. A `session=<user id>` cookie signs that person in. */
+/**
+ * The connections module over in-memory storage and a fake provider. A `session=<user id>`
+ * cookie signs that person in. Tests freeze the clock at `fixedNow` with `freezeClock`.
+ */
 export class ConnectionsHarness {
   readonly flow = new FakeConnectFlow();
   readonly connections = new InMemoryConnectionRepository();
@@ -53,7 +58,12 @@ export class ConnectionsHarness {
   readonly module: ConnectionsModule;
   private app: ZodFastifyInstance | undefined;
 
-  constructor(props: { offerFlow?: boolean } = {}) {
+  private readonly logLevel: 'info' | 'silent';
+
+  constructor(
+    props: { offerFlow?: boolean; logLevel?: 'info' | 'silent' } = {},
+  ) {
+    this.logLevel = props.logLevel ?? 'silent';
     this.module = new ConnectionsModule({
       registry: new InMemoryIntegrationRegistry({
         integrations:
@@ -77,7 +87,6 @@ export class ConnectionsHarness {
       secret,
       baseUrl,
       webOrigin,
-      now: () => fixedNow,
     });
   }
 
@@ -86,7 +95,7 @@ export class ConnectionsHarness {
       config: {
         corsOrigins: [webOrigin],
         environment: 'test',
-        logLevel: 'silent',
+        logLevel: this.logLevel,
       },
       modules: [this.module],
     }).build();
@@ -113,6 +122,10 @@ export class ConnectionsHarness {
     this.app = undefined;
   }
 
+  static freezeClock(): void {
+    vi.useFakeTimers({ toFake: ['Date'], now: fixedNow });
+  }
+
   static cookie(userId: string) {
     return { cookie: `session=${userId}` };
   }
@@ -122,12 +135,12 @@ export class ConnectionsHarness {
     return new URL(url ?? '').searchParams.get('state') ?? '';
   }
 
-  /** A state as #74's install links will carry it, preselecting an account. */
+  /** A state as an install link for a chosen account carries it. Call with the clock frozen. */
   static requestState(props: {
     userId: string;
     targetAccountId: string;
   }): string {
-    return new SignedConnectState({ secret, now: () => fixedNow }).issue({
+    return new SignedConnectState({ secret }).issue({
       ...props,
       provider: 'github',
       returnTo: '/setup/github',

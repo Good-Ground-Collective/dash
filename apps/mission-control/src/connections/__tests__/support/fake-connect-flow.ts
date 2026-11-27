@@ -1,13 +1,27 @@
-import type {
-  AuthorizedUser,
-  ConnectFlow,
-  Installation,
-  UserGrant,
-  WebhookDelivery,
-  WebhookHeaders,
+import {
+  type AuthorizedUser,
+  type ConnectFlow,
+  GrantRevokedError,
+  type Installation,
+  type UserGrant,
+  type WebhookDelivery,
+  type WebhookHeaders,
 } from '@dash/integrations-core';
+import { z } from 'zod';
 
 export const providerHost = 'https://forge.test';
+
+const deliveryBodySchema = z
+  .string()
+  .transform((text, context) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      context.addIssue({ code: 'custom', message: 'Expected a JSON body' });
+      return z.NEVER;
+    }
+  })
+  .pipe(z.object({ installation: z.object({ id: z.number() }) }));
 
 export const octocatAccount = {
   provider: 'github',
@@ -44,10 +58,14 @@ export const acmeInstallation: Installation = {
 
 /**
  * A provider in memory. Code `good` authorizes octocat with `access-1`, which can manage
- * installation 42. A webhook is authentic when `x-signature` is `signed:<body>`.
+ * installation 42. Tokens in `revoked` are refused, and so is every refresh once
+ * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`; its
+ * installation is the body's `installation.id`, read only after the signature checks out.
  */
 export class FakeConnectFlow implements ConnectFlow {
   readonly refreshed: string[] = [];
+  readonly revoked = new Set<string>();
+  refusesRefresh = false;
   grant: UserGrant = {
     accessToken: 'access-1',
     accessTokenExpiresAt: '2026-11-26T20:00:00.000Z',
@@ -90,12 +108,19 @@ export class FakeConnectFlow implements ConnectFlow {
 
   async refreshGrant(props: { refreshToken: string }): Promise<UserGrant> {
     this.refreshed.push(props.refreshToken);
+    await Promise.resolve();
+    if (this.refusesRefresh) {
+      throw new GrantRevokedError({ provider: 'github' });
+    }
     return this.refreshedGrant;
   }
 
   async listUserInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]> {
+    if (this.revoked.has(props.accessToken)) {
+      throw new GrantRevokedError({ provider: 'github' });
+    }
     return this.manageable.get(props.accessToken) ?? [];
   }
 
@@ -107,20 +132,22 @@ export class FakeConnectFlow implements ConnectFlow {
 
   async verifyWebhook(props: {
     headers: WebhookHeaders;
-    body: string;
+    body: Uint8Array;
   }): Promise<WebhookDelivery | null> {
+    const text = Buffer.from(props.body).toString('utf8');
     const delivery = props.headers['x-delivery'];
     if (
-      props.headers['x-signature'] !== `signed:${props.body}` ||
+      props.headers['x-signature'] !== `signed:${text}` ||
       delivery === undefined ||
       Array.isArray(delivery)
     ) {
       return null;
     }
+    const body = deliveryBodySchema.safeParse(text);
     return {
       deliveryId: String(delivery),
       event: 'installation',
-      installationId: '42',
+      installationId: body.success ? String(body.data.installation.id) : null,
     };
   }
 }

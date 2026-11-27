@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   acmeInstallation,
@@ -7,6 +7,10 @@ import {
   installationUrl,
   repositoriesUrl,
 } from '#src/__tests__/support/fake-github.ts';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('GithubConnectFlow getInstallation', () => {
   it('reads the account, selection and repositories', async () => {

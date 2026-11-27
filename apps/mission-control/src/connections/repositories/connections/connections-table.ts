@@ -14,7 +14,7 @@ import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts
 
 /**
  * A provider account Dash reads. `owned` connections are installations of the provider's app,
- * read with the app's credentials. `guest` connections (#27) will be personal tokens.
+ * read with the app's credentials. `guest` connections will be personal tokens.
  */
 export const connectionTable = pgTable(
   'connection',
@@ -74,7 +74,7 @@ export const connectionRepositoryTable = pgTable(
   (table) => [primaryKey({ columns: [table.connectionId, table.externalId] })],
 );
 
-/** Someone asked an organisation owner to install the app on this account. #74 clears it when the installation arrives. */
+/** Someone asked an organisation owner to install the app on this account, and is waiting for the installation. */
 export const installRequestTable = pgTable(
   'install_request',
   {

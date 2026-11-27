@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   adaId,
@@ -30,8 +30,13 @@ class Served {
   }
 }
 
+beforeEach(() => {
+  ConnectionsHarness.freezeClock();
+});
+
 afterEach(async () => {
   await Promise.all(running.splice(0).map(async (harness) => harness.stop()));
+  vi.useRealTimers();
 });
 
 describe('ConnectionsModule connect', () => {

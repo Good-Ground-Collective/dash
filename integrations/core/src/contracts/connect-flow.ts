@@ -21,17 +21,17 @@ export interface ConnectFlow {
     code: string;
     redirectUrl: string;
   }): Promise<AuthorizedUser>;
-  /** A fresh grant for an expired one. */
+  /** A fresh grant for an expired one. Throws `GrantRevokedError` when the provider refuses the refresh token. */
   refreshGrant(props: { refreshToken: string }): Promise<UserGrant>;
-  /** The installations the person behind `accessToken` may manage, so a callback can't claim someone else's. */
+  /** The installations the person behind `accessToken` may manage, so a callback can't claim someone else's. Throws `GrantRevokedError` when the provider refuses the token. */
   listUserInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]>;
   /** Reads one installation as the app: its account and the repositories it covers. */
   getInstallation(props: { installationId: string }): Promise<Installation>;
-  /** The delivery when its signature matches the webhook secret, otherwise null. */
+  /** The delivery when its signature matches the webhook secret over the exact body bytes, otherwise null. The body is parsed only after the signature checks out. */
   verifyWebhook(props: {
     headers: WebhookHeaders;
-    body: string;
+    body: Uint8Array;
   }): Promise<WebhookDelivery | null>;
 }

@@ -21,6 +21,11 @@ export interface ConnectionRepository {
     installation: Installation;
   }): Promise<OwnedConnection>;
   listOwned(props: { provider: string }): Promise<OwnedConnection[]>;
+  /** Whether Dash has a connection for this installation of the provider's app. */
+  hasInstallation(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<boolean>;
   recordInstallRequest(props: {
     userId: string;
     provider: string;
@@ -126,6 +131,23 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
         ),
       }),
     );
+  }
+
+  async hasInstallation(props: {
+    provider: string;
+    installationId: string;
+  }): Promise<boolean> {
+    const rows = await this.database.orm
+      .select({ id: connectionTable.id })
+      .from(connectionTable)
+      .where(
+        and(
+          eq(connectionTable.provider, props.provider),
+          eq(connectionTable.installationId, props.installationId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async recordInstallRequest(props: {

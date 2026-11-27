@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
 import {
@@ -8,6 +8,10 @@ import {
   redirectUrl,
 } from '#src/__tests__/support/fake-github.ts';
 import { GithubConnectFlow } from '#src/services/github-connect-flow/github-connect-flow.ts';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('GithubConnectFlow URLs', () => {
   const flow = new FakeGithub().flow();

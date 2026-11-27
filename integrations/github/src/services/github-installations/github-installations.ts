@@ -7,35 +7,48 @@ import type { GithubRequest } from '#src/contracts/github-request.ts';
 
 const pageSize = 100;
 
-const installationResponseSchema = z.object({
-  id: z.number(),
-  account: githubAccountSchema,
-  repository_selection: z.enum(['all', 'selected']),
-  html_url: z.url(),
-  suspended_at: z.string().nullable(),
-});
+const installationResponseSchema = z
+  .object({
+    id: z.number(),
+    account: githubAccountSchema,
+    repository_selection: z.enum(['all', 'selected']),
+    html_url: z.url(),
+    suspended_at: z.string().nullable(),
+  })
+  .transform((installation) => ({
+    id: installation.id,
+    account: installation.account,
+    repositorySelection: installation.repository_selection,
+    htmlUrl: installation.html_url,
+    suspendedAt: installation.suspended_at,
+  }));
 
-const installationRepositoriesSchema = z.object({
-  total_count: z.number(),
-  repositories: z.array(
-    z
-      .object({
-        id: z.number(),
-        full_name: z.string(),
-        html_url: z.url(),
-        default_branch: z.string(),
-        archived: z.boolean(),
-      })
-      .transform((repository): Repository => ({
-        provider: 'github',
-        externalId: String(repository.id),
-        url: repository.html_url,
-        fullName: repository.full_name,
-        defaultBranch: repository.default_branch,
-        archived: repository.archived,
-      })),
-  ),
-});
+const installationRepositoriesSchema = z
+  .object({
+    total_count: z.number(),
+    repositories: z.array(
+      z
+        .object({
+          id: z.number(),
+          full_name: z.string(),
+          html_url: z.url(),
+          default_branch: z.string(),
+          archived: z.boolean(),
+        })
+        .transform((repository): Repository => ({
+          provider: 'github',
+          externalId: String(repository.id),
+          url: repository.html_url,
+          fullName: repository.full_name,
+          defaultBranch: repository.default_branch,
+          archived: repository.archived,
+        })),
+    ),
+  })
+  .transform((page) => ({
+    totalCount: page.total_count,
+    repositories: page.repositories,
+  }));
 
 /**
  * Installations of the App, read as the App. `@octokit/auth-app` mints the App JWTs and the
@@ -88,11 +101,11 @@ export class GithubInstallations {
     return {
       provider: 'github',
       externalId: String(installation.id),
-      url: installation.html_url,
+      url: installation.htmlUrl,
       account: installation.account,
-      repositorySelection: installation.repository_selection,
+      repositorySelection: installation.repositorySelection,
       repositories: await this.listRepositories(props),
-      suspended: installation.suspended_at !== null,
+      suspended: installation.suspendedAt !== null,
     };
   }
 
@@ -115,7 +128,7 @@ export class GithubInstallations {
       repositories.push(...parsed.repositories);
       if (
         parsed.repositories.length < pageSize ||
-        repositories.length >= parsed.total_count
+        repositories.length >= parsed.totalCount
       ) {
         return repositories;
       }

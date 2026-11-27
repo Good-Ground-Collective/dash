@@ -1,6 +1,6 @@
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 
-import { request } from '@octokit/request';
+import { vi } from 'vitest';
 import { z } from 'zod';
 
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
@@ -134,20 +134,17 @@ export class FakeGithub {
       });
   }
 
-  /** A connect flow over this fake, at `fixedNow`. */
+  /** A connect flow at `fixedNow`, with this fake standing in for the global `fetch`. The test file restores both after each test. */
   flow(): GithubConnectFlow {
-    return new GithubConnectFlow({
-      config: appConfig,
-      request: request.defaults({
-        request: {
-          fetch: async (
-            input: string | URL,
-            init: RequestInit & { headers?: Record<string, string> },
-          ) => this.answer({ input, init }),
-        },
-      }),
-      now: () => fixedNow,
-    });
+    vi.stubGlobal(
+      'fetch',
+      async (
+        input: string | URL,
+        init: RequestInit & { headers?: Record<string, string> },
+      ) => this.answer({ input, init }),
+    );
+    vi.useFakeTimers({ toFake: ['Date'], now: fixedNow });
+    return new GithubConnectFlow({ config: appConfig });
   }
 
   callsTo(props: { method: string; url: string }): RecordedCall[] {
@@ -182,7 +179,10 @@ export class FakeGithub {
   }
 
   /** An HMAC-SHA256 webhook signature, as GitHub sends it. */
-  static sign(body: string, secret = appConfig.webhookSecret): string {
+  static sign(
+    body: string | Uint8Array,
+    secret = appConfig.webhookSecret,
+  ): string {
     return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
   }
 

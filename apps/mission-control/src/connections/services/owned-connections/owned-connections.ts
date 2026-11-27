@@ -1,7 +1,8 @@
-import type {
-  ConnectedAccount,
-  ConnectFlow,
-  UserGrant,
+import {
+  type ConnectedAccount,
+  type ConnectFlow,
+  GrantRevokedError,
+  type UserGrant,
 } from '@dash/integrations-core';
 
 import type { OwnedConnection } from '#src/connections/contracts/connections.ts';
@@ -23,7 +24,7 @@ const expirySkewMilliseconds = 60_000;
 
 /**
  * One provider's `owned` connections: links a person to their provider account, records the
- * installations they can manage, and keeps their token fresh for later reads (#74).
+ * installations they can manage, and keeps their token fresh for reads made as them.
  */
 export class OwnedConnections {
   readonly provider: string;
@@ -31,7 +32,8 @@ export class OwnedConnections {
   private readonly connections: ConnectionRepository;
   private readonly linkedAccounts: LinkedAccountRepository;
   private readonly cipher: TokenCipher;
-  private readonly now: () => Date;
+  /** The refresh under way for each person, so concurrent requests spend a refresh token once. */
+  private readonly refreshing = new Map<string, Promise<UserGrant | null>>();
 
   constructor(props: {
     provider: string;
@@ -39,14 +41,12 @@ export class OwnedConnections {
     connections: ConnectionRepository;
     linkedAccounts: LinkedAccountRepository;
     cipher: TokenCipher;
-    now?: (() => Date) | undefined;
   }) {
     this.provider = props.provider;
     this.flow = props.flow;
     this.connections = props.connections;
     this.linkedAccounts = props.linkedAccounts;
     this.cipher = props.cipher;
-    this.now = props.now ?? (() => new Date());
   }
 
   /** Exchanges the authorization code and links the provider account to `userId`. */
@@ -77,38 +77,22 @@ export class OwnedConnections {
     return linked?.account ?? null;
   }
 
-  /** The person's token, refreshed first when it has expired. Null when they haven't linked an account or must authorize again. */
+  /**
+   * The person's token, refreshed first when it has expired. Null when they haven't linked an
+   * account or must authorize again, as when the provider refuses the refresh token. Refreshes
+   * for one person run one at a time in this process; a refresh token spent by another process
+   * comes back refused, which also means authorizing again.
+   */
   async userGrant(props: { userId: string }): Promise<UserGrant | null> {
-    const linked = await this.linkedAccounts.find({
-      userId: props.userId,
-      provider: this.provider,
+    const pending = this.refreshing.get(props.userId);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const grant = this.currentGrant(props).finally(() => {
+      this.refreshing.delete(props.userId);
     });
-    if (linked === null) {
-      return null;
-    }
-
-    const grant = this.open(linked);
-    if (grant === null) {
-      return null;
-    }
-    if (!this.expired(grant.accessTokenExpiresAt)) {
-      return grant;
-    }
-    if (
-      grant.refreshToken === null ||
-      this.expired(grant.refreshTokenExpiresAt)
-    ) {
-      return null;
-    }
-    const refreshed = await this.flow.refreshGrant({
-      refreshToken: grant.refreshToken,
-    });
-    await this.save({
-      userId: props.userId,
-      account: linked.account,
-      grant: refreshed,
-    });
-    return refreshed;
+    this.refreshing.set(props.userId, grant);
+    return grant;
   }
 
   /**
@@ -123,9 +107,7 @@ export class OwnedConnections {
     if (grant === null) {
       throw new AccountNotLinkedError({ provider: this.provider });
     }
-    const theirs = await this.flow.listUserInstallationIds({
-      accessToken: grant.accessToken,
-    });
+    const theirs = await this.installationIdsOf(grant);
     if (!theirs.includes(props.installationId)) {
       throw new InstallationNotYoursError({
         installationId: props.installationId,
@@ -154,6 +136,70 @@ export class OwnedConnections {
 
   async list(): Promise<OwnedConnection[]> {
     return this.connections.listOwned({ provider: this.provider });
+  }
+
+  private async currentGrant(props: {
+    userId: string;
+  }): Promise<UserGrant | null> {
+    const linked = await this.linkedAccounts.find({
+      userId: props.userId,
+      provider: this.provider,
+    });
+    if (linked === null) {
+      return null;
+    }
+
+    const grant = this.open(linked);
+    if (grant === null) {
+      return null;
+    }
+    if (!this.expired(grant.accessTokenExpiresAt)) {
+      return grant;
+    }
+    if (
+      grant.refreshToken === null ||
+      this.expired(grant.refreshTokenExpiresAt)
+    ) {
+      return null;
+    }
+    const refreshed = await this.refresh({ refreshToken: grant.refreshToken });
+    if (refreshed === null) {
+      return null;
+    }
+    await this.save({
+      userId: props.userId,
+      account: linked.account,
+      grant: refreshed,
+    });
+    return refreshed;
+  }
+
+  private async refresh(props: {
+    refreshToken: string;
+  }): Promise<UserGrant | null> {
+    try {
+      return await this.flow.refreshGrant(props);
+    } catch (error) {
+      if (error instanceof GrantRevokedError) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private async installationIdsOf(
+    grant: UserGrant,
+  ): Promise<readonly string[]> {
+    try {
+      return await this.flow.listUserInstallationIds({
+        accessToken: grant.accessToken,
+      });
+    } catch (error) {
+      if (error instanceof GrantRevokedError) {
+        throw new AccountNotLinkedError({ provider: this.provider });
+      }
+      throw error;
+    }
   }
 
   private async save(props: {
@@ -226,8 +272,7 @@ export class OwnedConnections {
   private expired(expiresAt: string | null): boolean {
     return (
       expiresAt !== null &&
-      new Date(expiresAt).getTime() - expirySkewMilliseconds <=
-        this.now().getTime()
+      new Date(expiresAt).getTime() - expirySkewMilliseconds <= Date.now()
     );
   }
 }

@@ -58,25 +58,41 @@ export const connectStatusSchema = z.object({
   connections: z.array(ownedConnectionSchema),
 });
 
-export const setupQuerySchema = z.object({
-  installation_id: z.string().min(1).max(64).optional(),
-  setup_action: z.enum(['install', 'update', 'request']),
-  state: z.string().min(1).optional(),
-});
+export const setupQuerySchema = z
+  .object({
+    installation_id: z.string().min(1).max(64).optional(),
+    setup_action: z.enum(['install', 'update', 'request']),
+    state: z.string().min(1).optional(),
+  })
+  .transform((query) => ({
+    installationId: query.installation_id,
+    setupAction: query.setup_action,
+    state: query.state,
+  }));
 
-export const callbackQuerySchema = z.object({
-  code: z.string().min(1).optional(),
-  state: z.string().min(1).optional(),
-  error: z.string().min(1).optional(),
-  installation_id: z.string().min(1).max(64).optional(),
-  setup_action: z.string().optional(),
-});
+export const callbackQuerySchema = z
+  .object({
+    code: z.string().min(1).optional(),
+    state: z.string().min(1).optional(),
+    error: z.string().min(1).optional(),
+    installation_id: z.string().min(1).max(64).optional(),
+    setup_action: z.string().optional(),
+  })
+  .transform((query) => ({
+    code: query.code,
+    state: query.state,
+    error: query.error,
+    installationId: query.installation_id,
+    setupAction: query.setup_action,
+  }));
 
 export const webhookAcknowledgementSchema = z.object({
   deliveryId: z.string(),
-  duplicate: z
-    .boolean()
-    .describe('True when this delivery id was already recorded.'),
+  status: z
+    .enum(['recorded', 'duplicate', 'ignored'])
+    .describe(
+      '`duplicate` when this delivery id was already recorded. `ignored` when the delivery concerns no installation Dash has a connection for, so nothing is stored.',
+    ),
 });
 
 export const connectOutcomeSchema = z.enum([

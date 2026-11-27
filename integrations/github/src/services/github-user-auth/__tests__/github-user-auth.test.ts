@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { GrantRevokedError } from '@dash/integrations-core';
 
 import { GithubOAuthError } from '#src/errors.ts';
 import {
@@ -7,6 +9,10 @@ import {
   redirectUrl,
   tokenUrl,
 } from '#src/__tests__/support/fake-github.ts';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const expiringToken = {
   access_token: 'ghu_access',
@@ -111,6 +117,27 @@ describe('GithubConnectFlow refreshGrant', () => {
       refresh_token: 'ghr_old',
     });
   });
+
+  it('reports a refused refresh token as a revoked grant', async () => {
+    const github = new FakeGithub().withUserToken({
+      error: 'bad_refresh_token',
+      error_description: 'The refresh token passed is incorrect or expired.',
+    });
+
+    await expect(
+      github.flow().refreshGrant({ refreshToken: 'ghr_spent' }),
+    ).rejects.toThrow(GrantRevokedError);
+  });
+
+  it('keeps other refusals as OAuth errors', async () => {
+    const github = new FakeGithub().withUserToken({
+      error: 'incorrect_client_credentials',
+    });
+
+    await expect(
+      github.flow().refreshGrant({ refreshToken: 'ghr_old' }),
+    ).rejects.toThrow(GithubOAuthError);
+  });
 });
 
 describe('GithubConnectFlow listUserInstallationIds', () => {
@@ -134,5 +161,17 @@ describe('GithubConnectFlow listUserInstallationIds', () => {
 
     expect(listed).toEqual(ids.map(String));
     expect(github.calls).toHaveLength(2);
+  });
+
+  it('reports a token GitHub refuses as a revoked grant', async () => {
+    const github = new FakeGithub().on({
+      method: 'GET',
+      url: 'https://api.github.com/user/installations',
+      reply: () => ({ status: 401, body: { message: 'Bad credentials' } }),
+    });
+
+    await expect(
+      github.flow().listUserInstallationIds({ accessToken: 'ghu_revoked' }),
+    ).rejects.toThrow(GrantRevokedError);
   });
 });

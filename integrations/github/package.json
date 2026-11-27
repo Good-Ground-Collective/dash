@@ -28,7 +28,6 @@
     "@dash/integrations-core": "workspace:*",
     "@octokit/auth-app": "catalog:",
     "@octokit/request": "catalog:",
-    "@octokit/webhooks-methods": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

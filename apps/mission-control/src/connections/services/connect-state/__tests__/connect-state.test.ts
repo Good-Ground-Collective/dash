@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SignedConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 
@@ -13,18 +13,27 @@ const request = {
 };
 
 class Clock {
-  static at(offsetSeconds: number): () => Date {
-    return () => new Date(issuedAt.getTime() + offsetSeconds * 1000);
+  /** Sets the clock `offsetSeconds` after `issuedAt`. */
+  static at(offsetSeconds: number): void {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: issuedAt.getTime() + offsetSeconds * 1000,
+    });
   }
 }
 
-describe('SignedConnectState', () => {
-  const token = new SignedConnectState({ secret, now: Clock.at(0) }).issue(
-    request,
-  );
+Clock.at(0);
+const token = new SignedConnectState({ secret }).issue(request);
+vi.useRealTimers();
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('SignedConnectState', () => {
   it('reads back what it issued for the same person and provider', () => {
-    const state = new SignedConnectState({ secret, now: Clock.at(60) });
+    Clock.at(60);
+    const state = new SignedConnectState({ secret });
 
     expect(state.read({ token, userId, provider: 'github' })).toMatchObject(
       request,
@@ -32,7 +41,8 @@ describe('SignedConnectState', () => {
   });
 
   it('refuses another person', () => {
-    const state = new SignedConnectState({ secret, now: Clock.at(60) });
+    Clock.at(60);
+    const state = new SignedConnectState({ secret });
 
     expect(
       state.read({
@@ -44,28 +54,31 @@ describe('SignedConnectState', () => {
   });
 
   it('refuses another provider', () => {
-    const state = new SignedConnectState({ secret, now: Clock.at(60) });
+    Clock.at(60);
+    const state = new SignedConnectState({ secret });
 
     expect(state.read({ token, userId, provider: 'jira' })).toBeNull();
   });
 
   it('expires after ten minutes', () => {
-    const state = new SignedConnectState({ secret, now: Clock.at(600) });
+    Clock.at(600);
+    const state = new SignedConnectState({ secret });
 
     expect(state.read({ token, userId, provider: 'github' })).toBeNull();
   });
 
   it('refuses a state signed with another secret', () => {
+    Clock.at(60);
     const state = new SignedConnectState({
       secret: 'another-secret-that-is-32-characters-long',
-      now: Clock.at(60),
     });
 
     expect(state.read({ token, userId, provider: 'github' })).toBeNull();
   });
 
   it('refuses an edited payload', () => {
-    const state = new SignedConnectState({ secret, now: Clock.at(60) });
+    Clock.at(60);
+    const state = new SignedConnectState({ secret });
     const [, signature] = token.split('.');
     const forged = Buffer.from(
       JSON.stringify({ ...request, expiresAt: 9_999_999_999, nonce: 'n' }),
