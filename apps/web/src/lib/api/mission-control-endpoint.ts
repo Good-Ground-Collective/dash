@@ -12,6 +12,16 @@ const jsonTextSchema = z.string().transform((value, context) => {
   }
 });
 
+export const missionControlBaseUrlSchema = z.url({ protocol: /^https?$/u });
+
+export const missionControlEndpointPropsSchema = z.object({
+  baseUrl: missionControlBaseUrlSchema,
+});
+
+export type MissionControlEndpointProps = z.input<
+  typeof missionControlEndpointPropsSchema
+>;
+
 const failureSchema = z.object({
   code: z.string().optional(),
   message: z.string().optional(),
@@ -21,8 +31,8 @@ const failureSchema = z.object({
 export class MissionControlEndpoint {
   private readonly base: URL;
 
-  constructor(props: { baseUrl: string }) {
-    this.base = new URL(props.baseUrl);
+  constructor(props: MissionControlEndpointProps) {
+    this.base = new URL(missionControlEndpointPropsSchema.parse(props).baseUrl);
     if (!this.base.pathname.endsWith('/')) this.base.pathname += '/';
   }
 
@@ -31,7 +41,7 @@ export class MissionControlEndpoint {
     return new URL(path, this.base);
   }
 
-  /** Parses a 2xx answer's JSON body with `schema`. Any other answer rejects with a `MissionControlError` carrying Mission Control's code and message. */
+  /** Parses a 2xx answer's JSON body with `schema`, rejecting a body that isn't JSON. Any other answer rejects with a `MissionControlError` carrying Mission Control's code and message. */
   async read<T>(props: {
     path: string;
     response: Response;
@@ -47,6 +57,13 @@ export class MissionControlEndpoint {
         status: props.response.status,
         code: failure.success ? failure.data.code : undefined,
         message: failure.success ? failure.data.message : undefined,
+      });
+    }
+    if (!text.success) {
+      throw new MissionControlError({
+        path: props.path,
+        status: props.response.status,
+        message: 'Mission Control answered with a body that is not JSON',
       });
     }
     return props.schema.parse(body);
