@@ -55,7 +55,11 @@ const fontValue = /^(inherit|(?:[^,]*\s)?var\(--font-[\w-]+\))$/iu;
 const binding =
   /(?:\bstyle:([a-z-]+)(?:\|important)?|(?<=\s)(fill|stroke|stop-color|flood-color|lighting-color))=(?:"([^"]*)"|'([^']*)'|\{((?:[^{}]|\$\{[^{}]*\})*)\})/giu;
 
-/** The string literals a braced expression can evaluate to, so `{dark ? 'white' : x}` is checked too. A literal right after `[`, `(` or `,` is a key or argument, not a value, and is skipped. A template's `${…}` parts become a placeholder. */
+/**
+ * The string literals a braced expression can evaluate to, so `{dark ? 'white' : x}` is
+ * checked too. A literal right after `[`, `(` or `,` is a key or argument, not a value, and is
+ * skipped. A template's `${…}` parts become a placeholder.
+ */
 const stringLiterals = (expression) =>
   [...expression.matchAll(/(['"`])((?:(?!\1).)*)\1/gsu)]
     .filter((match) => !/[[(,]\s*$/u.test(expression.slice(0, match.index)))
@@ -69,11 +73,12 @@ const position = (source, index) => {
 
 /** Whether a literal value names a raw colour or font stack for `property`. */
 const isRawValue = (property, value) => {
-  if (rawColour.test(value)) return true;
+  const bare = value.replaceAll(/url\([^)]*\)/gu, ' ');
+  if (rawColour.test(bare)) return true;
   if (fontProperties.test(property)) return !fontValue.test(value.trim());
   if (!colourProperties.test(property)) return false;
-  return value
-    .replaceAll(/url\([^)]*\)|var\(--[\w-]+\)|[\w-]+\(/gu, ' ')
+  return bare
+    .replaceAll(/var\(--[\w-]+\)|[\w-]+\(/gu, ' ')
     .split(/[\s,/()]+/u)
     .some((word) => namedColours.has(word.toLowerCase()));
 };
@@ -82,8 +87,9 @@ const isRawValue = (property, value) => {
  * Svelte `style:` directives and SVG colour attributes aren't CSS, so postcss-html never shows
  * them to the other rules. This rule reads them from the component source and holds them to the
  * same contract as stylesheets: no hex, colour functions or named colours, and fonts only from
- * `var(--font-…)` tokens. Composite values, keywords, gradients over tokens and `url(…)` pass. In a braced expression only the string literals are checked, since the rest isn't
- * known until runtime.
+ * `var(--font-…)` tokens. Composite values, keywords, gradients over tokens and `url(…)` pass.
+ * In a braced expression only the string literals are checked, since the rest isn't known
+ * until runtime.
  */
 const rule = (enabled) => (root, result) => {
   if (!enabled) return;

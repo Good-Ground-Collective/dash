@@ -119,6 +119,7 @@ describe('stylelint config: Svelte components', () => {
       '<p style:background="linear-gradient(var(--a), var(--b))">x</p>',
     ],
     ['an SVG url fill', '<path fill="url(#grad)" />'],
+    ['an SVG url fill with a hex-like id', '<path fill="url(#fade)" />'],
     [
       'a string used as a lookup key',
       "<p style:color={palette['accent']}>x</p>",
