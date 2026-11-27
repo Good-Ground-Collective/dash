@@ -72,16 +72,24 @@ export const githubTicketNodeSchema = issueSchema.extend({
     .nullable(),
 });
 
-const epicContentSchema = z.discriminatedUnion('__typename', [
-  issueSchema.extend({
-    __typename: z.literal('Issue'),
-    subIssues: z.object({
-      totalCount: z.int().nonnegative(),
-      nodes: z.array(githubTicketNodeSchema),
+const epicContentSchema = z
+  .discriminatedUnion('__typename', [
+    issueSchema.extend({
+      __typename: z.literal('Issue'),
+      subIssues: z.object({
+        totalCount: z.int().nonnegative(),
+        nodes: z.array(githubTicketNodeSchema),
+      }),
     }),
-  }),
-  z.object({ __typename: z.enum(['DraftIssue', 'PullRequest']) }),
-]);
+    z.object({ __typename: z.enum(['DraftIssue', 'PullRequest']) }),
+  ])
+  .transform((content) => {
+    if (content.__typename !== 'Issue') {
+      return null;
+    }
+    const { __typename: typename, ...issue } = content;
+    return issue;
+  });
 
 export const githubEpicItemSchema = z.object({
   priority: z
@@ -98,7 +106,9 @@ export const githubEpicItemSchema = z.object({
     .transform((value) => value?.date ?? null),
   content: epicContentSchema
     .nullable()
-    .describe('Null when the App can’t see the repository the issue is in.'),
+    .describe(
+      'Null for a draft or pull request, or when the App can’t see the repository the issue is in.',
+    ),
 });
 
 export const githubProjectsDataSchema = z.object({
@@ -147,10 +157,7 @@ export const githubEpicsDataSchema = z.object({
 
 export type GithubTicketNode = z.infer<typeof githubTicketNodeSchema>;
 export type GithubEpicItem = z.infer<typeof githubEpicItemSchema>;
-export type GithubEpicIssue = Extract<
-  NonNullable<GithubEpicItem['content']>,
-  { __typename: 'Issue' }
->;
+export type GithubEpicIssue = NonNullable<GithubEpicItem['content']>;
 export type GithubProject = NonNullable<
   z.infer<typeof githubProjectsDataSchema>['organization']
 >['projectsV2']['nodes'][number];

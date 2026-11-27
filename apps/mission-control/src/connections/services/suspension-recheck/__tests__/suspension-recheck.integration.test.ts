@@ -15,7 +15,7 @@ import { DbosConnectionsFixture } from '#src/connections/__tests__/support/dbos-
 const databaseUrl = inject('databaseUrl');
 const settle = { timeout: 15_000, interval: 100 };
 const fixture = new DbosConnectionsFixture();
-const { harness, listener } = fixture;
+const { harness, listener, other } = fixture;
 
 beforeAll(async () => {
   if (databaseUrl !== null) {
@@ -28,6 +28,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   harness.flow.unavailableReads = 0;
+  listener.failure = null;
 });
 
 afterAll(async () => {
@@ -53,6 +54,20 @@ describe.skipIf(databaseUrl === null)('Suspension recheck on DBOS', () => {
     await vi.waitFor(() => {
       expect(listener.reinstatedInstallations).toContain(installationId);
     }, settle);
+  }, 30_000);
+
+  it('still tells the other listeners when one fails', async () => {
+    const { installationId } = await fixture.owned({
+      suspended: true,
+    });
+    listener.failure = new Error('queue unavailable');
+
+    await recheck();
+
+    await vi.waitFor(() => {
+      expect(other.reinstatedInstallations).toContain(installationId);
+    }, settle);
+    expect(listener.reinstatedInstallations).not.toContain(installationId);
   }, 30_000);
 
   it('keeps a suspension the provider still reports', async () => {

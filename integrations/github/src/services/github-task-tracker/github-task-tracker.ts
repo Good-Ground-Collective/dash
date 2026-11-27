@@ -146,7 +146,7 @@ export class GithubTaskTracker implements TaskTracker {
       const items = data.node?.items;
       for (const item of items?.nodes ?? []) {
         const issue = item.content;
-        if (issue?.__typename === 'Issue' && issue.labels.epic) {
+        if (issue !== null && issue.labels.epic) {
           if (!read.epics.has(issue.id)) {
             GithubTaskTracker.collectTickets({ read, issue });
           }
@@ -173,7 +173,7 @@ export class GithubTaskTracker implements TaskTracker {
     return found;
   }
 
-  /** Keeps the first due date and Priority field read, and lets a Priority field replace a label fallback from an earlier Project. */
+  /** Keeps the earliest Target date and the first Priority field read, and lets a Priority field replace a label fallback from an earlier Project. */
   private static merge(props: {
     read: ReadEpics;
     epic: Epic;
@@ -193,7 +193,7 @@ export class GithubTaskTracker implements TaskTracker {
             priority: keepsPriority
               ? (known.priority ?? epic.priority)
               : epic.priority,
-            dueDate: known.dueDate ?? epic.dueDate,
+            dueDate: GithubTaskTracker.earliest(known.dueDate, epic.dueDate),
             initiativeIds: [
               ...new Set([...known.initiativeIds, ...epic.initiativeIds]),
             ],
@@ -203,6 +203,16 @@ export class GithubTaskTracker implements TaskTracker {
     }
     read.epics.set(merged.externalId, merged);
     return merged;
+  }
+
+  private static earliest(
+    left: string | null,
+    right: string | null,
+  ): string | null {
+    if (left === null || right === null) {
+      return left ?? right;
+    }
+    return left < right ? left : right;
   }
 
   private static collectTickets(props: {

@@ -108,6 +108,48 @@ describe.skipIf(databaseUrl === null)('DrizzleObjectiveRecordWriter', () => {
 });
 
 describe.skipIf(databaseUrl === null)(
+  'DrizzleObjectiveRecordWriter large reads',
+  () => {
+    const kinds = [
+      'ticket_closed',
+      'pull_request_merged',
+      'commented',
+    ] as const;
+    const [template] = records.tickets;
+    const tickets = Array.from({ length: 3_400 }, (_, index) => ({
+      ...template!,
+      nodeId: `BULK${String(index)}`,
+      position: index,
+    }));
+    const large: ObjectiveRecords = {
+      ...records,
+      tickets,
+      activity: tickets.flatMap(({ nodeId, url }) =>
+        kinds.map((kind) => ({
+          ticketNodeId: nodeId,
+          kind,
+          occurredAt: fixedNow.toISOString(),
+          actor: null,
+          url,
+        })),
+      ),
+    };
+
+    it('writes a read with more rows than one statement can bind, then prunes it', async () => {
+      expect(await Stored.replace(large, fixedNow)).toEqual({ applied: true });
+      const stored = (await Stored.owned())?.records;
+      expect(stored?.tickets).toHaveLength(3_400);
+      expect(stored?.activity).toHaveLength(10_200);
+
+      await Stored.replace(records, later);
+      const pruned = (await Stored.owned())?.records;
+      expect(pruned?.tickets).toHaveLength(records.tickets.length);
+      expect(pruned?.activity).toHaveLength(records.activity.length);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
   'DrizzleObjectiveRecordWriter ordering',
   () => {
     it('drops a read that started before the one already stored', async () => {
@@ -151,6 +193,39 @@ describe.skipIf(databaseUrl === null)(
           'PVT_launch',
         ),
       ).toMatchObject({ parked: true });
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleObjectiveRecordWriter attempts',
+  () => {
+    it('drops a failure from a read older than the stored one', async () => {
+      await Stored.replace(records, later);
+      await Stored.database.writer.recordFailure({
+        connectionId: ownedId,
+        error: 'Reading the tracker failed.',
+        attemptedAt: fixedNow,
+      });
+
+      expect(await Stored.owned()).toMatchObject({
+        lastError: null,
+        lastSyncedAt: later.toISOString(),
+      });
+    });
+
+    it('keeps a newer read’s failure when an older read finishes after it', async () => {
+      await Stored.database.writer.recordFailure({
+        connectionId: ownedId,
+        error: 'Reading the tracker failed.',
+        attemptedAt: later,
+      });
+      await Stored.replace(records, fixedNow);
+
+      expect(await Stored.owned()).toMatchObject({
+        lastError: 'Reading the tracker failed.',
+        lastSyncedAt: fixedNow.toISOString(),
+      });
     });
   },
 );

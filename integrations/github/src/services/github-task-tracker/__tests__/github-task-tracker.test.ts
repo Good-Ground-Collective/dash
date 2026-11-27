@@ -100,7 +100,7 @@ describe('GithubTaskTracker epic fields', () => {
     },
     { order: 'field first', reversed: true, initiativeIds: ['PVT_2', 'PVT_1'] },
   ])(
-    'lists an epic in two Projects once, with another Project’s Priority over its label ($order)',
+    'lists an epic in two Projects once, with another Project’s Priority over its label and the earliest Target date ($order)',
     async ({ reversed, initiativeIds }) => {
       const snapshot = await TrackerGithub.organisation({ reversed })
         .tracker()
@@ -108,7 +108,7 @@ describe('GithubTaskTracker epic fields', () => {
 
       expect(
         snapshot.epics.find(({ externalId }) => externalId === 'I_20'),
-      ).toMatchObject({ priority: 'P1', dueDate: null, initiativeIds });
+      ).toMatchObject({ priority: 'P1', dueDate: '2026-12-20', initiativeIds });
     },
   );
 
