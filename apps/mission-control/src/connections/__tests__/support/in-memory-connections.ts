@@ -1,7 +1,10 @@
 import type { Installation, WebhookDelivery } from '@dash/integrations-core';
 
 import type { OwnedConnection } from '#src/connections/contracts/connections.ts';
-import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
+import type {
+  ConnectionRepository,
+  InstallRequest,
+} from '#src/connections/repositories/connections/connection-repository.ts';
 import type {
   LinkedAccountRepository,
   StoredLinkedAccount,
@@ -12,6 +15,7 @@ export interface StoredInstallRequest {
   userId: string;
   provider: string;
   accountExternalId: string;
+  requestedAt: string;
 }
 
 export class InMemoryConnectionRepository implements ConnectionRepository {
@@ -61,8 +65,29 @@ export class InMemoryConnectionRepository implements ConnectionRepository {
     );
   }
 
-  async recordInstallRequest(request: StoredInstallRequest): Promise<void> {
-    this.installRequests.push(request);
+  async recordInstallRequest(
+    request: Omit<StoredInstallRequest, 'requestedAt'>,
+  ): Promise<void> {
+    this.installRequests.push({
+      ...request,
+      requestedAt: new Date().toISOString(),
+    });
+  }
+
+  async listInstallRequests(props: {
+    userId: string;
+    provider: string;
+  }): Promise<InstallRequest[]> {
+    return this.installRequests
+      .filter(
+        (request) =>
+          request.userId === props.userId &&
+          request.provider === props.provider,
+      )
+      .map(({ accountExternalId, requestedAt }) => ({
+        accountExternalId,
+        requestedAt,
+      }));
   }
 }
 

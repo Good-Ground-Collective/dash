@@ -117,6 +117,17 @@ export class ConnectionsHarness {
     );
   }
 
+  /** Authorizes the app as `userId` through the OAuth callback. */
+  async link(props: { userId: string }): Promise<void> {
+    const state = await this.issuedState({ ...props, url: 'authorizeUrl' });
+    await (
+      await this.start()
+    ).inject({
+      url: `/integrations/github/callback?code=good&state=${state}`,
+      headers: ConnectionsHarness.cookie(props.userId),
+    });
+  }
+
   async stop(): Promise<void> {
     await this.app?.close();
     this.app = undefined;

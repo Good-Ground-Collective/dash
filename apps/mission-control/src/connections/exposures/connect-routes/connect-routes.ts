@@ -19,6 +19,7 @@ import {
 } from '#src/connections/errors.ts';
 import type { ConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
+import { SignedInPerson } from '#src/connections/services/signed-in-person/signed-in-person.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 
 /**
@@ -32,7 +33,7 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 export class ConnectRoutes {
   private readonly connections: OwnedConnections;
   private readonly flow: ConnectFlow;
-  private readonly identity: Pick<Identity, 'session'>;
+  private readonly person: SignedInPerson;
   private readonly state: ConnectState;
   private readonly prefix: string;
   private readonly redirectUrl: string;
@@ -49,7 +50,7 @@ export class ConnectRoutes {
   }) {
     this.connections = props.connections;
     this.flow = props.flow;
-    this.identity = props.identity;
+    this.person = new SignedInPerson({ identity: props.identity });
     this.state = props.state;
     this.prefix = `/integrations/${props.connections.provider}`;
     this.redirectUrl = `${props.baseUrl}${this.prefix}/callback`;
@@ -66,7 +67,7 @@ export class ConnectRoutes {
         },
       },
       async (request) => {
-        const userId = await this.personOf(request);
+        const userId = await this.person.of(request);
         if (userId === null) {
           throw new SignInRequiredError();
         }
@@ -103,7 +104,7 @@ export class ConnectRoutes {
   }): Promise<FastifyReply> {
     const { request, reply } = props;
     const query = request.query;
-    const userId = await this.personOf(request);
+    const userId = await this.person.of(request);
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
@@ -151,7 +152,7 @@ export class ConnectRoutes {
   }): Promise<FastifyReply> {
     const { request, reply } = props;
     const query = request.query;
-    const userId = await this.personOf(request);
+    const userId = await this.person.of(request);
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
@@ -281,17 +282,5 @@ export class ConnectRoutes {
 
   private defaultReturnTo(): string {
     return `/setup/${this.connections.provider}`;
-  }
-
-  /** The signed-in person, or null without a session or for a service principal. */
-  private async personOf(request: FastifyRequest): Promise<string | null> {
-    const headers = new Headers();
-    for (const [name, value] of Object.entries(request.headers)) {
-      for (const item of [value ?? []].flat()) {
-        headers.append(name, item);
-      }
-    }
-    const session = await this.identity.session({ headers });
-    return session?.kind === 'user' ? session.principalId : null;
   }
 }

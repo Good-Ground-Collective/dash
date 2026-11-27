@@ -15,16 +15,7 @@ class Served {
   static async linked(): Promise<ConnectionsHarness> {
     const harness = new ConnectionsHarness();
     running.push(harness);
-    const state = await harness.issuedState({
-      userId: adaId,
-      url: 'authorizeUrl',
-    });
-    await (
-      await harness.start()
-    ).inject({
-      url: `/integrations/github/callback?code=good&state=${state}`,
-      headers: ConnectionsHarness.cookie(adaId),
-    });
+    await harness.link({ userId: adaId });
     return harness;
   }
 
@@ -200,7 +191,12 @@ describe('ConnectionsModule install requests', () => {
       connect: 'requested',
     });
     expect(harness.connections.installRequests).toEqual([
-      { userId: adaId, provider: 'github', accountExternalId: '9919' },
+      {
+        userId: adaId,
+        provider: 'github',
+        accountExternalId: '9919',
+        requestedAt: '2026-11-26T12:00:00.000Z',
+      },
     ]);
   });
 });

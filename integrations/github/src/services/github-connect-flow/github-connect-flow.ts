@@ -1,7 +1,9 @@
 import type {
+  AccountProfile,
   AuthorizedUser,
   ConnectFlow,
   Installation,
+  UserAccounts,
   UserGrant,
   WebhookDelivery,
   WebhookHeaders,
@@ -11,6 +13,7 @@ import { request as octokitRequest } from '@octokit/request';
 import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
 import { GithubInstallations } from '#src/services/github-installations/github-installations.ts';
+import { GithubUserAccounts } from '#src/services/github-user-accounts/github-user-accounts.ts';
 import { GithubUserAuth } from '#src/services/github-user-auth/github-user-auth.ts';
 import { GithubWebhooks } from '#src/services/github-webhooks/github-webhooks.ts';
 
@@ -18,6 +21,7 @@ import { GithubWebhooks } from '#src/services/github-webhooks/github-webhooks.ts
 export class GithubConnectFlow implements ConnectFlow {
   private readonly installations: GithubInstallations;
   private readonly users: GithubUserAuth;
+  private readonly accounts: GithubUserAccounts;
   private readonly webhooks: GithubWebhooks;
 
   constructor(props: { config: GithubAppConfig }) {
@@ -35,6 +39,10 @@ export class GithubConnectFlow implements ConnectFlow {
       clientId: config.clientId,
       clientSecret: config.clientSecret,
       request,
+    });
+    this.accounts = new GithubUserAccounts({
+      request,
+      installations: this.installations,
     });
     this.webhooks = new GithubWebhooks({ secret: config.webhookSecret });
   }
@@ -61,7 +69,20 @@ export class GithubConnectFlow implements ConnectFlow {
   async listUserInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]> {
-    return this.users.listInstallationIds(props);
+    return this.accounts.listInstallationIds(props);
+  }
+
+  async listUserAccounts(props: {
+    accessToken: string;
+  }): Promise<UserAccounts> {
+    return this.accounts.list(props);
+  }
+
+  async getAccount(props: {
+    accessToken: string;
+    accountExternalId: string;
+  }): Promise<AccountProfile | null> {
+    return this.accounts.get(props);
   }
 
   async getInstallation(props: {

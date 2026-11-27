@@ -1,6 +1,8 @@
 import type {
+  AccountProfile,
   AuthorizedUser,
   Installation,
+  UserAccounts,
   UserGrant,
   WebhookDelivery,
   WebhookHeaders,
@@ -27,6 +29,13 @@ export interface ConnectFlow {
   listUserInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]>;
+  /** The person's own account and every installation of the app their token can see, with their role in each. Throws `GrantRevokedError` when the provider refuses the token. */
+  listUserAccounts(props: { accessToken: string }): Promise<UserAccounts>;
+  /** One account by its id, read as the person, or null when it no longer exists. Throws `GrantRevokedError` when the provider refuses the token. */
+  getAccount(props: {
+    accessToken: string;
+    accountExternalId: string;
+  }): Promise<AccountProfile | null>;
   /** Reads one installation as the app: its account and the repositories it covers. */
   getInstallation(props: { installationId: string }): Promise<Installation>;
   /** The delivery when its signature matches the webhook secret over the exact body bytes, otherwise null. The body is parsed only after the signature checks out. */

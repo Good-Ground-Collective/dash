@@ -31,6 +31,16 @@ export interface ConnectionRepository {
     provider: string;
     accountExternalId: string;
   }): Promise<void>;
+  /** The accounts `userId` asked an owner to install the provider's app on, oldest first. */
+  listInstallRequests(props: {
+    userId: string;
+    provider: string;
+  }): Promise<InstallRequest[]>;
+}
+
+export interface InstallRequest {
+  accountExternalId: string;
+  requestedAt: string;
 }
 
 export class DrizzleConnectionRepository implements ConnectionRepository {
@@ -166,6 +176,29 @@ export class DrizzleConnectionRepository implements ConnectionRepository {
         ],
         set: { requestedAt: new Date() },
       });
+  }
+
+  async listInstallRequests(props: {
+    userId: string;
+    provider: string;
+  }): Promise<InstallRequest[]> {
+    const rows = await this.database.orm
+      .select({
+        accountExternalId: installRequestTable.accountExternalId,
+        requestedAt: installRequestTable.requestedAt,
+      })
+      .from(installRequestTable)
+      .where(
+        and(
+          eq(installRequestTable.userId, props.userId),
+          eq(installRequestTable.provider, props.provider),
+        ),
+      )
+      .orderBy(asc(installRequestTable.requestedAt));
+    return rows.map((row) => ({
+      accountExternalId: row.accountExternalId,
+      requestedAt: row.requestedAt.toISOString(),
+    }));
   }
 
   private toOwned(props: {

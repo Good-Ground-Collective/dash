@@ -59,6 +59,7 @@ export const octocat = {
   login: 'octocat',
   type: 'User',
   html_url: 'https://github.com/octocat',
+  avatar_url: 'https://avatars.githubusercontent.com/u/583231?v=4',
 };
 
 export const acmeInstallation = {
@@ -68,6 +69,7 @@ export const acmeInstallation = {
     login: 'acme',
     type: 'Organization',
     html_url: 'https://github.com/acme',
+    avatar_url: 'https://avatars.githubusercontent.com/u/9919?v=4',
   },
   repository_selection: 'selected',
   html_url: 'https://github.com/organizations/acme/settings/installations/42',

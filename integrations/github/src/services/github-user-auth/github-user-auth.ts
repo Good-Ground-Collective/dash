@@ -9,7 +9,6 @@ import { githubAccountSchema } from '#src/contracts/github-account.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubOAuthError } from '#src/errors.ts';
 
-const pageSize = 100;
 const tokenUrl = 'https://github.com/login/oauth/access_token';
 
 /** GitHub answers 200 with an `error` field when it refuses a token request. */
@@ -39,19 +38,6 @@ const tokenResponseSchema = z.union([
       refreshTokenExpiresIn: token.refresh_token_expires_in,
     })),
 ]);
-
-const userInstallationsSchema = z
-  .object({
-    total_count: z.number(),
-    installations: z.array(z.object({ id: z.number() })),
-  })
-  .transform((page) => ({
-    totalCount: page.total_count,
-    installationIds: page.installations.map(({ id }) => String(id)),
-  }));
-
-/** How `@octokit/request` reports a refused token. */
-const unauthorizedSchema = z.object({ status: z.literal(401) });
 
 /**
  * The App's OAuth web flow: a person authorizes the App, and Dash gets a user token that acts
@@ -110,40 +96,6 @@ export class GithubUserAuth {
         throw new GrantRevokedError({ provider: 'github', cause: error });
       }
       throw error;
-    }
-  }
-
-  async listInstallationIds(props: {
-    accessToken: string;
-  }): Promise<readonly string[]> {
-    try {
-      return await this.readInstallationIds(props);
-    } catch (error) {
-      if (unauthorizedSchema.safeParse(error).success) {
-        throw new GrantRevokedError({ provider: 'github', cause: error });
-      }
-      throw error;
-    }
-  }
-
-  private async readInstallationIds(props: {
-    accessToken: string;
-  }): Promise<readonly string[]> {
-    const ids: string[] = [];
-    for (let page = 1; ; page += 1) {
-      const { data } = await this.request('GET /user/installations', {
-        headers: { authorization: `Bearer ${props.accessToken}` },
-        per_page: pageSize,
-        page,
-      });
-      const parsed = userInstallationsSchema.parse(data);
-      ids.push(...parsed.installationIds);
-      if (
-        parsed.installationIds.length < pageSize ||
-        ids.length >= parsed.totalCount
-      ) {
-        return ids;
-      }
     }
   }
 
