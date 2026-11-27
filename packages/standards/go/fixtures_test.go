@@ -11,8 +11,10 @@ import (
 
 // decoders maps each fixtures/<kind>.v<major> directory to the generated type
 // that reads it. A schema without an entry here fails TestEverySchemaHasFixtures.
-var decoders = map[string]func([]byte) (any, error){
-	"example.ping.v1": decode[ExamplePingV1],
+func decoders() map[string]func([]byte) (any, error) {
+	return map[string]func([]byte) (any, error){
+		"example.ping.v1": decode[ExamplePingV1],
+	}
 }
 
 func decode[T any](data []byte) (any, error) {
@@ -33,11 +35,10 @@ func TestEverySchemaHasFixtures(t *testing.T) {
 
 	for _, schema := range schemas {
 		name := strings.TrimSuffix(filepath.Base(schema), ".json")
-		if _, ok := decoders[name]; !ok {
+		if _, ok := decoders()[name]; !ok {
 			t.Errorf("%s has no decoder in fixtures_test.go", name)
 		}
-		valid, _ := filepath.Glob(filepath.Join("..", "fixtures", name, "valid", "*.json"))
-		if len(valid) == 0 {
+		if len(fixtureFiles(t, name, "valid")) == 0 {
 			t.Errorf("%s has no fixtures in ../fixtures/%s/valid", name, name)
 		}
 	}
@@ -51,7 +52,7 @@ func TestFixtures(t *testing.T) {
 
 	for _, directory := range directories {
 		name := directory.Name()
-		decoder, ok := decoders[name]
+		decoder, ok := decoders()[name]
 		if !ok {
 			t.Errorf("../fixtures/%s has no decoder in fixtures_test.go", name)
 			continue
