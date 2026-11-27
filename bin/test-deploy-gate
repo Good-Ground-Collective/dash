@@ -5,10 +5,11 @@ set -euo pipefail
 gate="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/deploy-gate"
 failures=0
 
-# expect <name> <version> <tags> <exit code> <stdout>
+# expect <name> <tags> <exit code> <stdout> [gate args...]
 expect() {
-  local name=$1 version=$2 tags=$3 want_rc=$4 want_out=$5 out rc=0
-  out=$(printf '%s' "$tags" | "$gate" "$version") || rc=$?
+  local name=$1 tags=$2 want_rc=$3 want_out=$4 out rc=0
+  shift 4
+  out=$(printf '%s' "$tags" | "$gate" "$@") || rc=$?
   if [[ $rc == "$want_rc" && $out == "$want_out" ]]; then
     echo "ok: $name"
   else
@@ -17,15 +18,17 @@ expect() {
   fi
 }
 
-expect 'newest version deploys' v1.2.0 $'v1.0.0\nv1.1.0\nv1.2.0\n' 0 v1.2.0
-expect 'superseded version skips' v1.1.0 $'v1.0.0\nv1.1.0\nv1.2.0\n' 3 v1.2.0
-expect 'empty tag list fails' v1.0.0 '' 1 ''
-expect 'non-semver tags are ignored' v1.0.0 $'v1.0.0\nv2.0.0-rc.1\nlatest\nv9\nrelease-3.0.0\n' 0 v1.0.0
-expect 'only non-semver tags fails' v1.0.0 $'v2.0.0-rc.1\nlatest\n' 1 ''
-expect 'v1.10.0 is newer than v1.9.0' v1.10.0 $'v1.9.0\nv1.10.0\n' 0 v1.10.0
-expect 'v1.9.0 is superseded by v1.10.0' v1.9.0 $'v1.10.0\nv1.9.0\n' 3 v1.10.0
-expect 'version newer than every tag deploys' v1.3.0 $'v1.2.0\n' 0 v1.3.0
-expect 'non-semver version is a usage error' main $'v1.0.0\n' 2 ''
+expect 'newest version deploys' $'v1.0.0\nv1.1.0\nv1.2.0\n' 0 v1.2.0 v1.2.0
+expect 'superseded version skips' $'v1.0.0\nv1.1.0\nv1.2.0\n' 3 v1.2.0 v1.1.0
+expect 'empty tag list fails' '' 1 '' v1.0.0
+expect 'non-semver tags are ignored' $'v1.0.0\nv2.0.0-rc.1\nlatest\nv9\nrelease-3.0.0\n' 0 v1.0.0 v1.0.0
+expect 'only non-semver tags fails' $'v2.0.0-rc.1\nlatest\n' 1 '' v1.0.0
+expect 'v1.10.0 is newer than v1.9.0' $'v1.9.0\nv1.10.0\n' 0 v1.10.0 v1.10.0
+expect 'v1.9.0 is superseded by v1.10.0' $'v1.10.0\nv1.9.0\n' 3 v1.10.0 v1.9.0
+expect 'version newer than every tag deploys' $'v1.2.0\n' 0 v1.3.0 v1.3.0
+expect 'non-semver version is a usage error' $'v1.0.0\n' 2 '' main
+expect 'missing version is a usage error' $'v1.0.0\n' 2 ''
+expect 'two versions are a usage error' $'v1.0.0\n' 2 '' v1.0.0 v1.1.0
 
 if ((failures)); then
   echo "$failures test(s) failed" >&2
