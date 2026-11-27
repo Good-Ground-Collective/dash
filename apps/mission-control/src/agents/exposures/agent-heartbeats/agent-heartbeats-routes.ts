@@ -5,16 +5,29 @@ import {
   agentHeartbeatBatchSchema,
   agentHeartbeatMessageSchema,
   agentHeartbeatParamsSchema,
+  maxBatchHeartbeats,
   storedAgentHeartbeatSchema,
 } from '#src/agents/contracts/agent-heartbeat.ts';
 import type { AgentHeartbeats } from '#src/agents/services/agent-heartbeats/agent-heartbeats.ts';
 import type { AgentAuthentication } from '#src/auth/exposures/api-key-authentication/api-key-authentication.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
+import { JsonSizeBound } from '#src/platform/services/json-size-bound/json-size-bound.ts';
 
 const agentHeartbeatsRoutesPropsSchema = z.object({
   authentication: z.custom<AgentAuthentication>(),
   heartbeats: z.custom<AgentHeartbeats>(),
 });
+
+/** Room for the batch's own wrapper and for fields the heartbeat schema drops. */
+const batchHeadroomBytes = 1024 * 1024;
+
+/**
+ * A full batch of the largest heartbeats `agent.heartbeat` accepts, plus headroom, so a valid batch
+ * answers per-item results instead of a 413 from Fastify's 1 MiB default.
+ */
+const batchBodyLimitBytes =
+  maxBatchHeartbeats * JsonSizeBound.maxBytes(agentHeartbeatMessageSchema) +
+  batchHeadroomBytes;
 
 /**
  * `POST /api/agents/:reporterName/heartbeats` and its `/batch`, for a service account key with
@@ -58,6 +71,7 @@ export class AgentHeartbeatsRoutes {
     app.post(
       '/api/agents/:reporterName/heartbeats/batch',
       {
+        bodyLimit: batchBodyLimitBytes,
         onRequest: this.authentication.require('heartbeat:write'),
         schema: {
           params: agentHeartbeatParamsSchema,

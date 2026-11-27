@@ -13,6 +13,7 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 const eventsRoutesPropsSchema = z.object({
   liveEvents: z.custom<LiveEvents>(),
   identity: z.custom<Pick<Identity, 'session'>>(),
+  sessionCheckMilliseconds: z.int().positive().default(60_000),
 });
 
 const keepAliveMilliseconds = 15_000;
@@ -21,18 +22,22 @@ const maxBufferedBytes = 1024 * 1024;
 /**
  * `GET /events`: a Server-Sent Events stream of live updates for a signed-in person's browser.
  * Events carry what the person-only read APIs answer, so API keys and anonymous callers are
- * refused. A client that falls more than `maxBufferedBytes` behind is disconnected, and
- * `EventSource` reconnects.
+ * refused. The session is checked again every `sessionCheckMilliseconds` while the stream is
+ * open, and the stream ends once the person is no longer signed in, so a signed-out or revoked
+ * tab stops receiving events and its `EventSource` reconnects into a 401. A client that falls
+ * more than `maxBufferedBytes` behind is disconnected, and `EventSource` reconnects.
  */
 export class EventsRoutes {
   private readonly closers = new Set<() => void>();
   private readonly liveEvents: LiveEvents;
   private readonly person: SignedInPerson;
+  private readonly sessionCheckMilliseconds: number;
 
   constructor(props: z.input<typeof eventsRoutesPropsSchema>) {
     const parsed = eventsRoutesPropsSchema.parse(props);
     this.liveEvents = parsed.liveEvents;
     this.person = new SignedInPerson({ identity: parsed.identity });
+    this.sessionCheckMilliseconds = parsed.sessionCheckMilliseconds;
   }
 
   register(app: ZodFastifyInstance): void {
@@ -60,10 +65,14 @@ export class EventsRoutes {
     const keepAlive = setInterval(() => {
       this.send(stream, ': keep-alive\n\n');
     }, keepAliveMilliseconds);
+    const sessionCheck = setInterval(() => {
+      void this.endUnlessSignedIn(request, close);
+    }, this.sessionCheckMilliseconds);
 
     const close = (): void => {
       this.closers.delete(close);
       clearInterval(keepAlive);
+      clearInterval(sessionCheck);
       unsubscribe();
       stream.end();
     };
@@ -78,6 +87,17 @@ export class EventsRoutes {
         'x-accel-buffering': 'no',
       })
       .send(stream);
+  }
+
+  /** Calls `close` when the request's session no longer belongs to a signed-in person, or can't be checked. */
+  private async endUnlessSignedIn(
+    request: FastifyRequest,
+    close: () => void,
+  ): Promise<void> {
+    const person = await this.person.of(request).catch(() => null);
+    if (person === null) {
+      close();
+    }
   }
 
   private format(event: LiveEvent): string {

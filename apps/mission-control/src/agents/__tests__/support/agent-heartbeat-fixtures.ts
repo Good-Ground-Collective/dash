@@ -48,4 +48,32 @@ export class AgentHeartbeatFixtures {
       },
     };
   }
+
+  /** A heartbeat at `seq` with every field at its longest, in characters JSON escapes to six bytes each. */
+  static largest(seq: number): AgentHeartbeatMessage {
+    const fill = (length: number): string => '\u0001'.repeat(length);
+    return AgentHeartbeatFixtures.message({
+      seq,
+      sessionId: fill(256),
+      agentId: fill(256),
+      agent: { type: fill(100), model: fill(100) },
+      status: 'question',
+      summary: fill(500),
+      question: {
+        text: fill(2000),
+        options: Array.from({ length: 10 }, () => ({
+          label: fill(200),
+          description: fill(500),
+        })),
+      },
+      error: { kind: fill(100), message: fill(2000) },
+      workspace: {
+        directory: fill(1024),
+        repository: fill(256),
+        branch: fill(256),
+      },
+      machine: fill(256),
+      taskId: fill(256),
+    });
+  }
 }

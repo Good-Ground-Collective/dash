@@ -246,3 +246,27 @@ describe('POST /api/agents/:reporterName/heartbeats/batch', () => {
     expect(served.records.heartbeats).toEqual([]);
   });
 });
+
+describe('POST /api/agents/:reporterName/heartbeats/batch size', () => {
+  it('answers per-item results for a full batch of the largest heartbeats, well past 1 MiB', async () => {
+    const json = JSON.stringify({
+      heartbeats: Array.from({ length: 100 }, (_, seq) =>
+        AgentHeartbeatFixtures.largest(seq),
+      ),
+    });
+
+    const response = await served.sendBatch(json);
+
+    expect(Buffer.byteLength(json)).toBeGreaterThan(8 * 1024 * 1024);
+    expect(response.statusCode).toBe(200);
+    expect(response.body['results']).toHaveLength(100);
+    expect(response.body['results']).toEqual(
+      Array.from({ length: 100 }, (_, seq) =>
+        expect.objectContaining({
+          outcome: 'created',
+          heartbeat: expect.objectContaining({ seq }),
+        }),
+      ),
+    );
+  });
+});

@@ -9,6 +9,7 @@ import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 const liveModulePropsSchema = z.object({
   liveEvents: z.custom<LiveEvents>(),
   identity: z.custom<Pick<Identity, 'session'>>(),
+  sessionCheckMilliseconds: z.int().positive().optional(),
 });
 
 /** Live updates for a signed-in person's browser over Server-Sent Events. */
@@ -20,6 +21,7 @@ export class LiveModule implements HttpModule {
     const routes = new EventsRoutes({
       liveEvents: props.liveEvents,
       identity: props.identity,
+      sessionCheckMilliseconds: props.sessionCheckMilliseconds,
     });
     this.plugin = async (app) => {
       routes.register(app);

@@ -92,11 +92,14 @@ const batchItemSchema = z
 
 export type AgentHeartbeatBatchItem = z.output<typeof batchItemSchema>;
 
+/** The most heartbeats one batch carries. */
+export const maxBatchHeartbeats = 100;
+
 export const agentHeartbeatBatchSchema = z.object({
   heartbeats: z
     .array(batchItemSchema)
     .min(1)
-    .max(100)
+    .max(maxBatchHeartbeats)
     .describe(
       'Each heartbeat is checked on its own, so one that fails validation is reported in its result without refusing the rest.',
     ),
