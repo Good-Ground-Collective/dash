@@ -39,7 +39,6 @@ const conclusions = new Map<GithubFeedRun['conclusion'], string>([
   ['startup_failure', 'Couldn’t start'],
 ]);
 
-/** Turns feed items into rows. */
 export class FeedRows {
   /** A pull request waiting on your review: who opened it, and whether it's a draft. */
   static reviewRequest(pull: GithubFeedPullRequest): FeedRow {
@@ -53,6 +52,7 @@ export class FeedRows {
   /** Your own pull request: its review state, conflicts and checks. */
   static myPullRequest(pull: GithubFeedPullRequest): FeedRow {
     const badges: FeedBadge[] = [];
+
     if (pull.draft) badges.push({ label: 'Draft', tone: 'neutral' });
     const review =
       pull.reviewDecision === null
@@ -64,6 +64,7 @@ export class FeedRows {
     }
     const checks = FeedRows.checks(pull.checks);
     if (checks !== null) badges.push(checks);
+
     return { ...FeedRows.pullBase(pull), detail: null, badges };
   }
 

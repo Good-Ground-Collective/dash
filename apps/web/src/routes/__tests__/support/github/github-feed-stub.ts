@@ -41,12 +41,14 @@ export class GithubFeedStub {
     if (this.scenario === 'failing') {
       return { status: 503, body: { code: 'UNAVAILABLE' } };
     }
+
     const empty = {
       reviewRequests: [],
       myPullRequests: [],
       failedRuns: [],
       assignedIssues: [],
     };
+
     if (this.scenario === 'not-connected') {
       return { status: 200, body: { connections: [], ...empty } };
     }
@@ -59,6 +61,7 @@ export class GithubFeedStub {
         },
       };
     }
+
     const connections = [
       GithubFeedStub.connection(acme, 'acme-labs', 4),
       {

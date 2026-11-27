@@ -20,7 +20,7 @@ export class RelativeTime {
     return format.format(-Math.floor(seconds / match.seconds), match.unit);
   }
 
-  /** Whether `when` is more than `minutes` ago. */
+  /** Strict: exactly `minutes` ago is not older. */
   static olderThan(props: { when: Date; minutes: number }): boolean {
     return Date.now() - props.when.getTime() > props.minutes * 60 * 1000;
   }
