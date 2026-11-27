@@ -24,7 +24,7 @@ class Checklist {
   }): Promise<SetupChecklistReport> {
     return new SourcedSetupChecklist({
       connections: new ConnectedProviders({ providers: props.connected }),
-    }).for();
+    }).report();
   }
 }
 

@@ -8,8 +8,8 @@ export interface ConnectionPresence {
 }
 
 export interface SetupChecklist {
-  /** Each item's status for `userId`, read fresh so an item ticks off as soon as its condition holds. */
-  for(props: { userId: string }): Promise<SetupChecklistReport>;
+  /** Each item's status, read fresh so an item ticks off as soon as its condition holds. */
+  report(): Promise<SetupChecklistReport>;
 }
 
 /**
@@ -23,7 +23,7 @@ export class SourcedSetupChecklist implements SetupChecklist {
     this.connections = props.connections;
   }
 
-  async for(): Promise<SetupChecklistReport> {
+  async report(): Promise<SetupChecklistReport> {
     const connected = await this.connections.exists({
       provider: githubProvider,
     });
