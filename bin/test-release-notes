@@ -12,10 +12,16 @@ const { generateNotes } = await import(
 );
 
 const { release } = fromRoot('./package.json');
-const pluginConfig = (name) =>
-  release.plugins.find(
-    (plugin) => Array.isArray(plugin) && plugin[0] === name,
-  )[1];
+const pluginConfig = (name) => {
+  const entry = release.plugins.find(
+    (plugin) => (Array.isArray(plugin) ? plugin[0] : plugin) === name,
+  );
+  if (entry === undefined) {
+    console.error(`package.json release.plugins has no ${name} entry`);
+    process.exit(1);
+  }
+  return Array.isArray(entry) ? (entry[1] ?? {}) : {};
+};
 
 const commit = {
   hash: '0000000',
