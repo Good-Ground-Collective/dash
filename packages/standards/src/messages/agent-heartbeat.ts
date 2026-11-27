@@ -79,7 +79,21 @@ export const agentHeartbeat = new MessageDefinition({
           .max(2000)
           .describe('The question, copied verbatim and trimmed to fit.'),
         options: z
-          .array(z.string().min(1).max(200))
+          .array(
+            z.object({
+              label: z
+                .string()
+                .min(1)
+                .max(200)
+                .describe('The answer as the harness shows it.'),
+              description: z
+                .string()
+                .min(1)
+                .max(500)
+                .optional()
+                .describe("The harness's explanation of the answer, if any."),
+            }),
+          )
           .max(10)
           .optional()
           .describe('The answers offered, if the question has any.'),

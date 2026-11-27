@@ -143,10 +143,48 @@ func (j *AgentHeartbeatV1PayloadError) UnmarshalJSON(value []byte) error {
 // What the agent is asking. Set when `status` is `question`.
 type AgentHeartbeatV1PayloadQuestion struct {
 	// The answers offered, if the question has any.
-	Options []string `json:"options,omitempty,omitzero"`
+	Options []AgentHeartbeatV1PayloadQuestionOptionsElem `json:"options,omitempty,omitzero"`
 
 	// The question, copied verbatim and trimmed to fit.
 	Text string `json:"text"`
+}
+
+type AgentHeartbeatV1PayloadQuestionOptionsElem struct {
+	// The harness's explanation of the answer, if any.
+	Description *string `json:"description,omitempty,omitzero"`
+
+	// The answer as the harness shows it.
+	Label string `json:"label"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *AgentHeartbeatV1PayloadQuestionOptionsElem) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["label"]; raw != nil && !ok {
+		return fmt.Errorf("field label in AgentHeartbeatV1PayloadQuestionOptionsElem: required")
+	}
+	type Plain AgentHeartbeatV1PayloadQuestionOptionsElem
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if plain.Description != nil && utf8.RuneCountInString(string(*plain.Description)) < 1 {
+		return fmt.Errorf("field %s length: must be >= %d", "description", 1)
+	}
+	if plain.Description != nil && utf8.RuneCountInString(string(*plain.Description)) > 500 {
+		return fmt.Errorf("field %s length: must be <= %d", "description", 500)
+	}
+	if utf8.RuneCountInString(string(plain.Label)) < 1 {
+		return fmt.Errorf("field %s length: must be >= %d", "label", 1)
+	}
+	if utf8.RuneCountInString(string(plain.Label)) > 200 {
+		return fmt.Errorf("field %s length: must be <= %d", "label", 200)
+	}
+	*j = AgentHeartbeatV1PayloadQuestionOptionsElem(plain)
+	return nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

@@ -10,7 +10,15 @@
     "status": "question",
     "question": {
       "text": "Which branch should the fix go on?",
-      "options": ["main", "release/1.2"]
+      "options": [
+        {
+          "label": "main",
+          "description": "Ship it in the next release"
+        },
+        {
+          "label": "release/1.2"
+        }
+      ]
     }
   }
 }

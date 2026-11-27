@@ -77,7 +77,24 @@
           "properties": {
             "options": {
               "description": "The answers offered, if the question has any.",
-              "items": { "maxLength": 200, "minLength": 1, "type": "string" },
+              "items": {
+                "properties": {
+                  "description": {
+                    "description": "The harness's explanation of the answer, if any.",
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "label": {
+                    "description": "The answer as the harness shows it.",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["label"],
+                "type": "object"
+              },
               "maxItems": 10,
               "type": "array"
             },

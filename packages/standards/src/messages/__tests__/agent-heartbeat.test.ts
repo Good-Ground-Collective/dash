@@ -53,7 +53,10 @@ describe('agentHeartbeat', () => {
         status: 'question',
         question: {
           text: 'Which branch should the fix go on?',
-          options: ['main', 'release/1.2'],
+          options: [
+            { label: 'main', description: 'Ship it in the next release' },
+            { label: 'release/1.2' },
+          ],
         },
       },
     };
@@ -86,6 +89,20 @@ describe('agentHeartbeat constraints', () => {
       agentHeartbeat.schema.safeParse(withHarness('Claude Code')).success,
     ).toBe(false);
   });
+
+  it('accepts a 64-character harness and rejects a 65-character one', () => {
+    const withHarness = (harness: string) => ({
+      ...heartbeat,
+      payload: { ...heartbeat.payload, harness },
+    });
+
+    expect(
+      agentHeartbeat.schema.safeParse(withHarness('h'.repeat(64))).success,
+    ).toBe(true);
+    expect(
+      agentHeartbeat.schema.safeParse(withHarness('h'.repeat(65))).success,
+    ).toBe(false);
+  });
 });
 
 describe('agentHeartbeat length limits', () => {
@@ -101,10 +118,10 @@ describe('agentHeartbeat length limits', () => {
       payload: (text: string) => ({ question: { text } }),
     },
     {
-      field: 'question.options',
+      field: 'question.options[].label',
       limit: 200,
       payload: (text: string) => ({
-        question: { text: 'Which?', options: [text] },
+        question: { text: 'Which?', options: [{ label: text }] },
       }),
     },
     {

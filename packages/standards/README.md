@@ -73,20 +73,20 @@ Inside this repository, a Go consumer such as the bench daemon uses the module t
 
 `agent.heartbeat` (`agentHeartbeat`) is what a harness hook sends each time an agent's state changes. Mission Control keeps the latest one per session, raises the ones that need you and notices the ones that go quiet. Token and cost figures are not part of it; they come from OpenTelemetry.
 
-| Field       | Required | What it holds                                                                                                 |
-| ----------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `sessionId` | yes      | The harness session. A subagent carries its parent's session ID                                               |
-| `seq`       | yes      | A non-negative integer that increases within the session (see below)                                          |
-| `harness`   | yes      | An open enum: `claude-code` (in `knownHarnesses`) or any lowercase dotted or dashed name, up to 64 characters |
-| `status`    | yes      | Exactly one of the statuses below                                                                             |
-| `agentId`   | no       | Set only for a subagent, so it rolls up under the parent session                                              |
-| `agent`     | no       | `{ type?, model? }`: the agent type, such as a subagent name, and the model it runs on                        |
-| `summary`   | no       | The last assistant message, trimmed                                                                           |
-| `question`  | no       | `{ text, options? }`, copied verbatim from the harness. Set when `status` is `question`                       |
-| `error`     | no       | `{ kind, message }`. Set when `status` is `error`                                                             |
-| `workspace` | no       | `{ directory?, repository?, branch? }`: where the agent is working                                            |
-| `machine`   | no       | The hostname the agent runs on                                                                                |
-| `taskId`    | no       | The task the session serves. A session serves one task; a task can span sessions                              |
+| Field       | Required | What it holds                                                                                                      |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `sessionId` | yes      | The harness session. A subagent carries its parent's session ID                                                    |
+| `seq`       | yes      | A non-negative integer that increases within the session (see below)                                               |
+| `harness`   | yes      | An open enum: `claude-code` (in `knownHarnesses`) or any lowercase dotted or dashed name, up to 64 characters      |
+| `status`    | yes      | Exactly one of the statuses below                                                                                  |
+| `agentId`   | no       | Set only for a subagent, so it rolls up under the parent session                                                   |
+| `agent`     | no       | `{ type?, model? }`: the agent type, such as a subagent name, and the model it runs on                             |
+| `summary`   | no       | The last assistant message, trimmed                                                                                |
+| `question`  | no       | `{ text, options?: [{ label, description? }] }`, copied verbatim from the harness. Set when `status` is `question` |
+| `error`     | no       | `{ kind, message }`. Set when `status` is `error`                                                                  |
+| `workspace` | no       | `{ directory?, repository?, branch? }`: where the agent is working                                                 |
+| `machine`   | no       | The hostname the agent runs on                                                                                     |
+| `taskId`    | no       | The task the session serves. A session serves one task; a task can span sessions                                   |
 
 The envelope's `emittedAt` is the heartbeat's timestamp. Ticket and pull request links aren't in v1; the board joins those from GitHub.
 
@@ -108,12 +108,12 @@ A2A's `canceled` has no heartbeat status: a session someone interrupts sends its
 
 ### Length limits
 
-| Field              | Limit                           |
-| ------------------ | ------------------------------- |
-| `summary`          | 500 characters                  |
-| `question.text`    | 2,000 characters                |
-| `question.options` | 10 options, 200 characters each |
-| `error.message`    | 2,000 characters                |
+| Field              | Limit                                                 |
+| ------------------ | ----------------------------------------------------- |
+| `summary`          | 500 characters                                        |
+| `question.text`    | 2,000 characters                                      |
+| `question.options` | 10 options; `label` 200 characters, `description` 500 |
+| `error.message`    | 2,000 characters                                      |
 
 Limits count UTF-16 code units, which is what Zod's `.max()` measures. JSON Schema and the Go structs count code points, which is never more, so text within a limit passes all three. A writer in any language must trim by UTF-16 length; trimming by characters can leave emoji-heavy text over the limit for TypeScript readers. Hooks trim to fit, keeping the start and ending with `…`. The schema rejects anything longer, so a writer that forgets to trim fails loudly instead of storing a very long message.
 
