@@ -12,7 +12,12 @@ export type Transaction = Parameters<
   Parameters<Database['orm']['transaction']>[0]
 >[0];
 
-/** Upserts for tables a sync replaces whole: a repeated read overwrites each row in place, keyed on the table's primary key. */
+const bindParameterBudget = 60_000;
+
+/**
+ * Upserts for tables a sync replaces whole: a repeated read overwrites each row in place, keyed on
+ * the table's primary key. Large reads go in several statements on the caller's transaction.
+ */
 export class ReplacedRows {
   static async upsert<T extends PgTable>(props: {
     transaction: Transaction;
@@ -23,13 +28,20 @@ export class ReplacedRows {
       return;
     }
     const target = getTableConfig(props.table).primaryKeys[0]?.columns ?? [];
-    await props.transaction
-      .insert(props.table)
-      .values([...props.rows])
-      .onConflictDoUpdate({
-        target,
-        set: ReplacedRows.excluded({ table: props.table, target }),
-      });
+    const set = ReplacedRows.excluded({ table: props.table, target });
+    const perStatement = ReplacedRows.rowsPerStatement(props.table);
+    for (let start = 0; start < props.rows.length; start += perStatement) {
+      await props.transaction
+        .insert(props.table)
+        .values(props.rows.slice(start, start + perStatement))
+        .onConflictDoUpdate({ target, set });
+    }
+  }
+
+  /** Postgres binds at most 65,535 parameters to a statement, one per column of each row. */
+  private static rowsPerStatement(table: PgTable): number {
+    const columns = Object.keys(getTableColumns(table)).length;
+    return Math.max(1, Math.floor(bindParameterBudget / columns));
   }
 
   /** Every column but the primary key, taken from the row that conflicted. */

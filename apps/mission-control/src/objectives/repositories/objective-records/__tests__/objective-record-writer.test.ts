@@ -108,6 +108,48 @@ describe.skipIf(databaseUrl === null)('DrizzleObjectiveRecordWriter', () => {
 });
 
 describe.skipIf(databaseUrl === null)(
+  'DrizzleObjectiveRecordWriter large reads',
+  () => {
+    const kinds = [
+      'ticket_closed',
+      'pull_request_merged',
+      'commented',
+    ] as const;
+    const [template] = records.tickets;
+    const tickets = Array.from({ length: 3_400 }, (_, index) => ({
+      ...template!,
+      nodeId: `BULK${String(index)}`,
+      position: index,
+    }));
+    const large: ObjectiveRecords = {
+      ...records,
+      tickets,
+      activity: tickets.flatMap(({ nodeId, url }) =>
+        kinds.map((kind) => ({
+          ticketNodeId: nodeId,
+          kind,
+          occurredAt: fixedNow.toISOString(),
+          actor: null,
+          url,
+        })),
+      ),
+    };
+
+    it('writes a read with more rows than one statement can bind, then prunes it', async () => {
+      expect(await Stored.replace(large, fixedNow)).toEqual({ applied: true });
+      const stored = (await Stored.owned())?.records;
+      expect(stored?.tickets).toHaveLength(3_400);
+      expect(stored?.activity).toHaveLength(10_200);
+
+      await Stored.replace(records, later);
+      const pruned = (await Stored.owned())?.records;
+      expect(pruned?.tickets).toHaveLength(records.tickets.length);
+      expect(pruned?.activity).toHaveLength(records.activity.length);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
   'DrizzleObjectiveRecordWriter ordering',
   () => {
     it('drops a read that started before the one already stored', async () => {
