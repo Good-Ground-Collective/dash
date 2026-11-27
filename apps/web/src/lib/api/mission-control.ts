@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MissionControlError } from '#lib/api/mission-control-error.ts';
+import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import {
   colorModeSchema,
   themeNameSchema,
@@ -77,14 +77,13 @@ export interface ServiceAccountReads {
 export class HttpMissionControl
   implements MissionControl, PasskeyReads, ServiceAccountReads
 {
-  private readonly baseUrl: URL;
+  private readonly endpoint: MissionControlEndpoint;
   private readonly fetcher: typeof fetch;
   private readonly timeoutMs: number;
 
   constructor(props: HttpMissionControlProps) {
     const valid = httpMissionControlPropsSchema.parse(props);
-    this.baseUrl = new URL(valid.baseUrl);
-    if (!this.baseUrl.pathname.endsWith('/')) this.baseUrl.pathname += '/';
+    this.endpoint = new MissionControlEndpoint({ baseUrl: valid.baseUrl });
     this.fetcher = valid.fetch;
     this.timeoutMs = valid.timeoutMs;
   }
@@ -126,19 +125,16 @@ export class HttpMissionControl
     path: string;
     schema: z.ZodType<T>;
   }): Promise<T> {
-    const response = await this.fetcher(new URL(props.path, this.baseUrl), {
+    const response = await this.fetcher(this.endpoint.url(props.path), {
       credentials: 'include',
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(this.timeoutMs),
     });
 
-    if (!response.ok) {
-      throw new MissionControlError({
-        path: props.path,
-        status: response.status,
-      });
-    }
-
-    return props.schema.parse(await response.json());
+    return this.endpoint.read({
+      path: props.path,
+      response,
+      schema: props.schema,
+    });
   }
 }

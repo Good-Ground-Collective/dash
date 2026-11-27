@@ -25,7 +25,7 @@ export class AppearanceStub {
   }
 
   /** The person as the session lookup returns them, with their appearance. */
-  dress<T extends object>(
+  withAppearance<T extends object>(
     person: T,
   ): T & { theme: 'characters'; colorMode: 'light' | 'dark' | null } {
     return { ...person, theme: 'characters', colorMode: this.colorMode };

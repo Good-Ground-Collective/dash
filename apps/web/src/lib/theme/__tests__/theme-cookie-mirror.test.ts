@@ -20,7 +20,7 @@ describe('ThemeCookieMirror', () => {
     const cookies = new RecordingCookies({});
 
     expect(
-      themeCookieMirror.adopt({
+      themeCookieMirror.resolve({
         cookies,
         requested: { theme: 'characters', mode: 'dark' },
         saved: null,
@@ -33,7 +33,7 @@ describe('ThemeCookieMirror', () => {
     const cookies = new RecordingCookies({ 'dash-theme': 'characters' });
 
     expect(
-      themeCookieMirror.adopt({
+      themeCookieMirror.resolve({
         cookies,
         requested: { theme: 'characters', mode: 'dark' },
         saved: { theme: 'characters', colorMode: null },
@@ -49,7 +49,7 @@ describe('ThemeCookieMirror', () => {
     });
 
     expect(
-      themeCookieMirror.adopt({
+      themeCookieMirror.resolve({
         cookies,
         requested: { theme: 'characters', mode: 'dark' },
         saved: { theme: 'characters', colorMode: 'light' },

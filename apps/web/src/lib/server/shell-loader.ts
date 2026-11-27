@@ -43,7 +43,7 @@ export class MissionControlShellLoader implements ShellLoader {
 
   readonly load = async (event: ShellLoadEvent): Promise<ShellData> => {
     const viewer = await this.viewer(event);
-    event.locals.themePreference = this.cookieMirror.adopt({
+    event.locals.themePreference = this.cookieMirror.resolve({
       cookies: event.cookies,
       requested: event.locals.themePreference,
       saved: viewer,

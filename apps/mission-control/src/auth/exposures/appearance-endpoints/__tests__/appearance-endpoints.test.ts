@@ -89,3 +89,34 @@ describe('AppearanceEndpoints', () => {
     ).toBeNull();
   });
 });
+
+describe('AppearanceEndpoints for service principals', () => {
+  it('refuses a service principal that somehow holds a session', async () => {
+    const harness = new ServiceAccountHarness();
+    const owner = await harness.signIn();
+    const created = await harness.createAccount({
+      cookie: owner,
+      account: {
+        kind: 'agent',
+        name: 'Rook',
+        agentName: 'rook',
+        description: 'Reviews pull requests',
+        scopes: ['heartbeat:write'],
+      },
+    });
+    const cookie = await harness.forgeSession({
+      userId: created.serviceAccount.id,
+    });
+
+    const response = await harness.post({
+      path: '/appearance/update',
+      cookie,
+      body: { theme: 'characters', mode: 'dark' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: 'SERVICE_PRINCIPAL_FORBIDDEN',
+    });
+  });
+});
