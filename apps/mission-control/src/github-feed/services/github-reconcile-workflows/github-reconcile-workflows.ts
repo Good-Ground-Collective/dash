@@ -1,6 +1,7 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
+import { webhookStepRetries } from '#src/connections/contracts/webhook-events.ts';
 import {
   ReconcileNotRegisteredError,
   ReconcileOutsideWorkflowError,
@@ -102,7 +103,7 @@ export class GithubReconcileWorkflows
         const startedAt = await DBOS.now();
         const outcome = await DBOS.runStep(
           () => this.reconcile.syncConnection({ connectionId }),
-          { name: 'githubSyncConnection' },
+          { ...webhookStepRetries, name: 'githubSyncConnection' },
         );
         GithubReconcileWorkflows.log({ connectionId, outcome });
 
