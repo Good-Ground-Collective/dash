@@ -5,6 +5,7 @@ import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { SharedFixtures } from '#src/messages/__tests__/support/shared-fixtures.js';
 import { examplePing } from '#src/messages/example.js';
 
 const ping = {
@@ -89,4 +90,22 @@ describe('the generated example.ping JSON Schema', () => {
 
     expect(validate(withoutVersion)).toBe(false);
   });
+});
+
+const fixtures = await SharedFixtures.load(examplePing);
+const validateFixture = await SharedFixtures.compileJsonSchema(examplePing);
+
+describe('the shared example.ping fixtures', () => {
+  it('include valid and invalid messages', () => {
+    expect(fixtures.some((fixture) => fixture.valid)).toBe(true);
+    expect(fixtures.some((fixture) => !fixture.valid)).toBe(true);
+  });
+
+  it.each(fixtures)(
+    '$file gets the same verdict from Zod and the JSON Schema',
+    ({ valid, message }) => {
+      expect(examplePing.schema.safeParse(message).success).toBe(valid);
+      expect(validateFixture(message)).toBe(valid);
+    },
+  );
 });

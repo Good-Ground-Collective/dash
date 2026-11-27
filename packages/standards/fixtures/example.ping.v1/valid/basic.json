@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "example.ping",
+  "id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "emittedAt": "2026-11-27T09:30:00Z",
+  "payload": { "text": "hello" }
+}
