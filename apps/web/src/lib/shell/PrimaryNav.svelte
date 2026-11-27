@@ -79,6 +79,8 @@
 
     ul {
       gap: 0;
+      width: max-content;
+      min-width: 100%;
       padding-inline-end: var(--space-4);
     }
 
