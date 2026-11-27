@@ -21,8 +21,8 @@ export interface DefaultBranchActivity {
 }
 
 /** GraphQL nodes read as provider-neutral activity records. */
-export const githubActivityRecords = {
-  run(props: {
+export class GithubActivityRecords {
+  static run(props: {
     suite: FailedSuite;
     repositoryId: string;
     pullRequestId: string | null;
@@ -44,9 +44,9 @@ export const githubActivityRecords = {
       conclusion: suite.conclusion,
       updatedAt: suite.updatedAt,
     };
-  },
+  }
 
-  pullRequest(node: GithubPullRequestNode): ActivityPullRequest {
+  static pullRequest(node: GithubPullRequestNode): ActivityPullRequest {
     const commit = node.commits.nodes.at(-1)?.commit;
     return {
       provider: 'github',
@@ -69,15 +69,15 @@ export const githubActivityRecords = {
       checks: commit?.statusCheckRollup ?? null,
       updatedAt: node.updatedAt,
     };
-  },
+  }
 
-  pullRequestRuns(node: GithubPullRequestNode): ActivityRun[] {
+  static pullRequestRuns(node: GithubPullRequestNode): ActivityRun[] {
     const suites = node.commits.nodes.at(-1)?.commit.checkSuites.nodes ?? [];
     return suites.flatMap((suite) =>
       suite === null
         ? []
         : [
-            githubActivityRecords.run({
+            GithubActivityRecords.run({
               suite,
               repositoryId: node.repository.externalId,
               pullRequestId: node.id,
@@ -86,9 +86,9 @@ export const githubActivityRecords = {
             }),
           ],
     );
-  },
+  }
 
-  issue(node: GithubIssueNode): ActivityIssue {
+  static issue(node: GithubIssueNode): ActivityIssue {
     return {
       provider: 'github',
       externalId: node.id,
@@ -100,9 +100,9 @@ export const githubActivityRecords = {
       assignees: node.assignees.nodes.map(({ login }) => login),
       updatedAt: node.updatedAt,
     };
-  },
+  }
 
-  defaultBranch(
+  static defaultBranch(
     node: NonNullable<GithubDefaultBranchNode>,
   ): DefaultBranchActivity {
     const branch = node.defaultBranchRef;
@@ -126,7 +126,7 @@ export const githubActivityRecords = {
         suite === null
           ? []
           : [
-              githubActivityRecords.run({
+              GithubActivityRecords.run({
                 suite,
                 repositoryId: node.id,
                 pullRequestId: null,
@@ -136,5 +136,5 @@ export const githubActivityRecords = {
             ],
       ),
     };
-  },
-};
+  }
+}

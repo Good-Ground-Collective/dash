@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import {
   afterAll,
   beforeAll,
@@ -15,6 +16,7 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubRecordsDatabase } from '#src/github-feed/__tests__/support/github-records-database.ts';
+import { githubSyncTable } from '#src/github-feed/repositories/github-records/github-records-table.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
 
 const databaseUrl = inject('databaseUrl');
@@ -33,20 +35,12 @@ let store: GithubRecordsDatabase | undefined;
 
 class Stored {
   static async owned() {
-    const [owned] = await Opened.store().reader.recordsFor({
+    const [owned] = await GithubRecordsDatabase.required(
+      store,
+    ).reader.recordsFor({
       connectedBy: adaId,
     });
     return owned;
-  }
-}
-
-/** The test database, opened once the suite runs. */
-class Opened {
-  static store(): GithubRecordsDatabase {
-    if (store === undefined) {
-      throw new TypeError('Set DASH_TEST_DATABASE_URL to run repository tests');
-    }
-    return store;
   }
 }
 
@@ -71,8 +65,14 @@ describe.skipIf(databaseUrl === null)(
   'DrizzleGithubRecordWriter upserts',
   () => {
     it('writes the same read twice into one set of rows', async () => {
-      await Opened.store().writer.replace({ ...read, syncedAt: fixedNow });
-      await Opened.store().writer.replace({ ...read, syncedAt: later });
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: fixedNow,
+      });
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: later,
+      });
 
       const owned = await Stored.owned();
       expect(owned?.records).toEqual(records);
@@ -80,9 +80,14 @@ describe.skipIf(databaseUrl === null)(
     });
 
     it('drops a read that started before the one already stored', async () => {
-      await Opened.store().writer.replace({ ...read, syncedAt: later });
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: later,
+      });
 
-      const { applied } = await Opened.store().writer.replace({
+      const { applied } = await GithubRecordsDatabase.required(
+        store,
+      ).writer.replace({
         ...read,
         records: { ...records, issues: [] },
         syncedAt: fixedNow,
@@ -94,8 +99,11 @@ describe.skipIf(databaseUrl === null)(
 
     it('keeps the newer of two concurrent first reads', async () => {
       const [newer] = await Promise.all([
-        Opened.store().writer.replace({ ...read, syncedAt: later }),
-        Opened.store().writer.replace({
+        GithubRecordsDatabase.required(store).writer.replace({
+          ...read,
+          syncedAt: later,
+        }),
+        GithubRecordsDatabase.required(store).writer.replace({
           ...read,
           records: { ...records, issues: [] },
           syncedAt: fixedNow,
@@ -114,8 +122,11 @@ describe.skipIf(databaseUrl === null)(
   'DrizzleGithubRecordWriter prunes',
   () => {
     it('removes rows a later read no longer reports', async () => {
-      await Opened.store().writer.replace({ ...read, syncedAt: fixedNow });
-      await Opened.store().writer.replace({
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: fixedNow,
+      });
+      await GithubRecordsDatabase.required(store).writer.replace({
         ...read,
         records: {
           ...records,
@@ -136,8 +147,11 @@ describe.skipIf(databaseUrl === null)(
     });
 
     it('keeps the last good rows when a read fails', async () => {
-      await Opened.store().writer.replace({ ...read, syncedAt: fixedNow });
-      await Opened.store().writer.recordFailure({
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: fixedNow,
+      });
+      await GithubRecordsDatabase.required(store).writer.recordFailure({
         connectionId: ownedId,
         error: 'GitHub answered 502.',
         attemptedAt: later,
@@ -152,8 +166,11 @@ describe.skipIf(databaseUrl === null)(
     });
 
     it('drops a failure from a read older than the stored one', async () => {
-      await Opened.store().writer.replace({ ...read, syncedAt: later });
-      await Opened.store().writer.recordFailure({
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: later,
+      });
+      await GithubRecordsDatabase.required(store).writer.recordFailure({
         connectionId: ownedId,
         error: 'GitHub answered 502.',
         attemptedAt: fixedNow,
@@ -162,6 +179,33 @@ describe.skipIf(databaseUrl === null)(
       expect(await Stored.owned()).toMatchObject({
         lastSyncedAt: later.toISOString(),
         lastError: null,
+      });
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter attempts',
+  () => {
+    it('keeps a newer read’s failure when an older read finishes after it', async () => {
+      await GithubRecordsDatabase.required(store).writer.recordFailure({
+        connectionId: ownedId,
+        error: 'GitHub answered 502.',
+        attemptedAt: later,
+      });
+      await GithubRecordsDatabase.required(store).writer.replace({
+        ...read,
+        syncedAt: fixedNow,
+      });
+
+      const [sync] = await GithubRecordsDatabase.required(store)
+        .database.orm.select()
+        .from(githubSyncTable)
+        .where(eq(githubSyncTable.connectionId, ownedId));
+      expect(sync).toMatchObject({
+        lastSyncedAt: fixedNow,
+        lastAttemptedAt: later,
+        lastError: 'GitHub answered 502.',
       });
     });
   },

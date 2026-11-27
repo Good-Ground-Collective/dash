@@ -10,6 +10,9 @@ import {
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
 
+const unclaimedId = '40000000-0000-4000-8000-000000000001';
+const uninstalledId = '40000000-0000-4000-8000-000000000002';
+
 class Reconciling {
   static async linked(): Promise<GithubFeedHarness> {
     const harness = await new GithubFeedHarness().link({
@@ -96,15 +99,60 @@ describe('GithubReconcile failed reads', () => {
         suspended: true,
       }),
     );
+    for (const target of [
+      { connectionId: unclaimedId, connectedBy: null },
+      { connectionId: uninstalledId, installationId: null },
+    ]) {
+      harness.records.add(GithubFeedFixtures.target(target));
+    }
 
-    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
-    await harness.module.reconcile.syncConnection({ connectionId: guestId });
+    for (const connectionId of [ownedId, guestId, unclaimedId, uninstalledId]) {
+      await harness.module.reconcile.syncConnection({ connectionId });
+    }
 
     expect(harness.records.syncs.get(ownedId)?.lastError).toMatch(
       /Authorize the GitHub app/u,
     );
     expect(harness.records.syncs.get(guestId)?.lastError).toMatch(/suspended/u);
+    for (const connectionId of [unclaimedId, uninstalledId]) {
+      expect(harness.records.syncs.get(connectionId)?.lastError).toBe(
+        'This connection can’t be read until it is reconnected.',
+      );
+    }
     expect(harness.feed.queries).toEqual([]);
+  });
+});
+
+describe('GithubReconcile overlapping reads', () => {
+  it('keeps a newer read’s failure when an older read finishes after it', async () => {
+    const harness = await Reconciling.linked();
+    const later = new Date(fixedNow.getTime() + 15 * 60_000);
+    const { promise: held, resolve: release } = Promise.withResolvers<void>();
+    harness.feed.held = held;
+    const older = harness.module.reconcile.syncConnection({
+      connectionId: ownedId,
+    });
+    while (harness.feed.queries.length === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    harness.feed.held = null;
+    harness.feed.failure = Object.assign(new Error('Bad gateway'), {
+      status: 502,
+    });
+    vi.setSystemTime(later);
+
+    const newer = await harness.module.reconcile.syncConnection({
+      connectionId: ownedId,
+    });
+    release();
+
+    expect(newer).toMatchObject({ status: 'failed' });
+    expect(await older).toEqual({ status: 'synced' });
+    expect(harness.records.syncs.get(ownedId)).toMatchObject({
+      lastSyncedAt: fixedNow,
+      lastAttemptedAt: later,
+      lastError: 'GitHub answered 502. Dash tries again at the next sync.',
+    });
   });
 });
 

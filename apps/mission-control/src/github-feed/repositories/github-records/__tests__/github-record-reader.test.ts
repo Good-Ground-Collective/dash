@@ -16,7 +16,6 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubRecordsDatabase } from '#src/github-feed/__tests__/support/github-records-database.ts';
-import type { GithubFeed } from '#src/github-feed/contracts/github-feed.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
 import { GithubFeedAssembly } from '#src/github-feed/services/github-feed-assembly/github-feed-assembly.ts';
 
@@ -26,32 +25,6 @@ const records = ActivityRecords.from({
   viewerLogin: 'ada',
 });
 let store: GithubRecordsDatabase | undefined;
-
-class Feeds {
-  /** The feed's items with their connection blanked, to compare what each kind of connection produced. */
-  static items(feed: GithubFeed | undefined) {
-    const item = <T extends { connectionId: string }>(value: T) => ({
-      ...value,
-      connectionId: 'any',
-    });
-    return {
-      reviewRequests: feed?.reviewRequests.map(item),
-      myPullRequests: feed?.myPullRequests.map(item),
-      failedRuns: feed?.failedRuns.map(item),
-      assignedIssues: feed?.assignedIssues.map(item),
-    };
-  }
-}
-
-/** The test database, opened once the suite runs. */
-class Opened {
-  static store(): GithubRecordsDatabase {
-    if (store === undefined) {
-      throw new TypeError('Set DASH_TEST_DATABASE_URL to run repository tests');
-    }
-    return store;
-  }
-}
 
 beforeAll(async () => {
   if (databaseUrl !== null) {
@@ -73,7 +46,7 @@ afterAll(async () => {
 describe.skipIf(databaseUrl === null)('DrizzleGithubRecordReader', () => {
   it('reads owned and guest rows back as the same feed', async () => {
     for (const connectionId of [ownedId, guestId]) {
-      await Opened.store().writer.replace({
+      await GithubRecordsDatabase.required(store).writer.replace({
         connectionId,
         viewerLogin: 'ada',
         records,
@@ -82,7 +55,9 @@ describe.skipIf(databaseUrl === null)('DrizzleGithubRecordReader', () => {
       });
     }
 
-    const connections = await Opened.store().reader.recordsFor({
+    const connections = await GithubRecordsDatabase.required(
+      store,
+    ).reader.recordsFor({
       connectedBy: adaId,
     });
     const [owned, guest] = (['owned', 'guest'] as const).map((kind) =>
@@ -96,8 +71,10 @@ describe.skipIf(databaseUrl === null)('DrizzleGithubRecordReader', () => {
       'owned',
     ]);
     expect(guest?.myPullRequests[0]?.connectionId).toBe(guestId);
-    expect(Feeds.items(guest)).toEqual(Feeds.items(owned));
-    expect(Feeds.items(owned).reviewRequests).toHaveLength(1);
+    expect(GithubFeedFixtures.comparable(guest)).toEqual(
+      GithubFeedFixtures.comparable(owned),
+    );
+    expect(GithubFeedFixtures.comparable(owned).reviewRequests).toHaveLength(1);
   });
 });
 
@@ -105,13 +82,15 @@ describe.skipIf(databaseUrl === null)(
   'DrizzleGithubRecordReader sync targets',
   () => {
     it('lists sync targets with their unarchived repositories, untried first', async () => {
-      await Opened.store().writer.recordFailure({
+      await GithubRecordsDatabase.required(store).writer.recordFailure({
         connectionId: ownedId,
         error: 'GitHub answered 502.',
         attemptedAt: fixedNow,
       });
 
-      const targets = await Opened.store().reader.syncTargets({
+      const targets = await GithubRecordsDatabase.required(
+        store,
+      ).reader.syncTargets({
         kinds: ['owned', 'guest'],
         limit: 10,
       });
@@ -131,7 +110,7 @@ describe.skipIf(databaseUrl === null)(
 
     it('narrows sync targets to one person or one connection', async () => {
       expect(
-        await Opened.store().reader.syncTargets({
+        await GithubRecordsDatabase.required(store).reader.syncTargets({
           connectionId: guestId,
           kinds: ['owned', 'guest'],
           limit: 10,
@@ -140,7 +119,7 @@ describe.skipIf(databaseUrl === null)(
         expect.objectContaining({ connectionId: guestId, kind: 'guest' }),
       ]);
       expect(
-        await Opened.store().reader.syncTargets({
+        await GithubRecordsDatabase.required(store).reader.syncTargets({
           connectedBy: ownedId,
           kinds: ['owned', 'guest'],
           limit: 10,

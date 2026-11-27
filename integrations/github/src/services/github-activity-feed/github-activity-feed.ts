@@ -10,7 +10,7 @@ import { createAppAuth } from '@octokit/auth-app';
 import { z } from 'zod';
 
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
-import { githubActivityRecords } from '#src/contracts/github-activity-records.ts';
+import { GithubActivityRecords } from '#src/contracts/github-activity-records.ts';
 import {
   githubDefaultBranchNodeSchema,
   type GithubGraphqlData,
@@ -124,7 +124,7 @@ export class GithubActivityFeed implements ActivityFeed {
           data[`repository${index}`] ?? null,
         );
         if (node !== null) {
-          const read = githubActivityRecords.defaultBranch(node);
+          const read = GithubActivityRecords.defaultBranch(node);
           repositories.push(read.repository);
           runs.push(...read.runs);
         }
@@ -200,7 +200,7 @@ export class GithubActivityFeed implements ActivityFeed {
     const runs = new Map<string, ActivityRun>();
     for (const run of [
       ...authored.flatMap((node) =>
-        githubActivityRecords.pullRequestRuns(node),
+        GithubActivityRecords.pullRequestRuns(node),
       ),
       ...props.branches.runs,
     ]) {
@@ -210,13 +210,13 @@ export class GithubActivityFeed implements ActivityFeed {
     return {
       repositories: [...repositories.values()],
       reviewRequests: review.map((node) =>
-        githubActivityRecords.pullRequest(node),
+        GithubActivityRecords.pullRequest(node),
       ),
       authoredPullRequests: authored.map((node) =>
-        githubActivityRecords.pullRequest(node),
+        GithubActivityRecords.pullRequest(node),
       ),
       failedRuns: [...runs.values()],
-      assignedIssues: assigned.map((node) => githubActivityRecords.issue(node)),
+      assignedIssues: assigned.map((node) => GithubActivityRecords.issue(node)),
       truncated: props.truncated,
     };
   }

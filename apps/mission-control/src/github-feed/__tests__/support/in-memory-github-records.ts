@@ -86,11 +86,13 @@ export class InMemoryGithubRecords
     ) {
       return { applied: false };
     }
+    const triedLater =
+      stored !== undefined && stored.lastAttemptedAt > props.syncedAt;
     this.syncs.set(props.connectionId, {
       viewerLogin: props.viewerLogin,
       lastSyncedAt: props.syncedAt,
-      lastAttemptedAt: props.syncedAt,
-      lastError: null,
+      lastAttemptedAt: triedLater ? stored.lastAttemptedAt : props.syncedAt,
+      lastError: triedLater ? stored.lastError : null,
       truncated: props.truncated,
       records: props.records,
     });

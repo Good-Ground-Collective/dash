@@ -18,8 +18,10 @@ import type {
 } from '#src/github-feed/repositories/github-records/github-records-table.ts';
 
 /** Stored rows read back as records, without the connection and read stamp the tables add. */
-export const githubRecordRows = {
-  repository(row: typeof githubRepoTable.$inferSelect): GithubRepositoryRecord {
+export class GithubRecordRows {
+  static repository(
+    row: typeof githubRepoTable.$inferSelect,
+  ): GithubRepositoryRecord {
     return {
       nodeId: row.nodeId,
       fullName: row.fullName,
@@ -27,9 +29,9 @@ export const githubRecordRows = {
       defaultBranch: row.defaultBranch,
       archived: row.archived,
     };
-  },
+  }
 
-  pullRequest(
+  static pullRequest(
     row: typeof githubPullRequestTable.$inferSelect,
   ): GithubPullRequestRecord {
     return {
@@ -47,9 +49,9 @@ export const githubRecordRows = {
       headSha: row.headSha,
       updatedAt: row.updatedAt.toISOString(),
     };
-  },
+  }
 
-  reviewRequest(
+  static reviewRequest(
     row: typeof githubReviewRequestTable.$inferSelect,
   ): GithubReviewRequestRecord {
     return {
@@ -57,9 +59,9 @@ export const githubRecordRows = {
       reviewerKind: row.reviewerKind,
       reviewer: row.reviewer,
     };
-  },
+  }
 
-  checkRollup(
+  static checkRollup(
     row: typeof githubCheckRollupTable.$inferSelect,
   ): GithubCheckRollupRecord {
     return {
@@ -70,9 +72,9 @@ export const githubRecordRows = {
       failureCount: row.failureCount,
       pendingCount: row.pendingCount,
     };
-  },
+  }
 
-  workflowRun(
+  static workflowRun(
     row: typeof githubWorkflowRunTable.$inferSelect,
   ): GithubWorkflowRunRecord {
     return {
@@ -88,9 +90,9 @@ export const githubRecordRows = {
       url: row.url,
       updatedAt: row.updatedAt.toISOString(),
     };
-  },
+  }
 
-  issue(row: typeof githubIssueTable.$inferSelect): GithubIssueRecord {
+  static issue(row: typeof githubIssueTable.$inferSelect): GithubIssueRecord {
     return {
       nodeId: row.nodeId,
       repositoryNodeId: row.repositoryNodeId,
@@ -100,9 +102,9 @@ export const githubRecordRows = {
       author: row.author,
       updatedAt: row.updatedAt.toISOString(),
     };
-  },
+  }
 
-  assignment(
+  static assignment(
     row: typeof githubAssignmentTable.$inferSelect,
   ): GithubAssignmentRecord {
     return {
@@ -111,5 +113,5 @@ export const githubRecordRows = {
       login: row.login,
       role: row.role,
     };
-  },
-};
+  }
+}

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ConnectionKind } from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSource } from '#src/github-feed/contracts/github-source.ts';
 import {
+  ConnectionNotReadableError,
+  ConnectorUnknownError,
   InstallationSuspendedError,
   ViewerNotLinkedError,
 } from '#src/github-feed/errors.ts';
@@ -19,12 +21,18 @@ export type SyncOutcome =
   | { status: 'synced' | 'skipped' | 'stale' }
   | { status: 'failed'; error: string };
 
+export interface GithubReconcile {
+  dueConnectionIds(): Promise<string[]>;
+  connectionIdsOf(props: { userId: string }): Promise<string[]>;
+  syncConnection(props: { connectionId: string }): Promise<SyncOutcome>;
+}
+
 /**
  * Keeps stored GitHub rows in step with GitHub: reads each connection through the source
  * for its kind and replaces what the last read stored. A failed read is recorded on the
  * connection and keeps the previous rows, so the feed shows them as stale instead of empty.
  */
-export class GithubReconcile {
+export class SourcedGithubReconcile implements GithubReconcile {
   private readonly sources: readonly GithubSource[];
   private readonly reader: GithubRecordReader;
   private readonly writer: GithubRecordWriter;
@@ -86,7 +94,7 @@ export class GithubReconcile {
         thrown instanceof Error ? thrown : new Error('A non-error was thrown');
       await this.writer.recordFailure({
         connectionId: target.connectionId,
-        error: GithubReconcile.describe(error),
+        error: SourcedGithubReconcile.describe(error),
         attemptedAt,
       });
       return { status: 'failed', error: `${error.name}: ${error.message}` };
@@ -104,6 +112,12 @@ export class GithubReconcile {
       error instanceof InstallationSuspendedError
     ) {
       return error.message;
+    }
+    if (
+      error instanceof ConnectionNotReadableError ||
+      error instanceof ConnectorUnknownError
+    ) {
+      return 'This connection can’t be read until it is reconnected.';
     }
     const status = statusSchema.safeParse(error);
     return status.success

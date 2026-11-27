@@ -19,13 +19,13 @@ import {
   githubSyncTable,
   githubWorkflowRunTable,
 } from '#src/github-feed/repositories/github-records/github-records-table.ts';
-import { githubRecordRows } from '#src/github-feed/repositories/github-records/github-record-rows.ts';
+import { GithubRecordRows } from '#src/github-feed/repositories/github-records/github-record-rows.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
 /** A GitHub connection a person made, how its reads went, and what the last good one found. */
 export interface ConnectionRecords {
   connectionId: string;
-  kind: 'owned' | 'guest';
+  kind: ConnectionKind;
   accountLogin: string;
   viewerLogin: string | null;
   lastSyncedAt: string | null;
@@ -148,23 +148,23 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
         id,
         {
           repositories: of(rows.repositories, id).map(
-            githubRecordRows.repository,
+            GithubRecordRows.repository,
           ),
           pullRequests: of(rows.pullRequests, id).map(
-            githubRecordRows.pullRequest,
+            GithubRecordRows.pullRequest,
           ),
           reviewRequests: of(rows.reviewRequests, id).map(
-            githubRecordRows.reviewRequest,
+            GithubRecordRows.reviewRequest,
           ),
           checkRollups: of(rows.checkRollups, id).map(
-            githubRecordRows.checkRollup,
+            GithubRecordRows.checkRollup,
           ),
           workflowRuns: of(rows.workflowRuns, id).map(
-            githubRecordRows.workflowRun,
+            GithubRecordRows.workflowRun,
           ),
-          issues: of(rows.issues, id).map(githubRecordRows.issue),
+          issues: of(rows.issues, id).map(GithubRecordRows.issue),
           assignments: of(rows.assignments, id).map(
-            githubRecordRows.assignment,
+            GithubRecordRows.assignment,
           ),
         },
       ]),

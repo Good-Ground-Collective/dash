@@ -5,6 +5,7 @@ import type {
   ActivityQuery,
 } from '@dash/integrations-core';
 
+import type { GithubFeed } from '#src/github-feed/contracts/github-feed.ts';
 import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.ts';
 
 export const adaId = '00000000-0000-4000-8000-00000000000a';
@@ -13,18 +14,21 @@ export const ownedId = '10000000-0000-4000-8000-000000000001';
 export const guestId = '10000000-0000-4000-8000-000000000002';
 export const fixedNow = new Date('2026-11-26T12:00:00Z');
 
-/** A provider activity feed that answers with a set activity, or fails, and records each query. */
+/** A provider activity feed that answers with a set activity, or fails, and records each query. A read waits for `held` when it is set. */
 export class FakeActivityFeed implements ActivityFeed {
   readonly queries: ActivityQuery[] = [];
   activity: Activity = GithubFeedFixtures.activity();
   failure: Error | null = null;
+  held: Promise<void> | null = null;
 
   async read(query: ActivityQuery): Promise<Activity> {
     this.queries.push(query);
-    if (this.failure !== null) {
-      throw this.failure;
+    const { activity, failure, held } = this;
+    await held;
+    if (failure !== null) {
+      throw failure;
     }
-    return this.activity;
+    return activity;
   }
 }
 
@@ -123,6 +127,20 @@ export class GithubFeedFixtures {
         },
       ],
       truncated: false,
+    };
+  }
+
+  /** The feed's items with their connection blanked, to compare what each kind of connection produced. */
+  static comparable(feed: GithubFeed | undefined) {
+    const item = <T extends { connectionId: string }>(value: T) => ({
+      ...value,
+      connectionId: 'any',
+    });
+    return {
+      reviewRequests: feed?.reviewRequests.map(item),
+      myPullRequests: feed?.myPullRequests.map(item),
+      failedRuns: feed?.failedRuns.map(item),
+      assignedIssues: feed?.assignedIssues.map(item),
     };
   }
 }

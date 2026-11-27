@@ -105,20 +105,7 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
             ),
           );
       }
-      const sync = {
-        viewerLogin: props.viewerLogin,
-        lastSyncedAt: syncedAt,
-        lastAttemptedAt: syncedAt,
-        lastError: null,
-        truncated: props.truncated,
-      };
-      await transaction
-        .insert(githubSyncTable)
-        .values({ connectionId, ...sync })
-        .onConflictDoUpdate({
-          target: githubSyncTable.connectionId,
-          set: sync,
-        });
+      await DrizzleGithubRecordWriter.recordSync({ transaction, ...props });
       return { applied: true };
     });
   }
@@ -147,6 +134,40 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
           githubSyncTable.lastSyncedAt,
           props.attemptedAt,
         )}`,
+      });
+  }
+
+  private static async recordSync(props: {
+    transaction: Transaction;
+    connectionId: string;
+    viewerLogin: string;
+    truncated: boolean;
+    syncedAt: Date;
+  }): Promise<void> {
+    const sync = {
+      viewerLogin: props.viewerLogin,
+      lastSyncedAt: props.syncedAt,
+      truncated: props.truncated,
+    };
+    await props.transaction
+      .insert(githubSyncTable)
+      .values({
+        connectionId: props.connectionId,
+        ...sync,
+        lastAttemptedAt: props.syncedAt,
+        lastError: null,
+      })
+      .onConflictDoUpdate({
+        target: githubSyncTable.connectionId,
+        set: {
+          ...sync,
+          lastAttemptedAt: sql.raw(
+            'greatest("github_sync"."last_attempted_at", excluded."last_attempted_at")',
+          ),
+          lastError: sql.raw(
+            'case when "github_sync"."last_attempted_at" > excluded."last_attempted_at" then "github_sync"."last_error" end',
+          ),
+        },
       });
   }
 
