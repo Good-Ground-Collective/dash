@@ -58,7 +58,7 @@
 
 <form class="auth-form sheet" onsubmit={submit}>
   <ol class="codes" aria-label="Recovery codes" bind:this={list}>
-    {#each set.codes as code (code)}
+    {#each set.codes as code, index (index)}
       <li>{code}</li>
     {/each}
   </ol>
