@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DBOS } from '@dbos-inc/dbos-sdk';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   acmeInstallation,
@@ -51,6 +52,10 @@ beforeEach(() => {
   connections.owned.clear();
   flow.suspendedInstallations.clear();
   flow.unavailableReads = 0;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('DbosSuspensionRecheck due', () => {
@@ -145,18 +150,6 @@ describe('DbosSuspensionRecheck recheck', () => {
     expect(await Stored.find('42')).toMatchObject({ suspended: true });
   });
 
-  it('fails with the outage even when moving the connection back fails too', async () => {
-    await Stored.save({ installationId: '42', suspended: true });
-    flow.unavailableReads = 1;
-    vi.spyOn(connections, 'touchSuspended').mockRejectedValueOnce(
-      new Error('database unavailable'),
-    );
-
-    await expect(
-      recheck.recheck({ provider: 'github', installationId: '42' }),
-    ).rejects.toThrow(ProviderUnavailableError);
-  });
-
   it('leaves alone a provider without a connect flow', async () => {
     await expect(
       recheck.recheck({ provider: 'jira', installationId: '42' }),
@@ -166,6 +159,26 @@ describe('DbosSuspensionRecheck recheck', () => {
   it('refuses to schedule before its workflow is registered', async () => {
     await expect(recheck.activate()).rejects.toThrow(
       SuspensionRecheckNotRegisteredError,
+    );
+  });
+});
+
+describe('DbosSuspensionRecheck touch failures', () => {
+  it('fails with the outage and logs it when moving the connection back fails too', async () => {
+    await Stored.save({ installationId: '42', suspended: true });
+    flow.unavailableReads = 1;
+    vi.spyOn(connections, 'touchSuspended').mockRejectedValueOnce(
+      new TypeError('database unavailable'),
+    );
+    const logger = DBOS.logger;
+    vi.spyOn(DBOS, 'logger', 'get').mockReturnValue(logger);
+    const warn = vi.spyOn(logger, 'warn').mockReturnValue();
+
+    await expect(
+      recheck.recheck({ provider: 'github', installationId: '42' }),
+    ).rejects.toThrow(ProviderUnavailableError);
+    expect(warn).toHaveBeenCalledWith(
+      'Moving github installation 42 to the back of the recheck failed: TypeError',
     );
   });
 });

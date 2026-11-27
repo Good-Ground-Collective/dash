@@ -1,9 +1,10 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
-import type {
-  DispatchedDelivery,
-  WebhookEventHandler,
+import {
+  type DispatchedDelivery,
+  type WebhookEventHandler,
+  webhookStepRetries,
 } from '#src/connections/contracts/webhook-events.ts';
 import type { ConnectionReads } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
 import type { GithubSyncRequests } from '#src/github-feed/services/github-sync-requests/github-sync-requests.ts';
@@ -40,13 +41,7 @@ export class GithubFeedEventHandler implements WebhookEventHandler {
     const connectionId = await DBOS.runStep(
       () =>
         this.syncRequests.request({ installationId, requestedAt: new Date() }),
-      {
-        name: 'githubRequestSync',
-        retriesAllowed: true,
-        maxAttempts: 4,
-        intervalSeconds: 1,
-        backoffRate: 2,
-      },
+      { ...webhookStepRetries, name: 'githubRequestSync' },
     );
     if (connectionId !== null) {
       await this.workflows.syncConnection({ connectionId });

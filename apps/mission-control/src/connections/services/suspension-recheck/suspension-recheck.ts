@@ -66,7 +66,7 @@ export class DbosSuspensionRecheck
     try {
       return await this.askProvider(installation);
     } catch (error) {
-      await Promise.allSettled([this.connections.touchSuspended(installation)]);
+      await this.touchOrLog(installation);
       throw error;
     }
   }
@@ -116,6 +116,18 @@ export class DbosSuspensionRecheck
         `Rechecking the suspension of ${installation.provider} installation ${installation.installationId} failed: ${reason}`,
       );
       return false;
+    }
+  }
+
+  /** A failed touch is logged so the provider's error, not the database's, reaches the caller. */
+  private async touchOrLog(installation: SuspendedInstallation): Promise<void> {
+    try {
+      await this.connections.touchSuspended(installation);
+    } catch (error) {
+      const reason = error instanceof Error ? error.name : 'unknown';
+      DBOS.logger.warn(
+        `Moving ${installation.provider} installation ${installation.installationId} to the back of the recheck failed: ${reason}`,
+      );
     }
   }
 

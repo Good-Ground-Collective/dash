@@ -13,6 +13,14 @@ export const dispatchedDeliverySchema = z.object({
 
 export type DispatchedDelivery = z.infer<typeof dispatchedDeliverySchema>;
 
+/** A provider outage of a few seconds is retried inside a delivery's workflow: after 1, 2 and 4 seconds. */
+export const webhookStepRetries = {
+  retriesAllowed: true,
+  maxAttempts: 4,
+  intervalSeconds: 1,
+  backoffRate: 2,
+};
+
 /**
  * What a module does when a provider's webhook reports an event. `handle` runs inside the
  * delivery's DBOS workflow after the connection itself is brought up to date, so it reads

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   type DispatchedDelivery,
   dispatchedDeliverySchema,
+  webhookStepRetries,
 } from '#src/connections/contracts/webhook-events.ts';
 import { WebhookWorkflowsNotRegisteredError } from '#src/connections/errors.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
@@ -23,13 +24,6 @@ const failedStatuses: ReadonlySet<string> = new Set([
   'MAX_RECOVERY_ATTEMPTS_EXCEEDED',
   'CANCELLED',
 ]);
-/** A provider outage of a few seconds is retried inside the workflow: after 1, 2 and 4 seconds. */
-const retriedStep = {
-  retriesAllowed: true,
-  maxAttempts: 4,
-  intervalSeconds: 1,
-  backoffRate: 2,
-};
 
 const webhookDispatchPropsSchema = z.object({
   registry: z.custom<WebhookEventRegistry>(),
@@ -138,7 +132,7 @@ export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
             installationId,
             change: installationChange,
           }),
-        { ...retriedStep, name: 'webhookApplyInstallationChange' },
+        { ...webhookStepRetries, name: 'webhookApplyInstallationChange' },
       );
     }
 
@@ -148,7 +142,7 @@ export class DbosWebhookDispatch implements WebhookDispatch, WorkflowModule {
 
     await DBOS.runStep(
       () => this.deliveries.markDispatched({ provider, deliveryId }),
-      { ...retriedStep, name: 'webhookMarkDispatched' },
+      { ...webhookStepRetries, name: 'webhookMarkDispatched' },
     );
   }
 
