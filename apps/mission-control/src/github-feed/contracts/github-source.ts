@@ -18,6 +18,7 @@ export interface GithubSyncTarget {
 export interface GithubSnapshot {
   viewerLogin: string;
   records: GithubRecords;
+  truncated: boolean;
 }
 
 /**

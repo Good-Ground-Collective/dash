@@ -4,7 +4,10 @@ import {
   connectionRepositoryTable,
   connectionTable,
 } from '#src/connections/repositories/connections/connections-table.ts';
-import type { GithubRecords } from '#src/github-feed/contracts/github-records.ts';
+import type {
+  ConnectionKind,
+  GithubRecords,
+} from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.ts';
 import {
   githubAssignmentTable,
@@ -27,6 +30,7 @@ export interface ConnectionRecords {
   viewerLogin: string | null;
   lastSyncedAt: string | null;
   lastError: string | null;
+  truncated: boolean | null;
   records: GithubRecords;
 }
 
@@ -35,6 +39,7 @@ export interface GithubRecordReader {
   syncTargets(props: {
     connectionId?: string;
     connectedBy?: string;
+    kinds: readonly ConnectionKind[];
     limit: number;
   }): Promise<GithubSyncTarget[]>;
   /** Every GitHub connection `connectedBy` made, owned or guest, with its stored records. */
@@ -51,6 +56,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
   async syncTargets(props: {
     connectionId?: string;
     connectedBy?: string;
+    kinds: readonly ConnectionKind[];
     limit: number;
   }): Promise<GithubSyncTarget[]> {
     const rows = await this.database.orm
@@ -119,6 +125,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
       viewerLogin: sync?.viewerLogin ?? null,
       lastSyncedAt: sync?.lastSyncedAt?.toISOString() ?? null,
       lastError: sync?.lastError ?? null,
+      truncated: sync?.truncated ?? null,
       records:
         records.get(connection.id) ?? DrizzleGithubRecordReader.noRecords(),
     }));
@@ -214,9 +221,11 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
   private static connectionFilter(props: {
     connectionId?: string;
     connectedBy?: string;
+    kinds: readonly ConnectionKind[];
   }): SQL[] {
     return [
       eq(connectionTable.provider, 'github'),
+      inArray(connectionTable.kind, [...props.kinds]),
       ...(props.connectionId === undefined
         ? []
         : [eq(connectionTable.id, props.connectionId)]),

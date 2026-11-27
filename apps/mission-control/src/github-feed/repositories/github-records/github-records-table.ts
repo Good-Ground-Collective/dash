@@ -21,6 +21,7 @@ export const githubSyncTable = pgTable('github_sync', {
     withTimezone: true,
   }).notNull(),
   lastError: text('last_error'),
+  truncated: boolean('truncated'),
 });
 
 export const githubRepoTable = pgTable(

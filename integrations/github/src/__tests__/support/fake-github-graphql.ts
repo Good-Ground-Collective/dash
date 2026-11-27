@@ -6,6 +6,7 @@ import {
   appConfig,
   type GithubJson,
 } from '#src/__tests__/support/fake-github.ts';
+import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubActivityFeed } from '#src/services/github-activity-feed/github-activity-feed.ts';
 
@@ -71,10 +72,13 @@ export class FakeGithubGraphql {
     });
   }
 
-  feed(): GithubActivityFeed {
+  feed(
+    credentials: Partial<Pick<GithubAppConfig, 'appId' | 'privateKey'>> = {},
+  ): GithubActivityFeed {
     return new GithubActivityFeed({
       appId: appConfig.appId,
       privateKey: appConfig.privateKey,
+      ...credentials,
       request: this.request(),
     });
   }

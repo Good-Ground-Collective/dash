@@ -23,7 +23,12 @@ const records = ActivityRecords.from({
   activity: GithubFeedFixtures.activity(),
   viewerLogin: 'ada',
 });
-const read = { connectionId: ownedId, viewerLogin: 'ada', records };
+const read = {
+  connectionId: ownedId,
+  viewerLogin: 'ada',
+  records,
+  truncated: false,
+};
 let store: GithubRecordsDatabase | undefined;
 
 class Stored {
@@ -86,6 +91,22 @@ describe.skipIf(databaseUrl === null)(
       expect(applied).toBe(false);
       expect((await Stored.owned())?.records.issues).toHaveLength(1);
     });
+
+    it('keeps the newer of two concurrent first reads', async () => {
+      const [newer] = await Promise.all([
+        Opened.store().writer.replace({ ...read, syncedAt: later }),
+        Opened.store().writer.replace({
+          ...read,
+          records: { ...records, issues: [] },
+          syncedAt: fixedNow,
+        }),
+      ]);
+
+      const owned = await Stored.owned();
+      expect(newer.applied).toBe(true);
+      expect(owned?.lastSyncedAt).toBe(later.toISOString());
+      expect(owned?.records.issues).toHaveLength(1);
+    });
   },
 );
 
@@ -128,6 +149,20 @@ describe.skipIf(databaseUrl === null)(
         lastError: 'GitHub answered 502.',
       });
       expect(owned?.records.pullRequests).toHaveLength(2);
+    });
+
+    it('drops a failure from a read older than the stored one', async () => {
+      await Opened.store().writer.replace({ ...read, syncedAt: later });
+      await Opened.store().writer.recordFailure({
+        connectionId: ownedId,
+        error: 'GitHub answered 502.',
+        attemptedAt: fixedNow,
+      });
+
+      expect(await Stored.owned()).toMatchObject({
+        lastSyncedAt: later.toISOString(),
+        lastError: null,
+      });
     });
   },
 );

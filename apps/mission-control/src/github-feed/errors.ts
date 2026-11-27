@@ -18,6 +18,16 @@ export class ConnectionNotReadableError extends Error {
   }
 }
 
+export class ConnectorUnknownError extends Error {
+  override name = 'ConnectorUnknownError';
+
+  constructor(props: { connectionId: string }) {
+    super(
+      `Connection ${props.connectionId} has no connecting person to read for`,
+    );
+  }
+}
+
 export class InstallationSuspendedError extends Error {
   override name = 'InstallationSuspendedError';
 

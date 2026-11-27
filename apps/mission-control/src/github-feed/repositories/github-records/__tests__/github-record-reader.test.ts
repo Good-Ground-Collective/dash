@@ -77,6 +77,7 @@ describe.skipIf(databaseUrl === null)('DrizzleGithubRecordReader', () => {
         connectionId,
         viewerLogin: 'ada',
         records,
+        truncated: false,
         syncedAt: fixedNow,
       });
     }
@@ -110,7 +111,10 @@ describe.skipIf(databaseUrl === null)(
         attemptedAt: fixedNow,
       });
 
-      const targets = await Opened.store().reader.syncTargets({ limit: 10 });
+      const targets = await Opened.store().reader.syncTargets({
+        kinds: ['owned', 'guest'],
+        limit: 10,
+      });
 
       expect(targets.map(({ connectionId }) => connectionId)).toEqual([
         guestId,
@@ -129,6 +133,7 @@ describe.skipIf(databaseUrl === null)(
       expect(
         await Opened.store().reader.syncTargets({
           connectionId: guestId,
+          kinds: ['owned', 'guest'],
           limit: 10,
         }),
       ).toEqual([
@@ -137,6 +142,7 @@ describe.skipIf(databaseUrl === null)(
       expect(
         await Opened.store().reader.syncTargets({
           connectedBy: ownedId,
+          kinds: ['owned', 'guest'],
           limit: 10,
         }),
       ).toEqual([]);

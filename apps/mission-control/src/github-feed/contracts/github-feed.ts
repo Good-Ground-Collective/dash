@@ -26,6 +26,12 @@ export const githubFeedConnectionSchema = z.object({
     .describe(
       'Why the latest read failed, or null when it succeeded. The items keep what the last good read found.',
     ),
+  truncated: z
+    .boolean()
+    .nullable()
+    .describe(
+      'True when the last good read hit a page or repository cap, so the items are partial. Null until the first read succeeds.',
+    ),
 });
 
 const feedItemSchema = z.object({

@@ -34,6 +34,7 @@ export class GithubFeedAssembly {
         kind: connection.kind,
         lastSyncedAt: connection.lastSyncedAt,
         lastError: connection.lastError,
+        truncated: connection.truncated,
       })),
       reviewRequests: GithubFeedAssembly.newest(
         groups.flatMap((group) => group.reviewRequests),

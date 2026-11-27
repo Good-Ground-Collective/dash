@@ -14,20 +14,6 @@ import type {
 
 type FailedSuite = NonNullable<GithubFailedSuite>;
 
-const mergeability = {
-  MERGEABLE: 'mergeable',
-  CONFLICTING: 'conflicting',
-  UNKNOWN: 'unknown',
-} as const;
-
-const reviewDecisions = {
-  APPROVED: 'approved',
-  CHANGES_REQUESTED: 'changes_requested',
-  REVIEW_REQUIRED: 'review_required',
-} as const;
-
-const states = { OPEN: 'open', CLOSED: 'closed', MERGED: 'merged' } as const;
-
 /** A default branch's repository and the runs that failed on its head commit. */
 export interface DefaultBranchActivity {
   repository: ActivityRepository;
@@ -70,13 +56,10 @@ export const githubActivityRecords = {
       number: node.number,
       title: node.title,
       author: node.author?.login ?? null,
-      state: states[node.state],
+      state: node.state,
       draft: node.isDraft,
-      mergeable: mergeability[node.mergeable],
-      reviewDecision:
-        node.reviewDecision === null
-          ? null
-          : reviewDecisions[node.reviewDecision],
+      mergeable: node.mergeable,
+      reviewDecision: node.reviewDecision,
       headRef: node.headRefName,
       headSha: node.headRefOid,
       requestedReviewers: node.reviewRequests.nodes.flatMap(

@@ -1,4 +1,13 @@
-import { and, eq, getTableColumns, lt, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  getTableColumns,
+  isNull,
+  lt,
+  lte,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import {
   getTableConfig,
   type PgColumn,
@@ -41,9 +50,10 @@ export interface GithubRecordWriter {
     connectionId: string;
     viewerLogin: string;
     records: GithubRecords;
+    truncated: boolean;
     syncedAt: Date;
   }): Promise<{ applied: boolean }>;
-  /** Notes a failed read. The rows from the last good read stay. */
+  /** Notes a failed read. The rows from the last good read stay, and a failure older than that read is dropped. */
   recordFailure(props: {
     connectionId: string;
     error: string;
@@ -62,10 +72,15 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     connectionId: string;
     viewerLogin: string;
     records: GithubRecords;
+    truncated: boolean;
     syncedAt: Date;
   }): Promise<{ applied: boolean }> {
     const { connectionId, syncedAt } = props;
     return this.database.orm.transaction(async (transaction) => {
+      await transaction
+        .insert(githubSyncTable)
+        .values({ connectionId, lastAttemptedAt: syncedAt })
+        .onConflictDoNothing();
       const [stored] = await transaction
         .select({ lastSyncedAt: githubSyncTable.lastSyncedAt })
         .from(githubSyncTable)
@@ -95,6 +110,7 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
         lastSyncedAt: syncedAt,
         lastAttemptedAt: syncedAt,
         lastError: null,
+        truncated: props.truncated,
       };
       await transaction
         .insert(githubSyncTable)
@@ -112,16 +128,25 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     error: string;
     attemptedAt: Date;
   }): Promise<void> {
-    const failure = {
-      lastAttemptedAt: props.attemptedAt,
-      lastError: props.error,
-    };
     await this.database.orm
       .insert(githubSyncTable)
-      .values({ connectionId: props.connectionId, ...failure })
+      .values({
+        connectionId: props.connectionId,
+        lastAttemptedAt: props.attemptedAt,
+        lastError: props.error,
+      })
       .onConflictDoUpdate({
         target: githubSyncTable.connectionId,
-        set: failure,
+        set: {
+          lastAttemptedAt: sql.raw(
+            'greatest("github_sync"."last_attempted_at", excluded."last_attempted_at")',
+          ),
+          lastError: props.error,
+        },
+        setWhere: sql`${isNull(githubSyncTable.lastSyncedAt)} or ${lte(
+          githubSyncTable.lastSyncedAt,
+          props.attemptedAt,
+        )}`,
       });
   }
 

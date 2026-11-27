@@ -8,6 +8,7 @@ import type {
 } from '#src/github-feed/contracts/github-source.ts';
 import {
   ConnectionNotReadableError,
+  ConnectorUnknownError,
   ViewerNotLinkedError,
 } from '#src/github-feed/errors.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
@@ -30,10 +31,13 @@ export class OwnedGithubSource implements GithubSource {
   }
 
   async read(target: GithubSyncTarget): Promise<GithubSnapshot> {
-    if (target.installationId === null || target.connectedBy === null) {
+    if (target.installationId === null) {
       throw new ConnectionNotReadableError({
         connectionId: target.connectionId,
       });
+    }
+    if (target.connectedBy === null) {
+      throw new ConnectorUnknownError({ connectionId: target.connectionId });
     }
     const linked = await this.linkedAccounts.find({
       userId: target.connectedBy,
@@ -53,6 +57,7 @@ export class OwnedGithubSource implements GithubSource {
     return {
       viewerLogin,
       records: ActivityRecords.from({ activity, viewerLogin }),
+      truncated: activity.truncated,
     };
   }
 }

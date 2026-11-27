@@ -17,6 +17,7 @@ import {
   githubGraphqlEnvelopeSchema,
   type GithubGraphqlVariables,
 } from '#src/contracts/github-activity-response.ts';
+import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
 import { GithubGraphqlError } from '#src/errors.ts';
 import {
@@ -38,6 +39,12 @@ const loginSchema = z
   .string()
   .regex(/^[A-Za-z\d](?:[A-Za-z\d-]{0,38})$/u, 'Expected a GitHub login');
 
+const githubActivityFeedPropsSchema = githubAppConfigSchema
+  .pick({ appId: true, privateKey: true })
+  .extend({
+    request: z.custom<GithubRequest>((value) => value instanceof Function),
+  });
+
 const githubActivityQuerySchema = activityQuerySchema.extend({
   account: z.object({
     login: loginSchema,
@@ -56,17 +63,11 @@ export class GithubActivityFeed implements ActivityFeed {
   private readonly request: GithubRequest;
   private readonly auth: ReturnType<typeof createAppAuth>;
 
-  constructor(props: {
-    appId: string;
-    privateKey: string;
-    request: GithubRequest;
-  }) {
-    this.request = props.request;
-    this.auth = createAppAuth({
-      appId: props.appId,
-      privateKey: props.privateKey,
-      request: props.request,
-    });
+  constructor(props: z.input<typeof githubActivityFeedPropsSchema>) {
+    const { appId, privateKey, request } =
+      githubActivityFeedPropsSchema.parse(props);
+    this.request = request;
+    this.auth = createAppAuth({ appId, privateKey, request });
   }
 
   async read(query: ActivityQuery): Promise<Activity> {
