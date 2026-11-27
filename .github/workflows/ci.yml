@@ -244,9 +244,10 @@ jobs:
       - name: Load deploy key
         if: steps.gate.outputs.go == 'true'
         run: |
-          ssh-agent -a "$RUNNER_TEMP/ssh-agent.sock" >/dev/null
-          echo "SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock" >> "$GITHUB_ENV"
-          SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock ssh-add -q - <<<"$DASH_DEPLOY_SSH_KEY"
+          export SSH_AUTH_SOCK=$RUNNER_TEMP/ssh-agent.sock
+          ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          ssh-add -q - <<<"$DASH_DEPLOY_SSH_KEY"
           mkdir -p ~/.ssh
           while IFS= read -r key; do
             [[ -z $key ]] || printf '%s %s\n' "$HOST" "$key" >> ~/.ssh/known_hosts
