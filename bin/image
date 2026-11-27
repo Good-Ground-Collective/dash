@@ -1,23 +1,35 @@
 #!/usr/bin/env bash
 # Builds an app's linux/amd64 image, proves it holds no credentials, and with
-# --push publishes it to GHCR tagged with the commit SHA for `kamal deploy
-# --skip-push --version <sha>`. Run from anywhere in the repository.
-# Usage: bin/image <web|mission-control> [--push]
+# --push publishes it to GHCR tagged with the commit SHA, plus each --tag (a
+# release version such as v1.2.0), for `kamal deploy --skip-push --version <tag>`.
+# Run from anywhere in the repository.
+# Usage: bin/image <web|mission-control> [--push] [--tag <tag>]...
 # Pushing reads GHCR_PUSH_USERNAME and GHCR_PUSH_TOKEN (write:packages), and
 # falls back to the gh CLI's login and token.
 set -euo pipefail
 
-usage='usage: bin/image <web|mission-control> [--push]'
+usage='usage: bin/image <web|mission-control> [--push] [--tag <tag>]...'
 app=${1:-}
-push=${2:-}
 case $app in
-  web | mission-control) ;;
+  web | mission-control) shift ;;
   *) echo "$usage" >&2 && exit 2 ;;
 esac
-if [[ -n $push && $push != --push ]] || (($# > 2)); then
-  echo "$usage" >&2
-  exit 2
-fi
+push=
+extra_tags=()
+while (($#)); do
+  case $1 in
+    --push) push=--push && shift ;;
+    --tag)
+      if [[ ! ${2:-} =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+        echo "$usage" >&2
+        exit 2
+      fi
+      extra_tags+=("$2")
+      shift 2
+      ;;
+    *) echo "$usage" >&2 && exit 2 ;;
+  esac
+done
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
@@ -45,12 +57,14 @@ docker buildx build --platform linux/amd64 --load \
 # Load every secret in infra.env, not only the app's, so the scan proves none of them leaked.
 load_infra_env '^[A-Za-z_][A-Za-z0-9_]*$'
 secrets=(NODE_AUTH_TOKEN)
-for name in KAMAL_REGISTRY_PASSWORD GHCR_PUSH_TOKEN ${infra_env_names[@]+"${infra_env_names[@]}"}; do
+for name in KAMAL_REGISTRY_PASSWORD GHCR_PUSH_TOKEN DASH_BETTER_AUTH_SECRET DASH_DATABASE_URL ${infra_env_names[@]+"${infra_env_names[@]}"}; do
   if [[ -n ${!name:-} ]]; then
     secrets+=("$name")
   fi
 done
-bin/image-secret-scan "$repository:$version" "$base" $(printf '%s\n' "${secrets[@]}" | sort -u)
+names=()
+while IFS= read -r name; do names+=("$name"); done < <(printf '%s\n' "${secrets[@]}" | sort -u)
+bin/image-secret-scan "$repository:$version" "$base" "${names[@]}"
 
 if [[ $push == --push ]]; then
   # A throwaway Docker config, so the push credential never reaches a keychain or ~/.docker.
@@ -60,6 +74,9 @@ if [[ $push == --push ]]; then
   auth=$(printf '%s:%s' "$username" "${GHCR_PUSH_TOKEN:-$(gh auth token)}" | base64 | tr -d '\n')
   printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$auth" >"$config/config.json"
 
-  DOCKER_CONFIG=$config docker push --quiet "$repository:$version"
-  echo "pushed $repository:$version"
+  for tag in "$version" ${extra_tags[@]+"${extra_tags[@]}"}; do
+    [[ $tag == "$version" ]] || docker tag "$repository:$version" "$repository:$tag"
+    DOCKER_CONFIG=$config docker push --quiet "$repository:$tag"
+    echo "pushed $repository:$tag"
+  done
 fi

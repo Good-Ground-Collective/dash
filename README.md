@@ -128,9 +128,54 @@ Agent-facing routes take `auth.agentAuthentication.require(scope)` as an `onRequ
 
 Production is one Linode box, `dash-app`, running both apps under [Kamal 2](https://kamal-deploy.org) behind kamal-proxy, which gets Let's Encrypt certificates: web at `https://dash.doublel.studio` and Mission Control at `https://api.dash.doublel.studio`. Each app has its own config in `deploy/`. Kamal reaches the box over the tailnet as `dash`.
 
-Images are public on GHCR as `ghcr.io/good-ground-collective/dash-web` and `ghcr.io/good-ground-collective/dash-mission-control`, tagged with the commit SHA. They are built for linux/amd64 with Node 24 slim, run as the `node` user, and get the GitHub Packages token only as a BuildKit secret in a build stage that never ships. `bin/image` builds an app's image, then runs `bin/image-secret-scan`, which fails if the image history, config or filesystem holds a token, a private key, a `.npmrc` or `.env` file, or the value of any production secret. Only then does `--push` publish it. `bin/test-image-secret-scan` checks the scan itself against a canary image with planted credentials.
+Images are public on GHCR as `ghcr.io/good-ground-collective/dash-web` and `ghcr.io/good-ground-collective/dash-mission-control`, tagged with the commit SHA and, when CI releases them, with the version (`v1.2.0`). They are built for linux/amd64 with Node 24 slim, run as the `node` user, and get the GitHub Packages token only as a BuildKit secret in a build stage that never ships. `bin/image` builds an app's image, then runs `bin/image-secret-scan`, which fails if the image history, config or filesystem holds a token, a private key, a `.npmrc` or `.env` file, or the value of any production secret. Only then does `--push` publish it, with one more tag per `--tag`. `bin/test-image-secret-scan` checks the scan itself against a canary image with planted credentials.
 
-`bin/kamal` runs Kamal from its pinned official image, so you need Docker but not Ruby. Secrets come from the environment through `.kamal/secrets`, which names variables and holds no values. Locally, the wrapper fills them from `gh` and from the `DASH_*` lines of `~/.config/dash/infra.env`. Kamal logs the server in to GHCR on every deploy, and the wrapper logs it out afterwards. Set `KAMAL_REGISTRY_PASSWORD` to a token with only `read:packages` so a broad `gh` token never lands on the box, even briefly. `bin/image --push` uses `GHCR_PUSH_TOKEN` instead, which needs `write:packages` and defaults to the `gh` token. CI will read the `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` repository secrets. From the repository root:
+`bin/kamal` runs Kamal from its pinned official image, so you need Docker but not Ruby. Secrets come from the environment through `.kamal/secrets`, which names variables and holds no values. Locally, the wrapper fills unset ones from the `DASH_*` lines of `~/.config/dash/infra.env` and, if `gh` is logged in, from `gh`. Kamal logs the server in to GHCR on every deploy, and the wrapper logs it out afterwards. Set `KAMAL_REGISTRY_PASSWORD` to a token with only `read:packages` so a broad `gh` token never lands on the box, even briefly. `bin/image --push` uses `GHCR_PUSH_TOKEN` instead, which needs `write:packages` and defaults to the `gh` token.
+
+### Release pipeline
+
+Every push to `main` runs the full CI, then releases and deploys whatever passed:
+
+1. `shellcheck`, `verify` (including every end-to-end test) and `tofu` must all pass.
+2. `release` runs [semantic-release](https://semantic-release.gitbook.io) over the conventional commits since the last `vX.Y.Z` tag. `feat` cuts a minor, `fix` and `perf` a patch, and a `!` or `BREAKING CHANGE` footer a major. It pushes the tag and a GitHub release with notes, and commits nothing back to `main`. The whole repository shares one version. Commits that need no release (`docs`, `chore`, `test` and so on) stop the pipeline here.
+3. `images` builds, scans and pushes both images with `bin/image --push --tag vX.Y.Z`, using the job's `GITHUB_TOKEN`.
+4. `deploy` runs in the `production` environment, one at a time (`concurrency: production`, never cancelled). It joins the tailnet as an ephemeral `tag:ci` node, deploys Mission Control first (it migrates at boot), then web, both with `--skip-push --version vX.Y.Z`, then checks both `/healthz` endpoints. The box logs in to GHCR with the job's `GITHUB_TOKEN`, which expires when the job ends.
+
+Until the deploy secrets below exist, `deploy` posts a notice and skips; releases and image pushes still happen. To redeploy after a failure, re-run the failed jobs: `release` finds the tag already on the commit and hands the same version on.
+
+### One-time deploy setup
+
+1. In the Tailscale policy, let admins own `tag:ci` and let it reach SSH on the boxes:
+
+   ```json
+   "tagOwners": { "tag:ci": ["autogroup:admin"] },
+   "grants": [{ "src": ["tag:ci"], "dst": ["tag:dash"], "ip": ["tcp:22"] }]
+   ```
+
+2. Create a Tailscale OAuth client with the `auth_keys` write scope and tag `tag:ci`.
+3. Make the deploy key on your laptop, outside the repository: `ssh-keygen -t ed25519 -N '' -C dash-ci-deploy -f dash-ci-deploy`.
+4. Add its public half to the running `dash-app`. The `from` option limits it to tailnet addresses:
+
+   ```sh
+   printf 'from="100.64.0.0/10,fd7a:115c:a1e0::/48",no-agent-forwarding,no-port-forwarding,no-X11-forwarding %s\n' "$(cat dash-ci-deploy.pub)" \
+     | ssh dash@dash-app 'cat >> ~/.ssh/authorized_keys'
+   ```
+
+   Also add the public key to `deploy_ssh_public_keys` in `infra/tofu/variables.tf`, so a rebuilt `dash-app` gets it from cloud-init. Running boxes ignore the change, so no apply is needed.
+
+5. Under Settings, Environments, create `production` and limit its deployment branches to `main`. Give it three secrets, then delete the private key file:
+
+   ```sh
+   gh secret set TS_OAUTH_CLIENT_ID --env production
+   gh secret set TS_OAUTH_SECRET --env production
+   gh secret set DASH_DEPLOY_SSH_KEY --env production < dash-ci-deploy
+   ```
+
+6. In each GHCR package's settings, under Manage Actions access, give this repository the Write role, so the workflow's `GITHUB_TOKEN` can push and pull.
+
+### Deploying by hand
+
+From the repository root:
 
 ```sh
 bin/image web --push
@@ -140,13 +185,15 @@ bin/image mission-control --push
 bin/kamal deploy -c deploy/mission-control.yml --skip-push --version "$(git rev-parse HEAD)"
 ```
 
-The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
+To roll back, deploy an older tag the same way, for example `--version v1.1.0`. The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
 
 Mission Control migrates its database as the container boots, before it listens. kamal-proxy moves traffic to a new container only once its `/healthz` reports the database and workflows ok, so a failed migration leaves the old container serving. Migrations must therefore stay compatible with the version still running. Server-Sent Events on `/events` pass through kamal-proxy unbuffered: it stops buffering `text/event-stream` responses, and its 30-second response timeout covers only the wait for headers.
 
 ## CI
 
-`.github/workflows/ci.yml` installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything. The repository needs Actions read access to the preflight package, granted in the package's settings.
+`.github/workflows/ci.yml` runs shellcheck on the host and deploy scripts, and `tofu fmt` and `tofu validate` on `infra/tofu`. The `verify` job installs with the workflow's `GITHUB_TOKEN` (`packages: read`), checks formatting, then runs lint, typecheck, test and build. It then installs Chromium (cached by Playwright version) and runs `test:e2e`. Pull requests run only the packages Turborepo marks as affected; pushes to `main` run everything, then release and deploy as described under [Release pipeline](#release-pipeline). Each job gets only the permissions it needs: `release` can push tags, `images` can write packages, and the rest read. The repository needs Actions read access to the preflight package, granted in the package's settings.
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org), since they decide the next version.
 
 Dependabot updates npm packages and GitHub Actions weekly. To resolve preflight it reads GitHub Packages with the `DEPENDABOT_PACKAGES_TOKEN` Dependabot secret, a token with `read:packages`.
 

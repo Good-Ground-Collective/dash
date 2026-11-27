@@ -2,9 +2,10 @@
 # Runs Kamal from its pinned official image, so deploys need Docker but no Ruby.
 # Run from the repository root, for example: bin/kamal deploy -c deploy/web.yml
 #
-# Secrets come from the environment (see .kamal/secrets). Locally, any that are
-# unset are filled from `gh` and from the DASH_* lines of $DASH_INFRA_ENV
-# (default ~/.config/dash/infra.env). Kamal logs the server in to the registry on
+# Secrets come from the environment (see .kamal/secrets). Any that are unset are
+# filled from the DASH_* lines of $DASH_INFRA_ENV (default
+# ~/.config/dash/infra.env) and, when the gh CLI is logged in, from gh. CI sets
+# them all itself and needs neither. Kamal logs the server in to the registry on
 # every deploy, so afterwards the server is logged out again: the images are
 # public, and the deployer's token shouldn't stay on the box. Set
 # KAMAL_REGISTRY_PASSWORD to a read:packages token to avoid lending it a broad one.
@@ -18,7 +19,7 @@ cd "$root"
 
 source bin/lib/infra-env.sh
 load_infra_env '^DASH_[A-Z0-9_]+$'
-if command -v gh >/dev/null; then
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
   [[ -n ${KAMAL_REGISTRY_USERNAME:-} ]] || KAMAL_REGISTRY_USERNAME=$(gh api user --jq .login)
   [[ -n ${KAMAL_REGISTRY_PASSWORD:-} ]] || KAMAL_REGISTRY_PASSWORD=$(gh auth token)
   [[ -n ${NODE_AUTH_TOKEN:-} ]] || NODE_AUTH_TOKEN=$(gh auth token)
