@@ -10,7 +10,7 @@
 </script>
 
 {#if kind === 'failed'}
-  <div class="notice warn" role="alert">
+  <div class="notice warn" role="status">
     <p class="title">GitHub activity didn’t load</p>
     <p class="body">
       Mission Control didn’t send it. Reload to try again; the rest of Dash

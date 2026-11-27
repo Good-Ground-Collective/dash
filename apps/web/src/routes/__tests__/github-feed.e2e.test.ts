@@ -122,10 +122,10 @@ test('the GitHub page lists every row with freshness and the last error', async 
   const freshness = page.getByRole('list', { name: 'Connection freshness' });
   await expect(freshness).toContainText('Synced 4 minutes ago');
   await expect(freshness).toContainText('Synced 3 hours ago');
-  await expect(page.getByRole('alert')).toContainText(
-    'Dash couldn’t read night-shift',
-  );
-  await expect(page.getByRole('alert')).toContainText('rate-limited');
+  const warning = page
+    .getByRole('status')
+    .filter({ hasText: 'Dash couldn’t read night-shift' });
+  await expect(warning).toContainText('rate-limited');
 });
 
 test('the account filter narrows the groups and survives a reload', async () => {
@@ -205,13 +205,15 @@ test('when the feed fails, home still renders with an inline error', async () =>
   await expect(
     page.getByRole('region', { name: 'Finish setting up' }),
   ).toBeVisible();
-  await expect(Feed.panel().getByRole('alert')).toContainText(
-    'GitHub activity didn’t load',
-  );
+  await expect(
+    Feed.panel()
+      .getByRole('status')
+      .filter({ hasText: 'GitHub activity didn’t load' }),
+  ).toBeVisible();
   await page.goto('/github');
-  await expect(page.getByRole('alert')).toContainText(
-    'GitHub activity didn’t load',
-  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'GitHub activity didn’t load' }),
+  ).toBeVisible();
   await page.goto('/settings');
   await expect(page.getByRole('region', { name: 'Connections' })).toContainText(
     'didn’t list your connections',

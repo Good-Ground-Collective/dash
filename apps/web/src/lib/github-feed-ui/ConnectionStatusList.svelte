@@ -7,7 +7,7 @@
 </script>
 
 {#each failing as status (status.id)}
-  <div class="warning" role="alert">
+  <div class="warning" role="status">
     <p class="title">Dash couldn’t read {status.login}</p>
     <p class="body">{status.error}</p>
     <p class="body">Showing what the last good read found.</p>
