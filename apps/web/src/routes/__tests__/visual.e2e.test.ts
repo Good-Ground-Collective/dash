@@ -7,6 +7,7 @@ const themes = ['characters'] as const;
 const modes = ['light', 'dark'] as const;
 const screens = [
   { name: 'home', path: '/' },
+  { name: 'home-all-objectives', path: '/?show=parked,done' },
   { name: 'github', path: '/github' },
   { name: 'settings', path: '/settings' },
   { name: 'service-accounts', path: '/settings/service-accounts' },
@@ -70,6 +71,9 @@ for (const theme of themes) {
           `${missionControl}/integrations/github/__stub/${stub}`,
         );
       }
+      await page.request.post(
+        `${missionControl}/objectives/__stub/scenario?name=populated`,
+      );
       await page.request.post(`${missionControl}/api/auth/appearance/update`, {
         data: { theme, mode },
       });

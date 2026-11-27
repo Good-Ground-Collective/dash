@@ -27,6 +27,13 @@ class Progress {
     );
   }
 
+  /** `empty` before the first initiative, `populated` after. */
+  static async objectives(scenario: string): Promise<void> {
+    await page.request.post(
+      `${missionControl}/objectives/__stub/scenario?name=${scenario}`,
+    );
+  }
+
   /** Registers a passkey through the stub, which trusts any credential. */
   static async addPasskey(id: string): Promise<void> {
     await page.request.post(
@@ -47,17 +54,22 @@ test.beforeAll(async ({ browser, baseURL }, testInfo) => {
   await Progress.addPasskey('this-computer');
 });
 
-test('a fresh account sees GitHub open, with where to connect it', async () => {
+test('a fresh account sees both items open, with where to do each', async () => {
   await page.goto('/');
 
-  await expect(Card.region()).toContainText('0 of 1 done');
+  await expect(Card.region()).toContainText('0 of 2 done');
   await expect(Card.region()).toContainText(
     'This list disappears once everything is done.',
   );
   await expect(
     Card.row('Connect GitHub').getByRole('link', { name: 'Connect GitHub' }),
   ).toHaveAttribute('href', '/setup/github');
-  await expect(Card.region().getByRole('listitem')).toHaveCount(1);
+  await expect(
+    Card.row('Create your first initiative').getByRole('link', {
+      name: 'Create a Project',
+    }),
+  ).toHaveAttribute('href', /^https:\/\/docs\.github\.com\//u);
+  await expect(Card.region().getByRole('listitem')).toHaveCount(2);
   await expect(page.getByText('Nothing here yet')).toHaveCount(0);
 });
 
@@ -75,8 +87,22 @@ test('the card fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
-test('connecting GitHub takes the card away', async () => {
+test('connecting GitHub ticks it off while the first initiative is still to do', async () => {
   await Progress.connectGitHub();
+  await Progress.objectives('empty');
+  await page.goto('/');
+
+  await expect(Card.region()).toContainText('1 of 2 done');
+  await expect(Card.row('Connect GitHub')).toContainText('Done');
+  const card = await Card.region().boundingBox();
+  const objectives = await page
+    .getByRole('region', { name: 'Objectives' })
+    .boundingBox();
+  expect(card?.y ?? 0).toBeLessThan(objectives?.y ?? 0);
+});
+
+test('the first initiative takes the card away', async () => {
+  await Progress.objectives('populated');
   await page.goto('/');
 
   await expect(Card.region()).toHaveCount(0);

@@ -36,6 +36,7 @@ class ChecklistServer {
         },
       },
       connections: { exists: async () => props.connected },
+      initiatives: { anyInitiative: async () => false },
     });
 
     const app = await new HttpServer({
@@ -62,7 +63,10 @@ describe('GET /onboarding/checklist', () => {
 
     expect(response.statusCode).toBe(200);
     expect(setupChecklistSchema.parse(response.json())).toEqual({
-      items: [{ id: 'connectGitHub', done: false }],
+      items: [
+        { id: 'connectGitHub', done: false },
+        { id: 'createInitiative', done: false },
+      ],
     });
   });
 

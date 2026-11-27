@@ -22,6 +22,7 @@ import { ObjectivesModule } from '#src/objectives/module.ts';
 import { DrizzleObjectiveOverlayRepository } from '#src/objectives/repositories/objective-overlays/objective-overlay-repository.ts';
 import { DrizzleObjectiveRecordReader } from '#src/objectives/repositories/objective-records/objective-record-reader.ts';
 import { DrizzleObjectiveRecordWriter } from '#src/objectives/repositories/objective-records/objective-record-writer.ts';
+import { DrizzleStoredInitiatives } from '#src/objectives/repositories/objective-records/stored-initiatives.ts';
 import { OnboardingModule } from '#src/onboarding/module.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
@@ -103,6 +104,7 @@ const platform = new PlatformModule({
     new OnboardingModule({
       identity: auth.identity,
       connections: connectionRepository,
+      initiatives: new DrizzleStoredInitiatives({ database }),
     }),
     new LiveModule({ liveEvents }),
     heartbeat,
