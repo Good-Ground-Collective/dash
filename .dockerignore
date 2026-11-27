@@ -6,6 +6,7 @@
 !tsconfig.json
 !apps
 !packages
+!integrations
 **/node_modules
 **/.env
 **/.env.*
