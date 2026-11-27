@@ -21,7 +21,11 @@ class ImportBoundary {
       filePath: `${packageRoot}${props.file}`,
     });
     return (result?.messages ?? [])
-      .filter((message) => message.ruleId === 'no-restricted-imports')
+      .filter(
+        (message) =>
+          message.ruleId === 'no-restricted-imports' ||
+          message.ruleId === 'no-restricted-syntax',
+      )
       .map((message) => message.message);
   }
 }
@@ -57,6 +61,28 @@ describe('provider import boundary', () => {
           "import type { GithubIntegration } from '@dash/integrations-github';\n\nexport type Wired = GithubIntegration;\n",
       }),
     ).resolves.toHaveLength(1);
+  });
+
+  it('fails a dynamic provider import', async () => {
+    await expect(
+      ImportBoundary.violations({
+        file: serviceFile,
+        source:
+          "export const load = () => import('@dash/integrations-github');\n",
+      }),
+    ).resolves.toEqual([
+      expect.stringContaining('Depend on @dash/integrations-core'),
+    ]);
+  });
+
+  it('allows a dynamic import of the core package', async () => {
+    await expect(
+      ImportBoundary.violations({
+        file: serviceFile,
+        source:
+          "export const load = () => import('@dash/integrations-core');\n",
+      }),
+    ).resolves.toEqual([]);
   });
 
   it('allows a service to import the core package', async () => {

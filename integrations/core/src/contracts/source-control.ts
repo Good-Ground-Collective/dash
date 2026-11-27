@@ -13,6 +13,7 @@ import type {
 export interface SourceControl {
   listRepositories(): Promise<readonly Repository[]>;
   listPullRequests(query: PullRequestQuery): Promise<readonly PullRequest[]>;
+  /** Submitted reviews only: a pending review is a private draft, so providers leave it out. */
   listReviews(query: { pullRequestId: string }): Promise<readonly Review[]>;
   /** Null when the pull request's head commit has no checks. */
   getCheckRollup(query: { pullRequestId: string }): Promise<CheckRollup | null>;

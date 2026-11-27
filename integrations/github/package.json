@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dash/integrations-core": "workspace:*"
+    "@dash/integrations-core": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@dash/config": "workspace:*",

@@ -1,3 +1,4 @@
+import { providerIdSchema } from '#src/contracts/external-record.ts';
 import type { Integration } from '#src/contracts/integration.ts';
 import type { Capability } from '#src/definitions/capabilities/capability.ts';
 import { DuplicateIntegrationIdError } from '#src/errors.ts';
@@ -27,9 +28,10 @@ export class InMemoryIntegrationRegistry implements IntegrationRegistry {
           integrationId: integration.id,
         });
       }
+      providerIdSchema.parse(integration.provider);
       seen.add(integration.id);
     }
-    this.integrations = props.integrations;
+    this.integrations = Object.freeze([...props.integrations]);
   }
 
   list(): readonly Integration[] {

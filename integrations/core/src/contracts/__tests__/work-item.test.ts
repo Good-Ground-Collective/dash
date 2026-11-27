@@ -47,7 +47,13 @@ describe('workItemSchema', () => {
     ).toBe(true);
   });
 
-  it('rejects a ticket without a parent epic', () => {
+  it('accepts a ticket outside any epic as a null epic', () => {
+    expect(
+      workItemSchema.parse({ ...base, level: 'ticket', epicId: null }),
+    ).toMatchObject({ level: 'ticket', epicId: null });
+  });
+
+  it('rejects a ticket that omits its epic', () => {
     expect(workItemSchema.safeParse({ ...base, level: 'ticket' }).success).toBe(
       false,
     );

@@ -5,6 +5,7 @@ import {
   taskTrackerCapability,
 } from '@dash/integrations-core';
 import { describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 
 import { GithubIntegration } from '#src/services/github-integration/github-integration.ts';
 
@@ -16,6 +17,10 @@ describe('GithubIntegration', () => {
       id: 'github-acme',
       provider: 'github',
     });
+  });
+
+  it('rejects an empty id', () => {
+    expect(() => new GithubIntegration({ id: '' })).toThrow(ZodError);
   });
 
   it('offers task tracking, source control and custom fields', () => {

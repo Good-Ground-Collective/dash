@@ -6,6 +6,7 @@ export default [
     files: ['src/integrations/module.ts'],
     rules: {
       'no-restricted-imports': 'off',
+      'no-restricted-syntax': 'off',
     },
   },
 ];

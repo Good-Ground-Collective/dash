@@ -17,4 +17,5 @@ export const externalRecordSchema = z.object({
   url: z.url().describe('Opens the record in the provider.'),
 });
 
+export type ProviderId = z.infer<typeof providerIdSchema>;
 export type ExternalRecord = z.infer<typeof externalRecordSchema>;

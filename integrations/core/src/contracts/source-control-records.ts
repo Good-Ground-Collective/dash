@@ -30,6 +30,7 @@ export const pullRequestSchema = externalRecordSchema.extend({
   updatedAt: z.iso.datetime({ offset: true }),
 });
 
+/** A submitted review. Providers omit pending (unsubmitted) reviews, which only their author can see. */
 export const reviewSchema = externalRecordSchema.extend({
   pullRequestId: z.string().min(1),
   author: handleSchema,

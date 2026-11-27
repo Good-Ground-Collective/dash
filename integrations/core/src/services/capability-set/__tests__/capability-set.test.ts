@@ -26,7 +26,10 @@ class EmptyTaskTracker implements TaskTracker {
 
 describe('CapabilitySet', () => {
   const tracker = new EmptyTaskTracker();
-  const capabilities = new CapabilitySet().with(taskTrackerCapability, tracker);
+  const capabilities = CapabilitySet.empty().with(
+    taskTrackerCapability,
+    tracker,
+  );
 
   it('returns the implementation registered for a capability', () => {
     expect(capabilities.get(taskTrackerCapability)).toBe(tracker);
@@ -48,8 +51,14 @@ describe('CapabilitySet', () => {
   });
 
   it('leaves the original set unchanged when extended', () => {
-    expect(new CapabilitySet().get(taskTrackerCapability)).toBeUndefined();
+    expect(CapabilitySet.empty().get(taskTrackerCapability)).toBeUndefined();
     expect(capabilities.get(taskTrackerCapability)).toBe(tracker);
+  });
+
+  it('cannot be built from a caller-supplied map', () => {
+    // @ts-expect-error -- the constructor is private, so `with` is the only writer.
+    const forged = () => new CapabilitySet(new Map([['task-tracker', {}]]));
+    expectTypeOf(forged).toBeFunction();
   });
 
   it('rejects a second implementation of the same capability', () => {
