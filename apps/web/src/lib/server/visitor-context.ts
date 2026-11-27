@@ -67,7 +67,7 @@ export class CookieVisitorContext implements VisitorContext {
     });
 
   async visit(visit: Visit): Promise<Response> {
-    const preference = themePreferenceReader.read({
+    visit.locals.themePreference = themePreferenceReader.read({
       cookies: visit.cookies,
       headers: visit.headers,
     });
@@ -76,7 +76,10 @@ export class CookieVisitorContext implements VisitorContext {
     });
 
     const response = await visit.render(({ html }) =>
-      documentTheme.apply({ html, preference }),
+      documentTheme.apply({
+        html,
+        preference: visit.locals.themePreference,
+      }),
     );
 
     if (

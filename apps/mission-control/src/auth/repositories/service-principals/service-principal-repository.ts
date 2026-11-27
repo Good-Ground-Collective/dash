@@ -7,6 +7,7 @@ import {
   servicePrincipalSchema,
 } from '#src/auth/contracts/principal.ts';
 import type { ApiKeyScope } from '#src/auth/definitions/api-key-scopes/api-key-scopes.ts';
+import type { CharacterHue } from '#src/auth/definitions/character-hues/character-hues.ts';
 import {
   ServiceAccountTakenError,
   ServicePrincipalNotStoredError,
@@ -23,6 +24,7 @@ export interface ServicePrincipalRecord {
   benchId: string | null;
   agentName: string | null;
   description: string;
+  hue: CharacterHue;
   scopes: ApiKeyScope[];
 }
 
@@ -128,6 +130,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
       benchId: row.profile.benchId,
       agentName: row.profile.agentName,
       description: row.profile.description,
+      hue: row.profile.hue,
       scopes: row.profile.scopes,
       createdAt: row.profile.createdAt.toISOString(),
     });
@@ -155,6 +158,7 @@ export class DrizzleServicePrincipalRepository implements ServicePrincipalReposi
           benchId: record.benchId,
           agentName: record.agentName,
           description: record.description,
+          hue: record.hue,
           scopes: record.scopes,
         })
         .returning();

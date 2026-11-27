@@ -21,6 +21,8 @@ export interface HarnessRow {
   createdAt?: Date;
   expiresAt?: Date | null;
   key?: string;
+  token?: string;
+  userId?: string;
 }
 
 /** The auth module over Better Auth's memory adapter, with people to sign in and owner calls to make. */
@@ -58,6 +60,24 @@ export class ServiceAccountHarness {
     const session = await context.internalAdapter.createSession(person.id);
     const signature = await makeSignature(session.token, secret);
     return `${context.authCookies.sessionToken.name}=${session.token}.${signature}`;
+  }
+
+  /** Writes a session straight into the table for any principal, skipping the guard that keeps service principals out, and returns its cookie. */
+  async forgeSession(props: { userId: string }): Promise<string> {
+    const context = await this.auth.identity.auth.$context;
+    const token = crypto.randomUUID();
+    const now = new Date();
+
+    this.tables.session.push({
+      id: crypto.randomUUID(),
+      token,
+      userId: props.userId,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
+
+    const signature = await makeSignature(token, secret);
+    return `${context.authCookies.sessionToken.name}=${token}.${signature}`;
   }
 
   /** Moves every session's start back, as if the sign-in happened `minutes` ago. */

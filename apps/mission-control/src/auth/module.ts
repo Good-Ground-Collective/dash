@@ -4,6 +4,7 @@ import {
   type AgentAuthentication,
   ApiKeyAuthentication,
 } from '#src/auth/exposures/api-key-authentication/api-key-authentication.ts';
+import { AppearanceEndpoints } from '#src/auth/exposures/appearance-endpoints/appearance-endpoints.ts';
 import { AuthHandlerRoutes } from '#src/auth/exposures/auth-handler/auth-handler-routes.ts';
 import { ServiceAccountEndpoints } from '#src/auth/exposures/service-account-endpoints/service-account-endpoints.ts';
 import type { AuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
@@ -31,7 +32,7 @@ import {
 } from '#src/auth/services/service-principals/service-principals.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 
-/** Who is calling: Better Auth under `/api/auth`, with people and service principals in one `user` table. People sign in with passkeys; service accounts send API keys, which other modules check through `agentAuthentication`. */
+/** Who is calling: Better Auth under `/api/auth`, with people and service principals in one `user` table. People sign in with passkeys and save their appearance; service accounts send API keys, which other modules check through `agentAuthentication`. */
 export class AuthModule implements HttpModule {
   readonly identity: Identity;
   readonly plugin: FastifyPluginAsyncZod;
@@ -64,7 +65,11 @@ export class AuthModule implements HttpModule {
     this.identity = new BetterAuthIdentity({
       ...props,
       storage: props.store.storage,
-      plugins: [...apiKeys.plugins, endpoints.plugin],
+      plugins: [
+        ...apiKeys.plugins,
+        endpoints.plugin,
+        new AppearanceEndpoints().plugin,
+      ],
     });
     this.agentAuthentication = new ApiKeyAuthentication({
       identity: this.identity,

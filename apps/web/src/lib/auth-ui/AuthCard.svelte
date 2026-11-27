@@ -69,8 +69,8 @@
     width: 2.75rem;
     height: 2.75rem;
     border-radius: var(--radius-control);
-    background: var(--char-blue-bg);
-    color: var(--char-blue-fg);
+    background: var(--ink);
+    color: var(--surface);
   }
 
   h1 {

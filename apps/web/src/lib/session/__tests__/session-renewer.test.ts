@@ -23,6 +23,8 @@ describe('MissionControlSessionRenewer', () => {
         id: 'u1',
         name: 'Ada',
         email: 'ada@example.com',
+        theme: 'characters',
+        colorMode: null,
       }),
     });
 

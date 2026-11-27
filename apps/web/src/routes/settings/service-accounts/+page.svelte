@@ -13,6 +13,7 @@
   import ConfirmDialog from '#lib/service-accounts-ui/ConfirmDialog.svelte';
   import CreateServiceAccountDialog from '#lib/service-accounts-ui/CreateServiceAccountDialog.svelte';
   import KeyRevealDialog from '#lib/service-accounts-ui/KeyRevealDialog.svelte';
+  import CharacterAvatar from '#lib/theme-ui/CharacterAvatar.svelte';
   import { serviceAccountWording as wording } from '#lib/service-accounts/service-account-wording.ts';
   import type { PageProps } from './$types';
 
@@ -151,8 +152,9 @@
         <li class="panel account">
           <div class="account-head">
             <div class="account-title">
+              <CharacterAvatar name={account.name} hue={account.hue} />
               <h2>{account.name}</h2>
-              <span class="badge {account.kind}">
+              <span class="badge">
                 {account.kind === 'bench' ? 'Bench' : 'Agent'}
               </span>
               <code>{account.benchId ?? account.agentName}</code>
@@ -364,19 +366,14 @@
     font-weight: var(--font-weight-medium);
   }
 
-  .badge.bench {
-    background: var(--char-blue-bg);
-    color: var(--char-blue-fg);
-  }
-
-  .badge.agent {
-    background: var(--char-violet-bg);
-    color: var(--char-violet-fg);
+  .badge {
+    border: var(--border-hairline) solid var(--line);
+    color: var(--ink-muted);
   }
 
   .scope {
-    background: var(--char-neutral-bg);
-    color: var(--char-neutral-fg);
+    background: var(--faint);
+    color: var(--ink-muted);
   }
 
   .row-actions {

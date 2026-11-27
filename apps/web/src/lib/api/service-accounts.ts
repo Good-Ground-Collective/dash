@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { missionControlBaseUrlSchema } from '#lib/api/mission-control.ts';
-import { MissionControlError } from '#lib/api/mission-control-error.ts';
+import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import {
   type CreatedServiceAccount,
   createdServiceAccountSchema,
@@ -8,22 +8,6 @@ import {
   issuedApiKeySchema,
   type NewServiceAccount,
 } from '#lib/api/service-account-contracts.ts';
-
-/** A response body as JSON. An empty body or one that isn't JSON, such as a proxy's error page, fails to parse. */
-const jsonTextSchema = z.string().transform((value, context) => {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return parsed;
-  } catch {
-    context.addIssue({ code: 'custom', message: 'The body is not JSON' });
-    return z.NEVER;
-  }
-});
-
-const failureSchema = z.object({
-  code: z.string().optional(),
-  message: z.string().optional(),
-});
 
 export const httpServiceAccountsPropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
@@ -45,13 +29,12 @@ export interface ServiceAccountChanges {
 
 /** Calls Mission Control's `/api/auth/service-accounts` with credentials. Failures are `MissionControlError`s carrying Mission Control's code. */
 export class HttpServiceAccounts implements ServiceAccountChanges {
-  private readonly baseUrl: URL;
+  private readonly endpoint: MissionControlEndpoint;
   private readonly fetcher: typeof fetch;
 
   constructor(props: HttpServiceAccountsProps) {
     const valid = httpServiceAccountsPropsSchema.parse(props);
-    this.baseUrl = new URL(valid.baseUrl);
-    if (!this.baseUrl.pathname.endsWith('/')) this.baseUrl.pathname += '/';
+    this.endpoint = new MissionControlEndpoint({ baseUrl: valid.baseUrl });
     this.fetcher = valid.fetch;
   }
 
@@ -85,7 +68,7 @@ export class HttpServiceAccounts implements ServiceAccountChanges {
     schema: z.ZodType<T>;
   }): Promise<T> {
     const path = `api/auth/service-accounts/${props.path}`;
-    const response = await this.fetcher(new URL(path, this.baseUrl), {
+    const response = await this.fetcher(this.endpoint.url(path), {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -94,19 +77,7 @@ export class HttpServiceAccounts implements ServiceAccountChanges {
       },
       body: JSON.stringify(props.body),
     });
-    const body = jsonTextSchema.safeParse(await response.text());
-    const json = body.success ? body.data : null;
-
-    if (!response.ok) {
-      const failure = failureSchema.safeParse(json);
-      throw new MissionControlError({
-        path,
-        status: response.status,
-        code: failure.success ? failure.data.code : undefined,
-        message: failure.success ? failure.data.message : undefined,
-      });
-    }
-    return props.schema.parse(json);
+    return this.endpoint.read({ path, response, schema: props.schema });
   }
 
   /** For the page: global `fetch`, which sends the person's Mission Control session cookie because every call sets `credentials: 'include'`. */

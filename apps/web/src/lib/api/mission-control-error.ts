@@ -1,4 +1,4 @@
-/** Mission Control answered with a non-2xx status. `code` is Mission Control's error code, or `UNKNOWN`. */
+/** Mission Control refused with a non-2xx status, or answered 2xx with a body that isn't JSON. `code` is Mission Control's error code, or `UNKNOWN`. */
 export class MissionControlError extends Error {
   override name = 'MissionControlError';
   readonly status: number;

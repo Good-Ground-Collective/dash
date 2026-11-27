@@ -24,6 +24,7 @@ export const serviceProfileTable = pgTable(
     benchId: text('bench_id'),
     agentName: text('agent_name'),
     description: text('description').notNull(),
+    hue: text('hue').notNull().default('neutral'),
     scopes: text('scopes')
       .array()
       .notNull()

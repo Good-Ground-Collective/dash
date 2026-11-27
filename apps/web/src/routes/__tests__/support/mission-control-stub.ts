@@ -5,7 +5,9 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { z } from 'zod';
+import { AppearanceStub } from './appearance-stub.ts';
 import { ServiceAccountsStub } from './service-accounts-stub.ts';
+import { StubRequest } from './stub-request.ts';
 
 const sessionCookie = 'better-auth.session_token';
 const stubSetupToken = 'stub-setup-token';
@@ -59,6 +61,7 @@ export class MissionControlStub {
   private passkeys: StubPasskey[] = [];
   private sessions = new Set<string>();
   private sessionStale = false;
+  private readonly appearance = new AppearanceStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
 
   constructor(props: { webOrigin: string }) {
@@ -85,7 +88,8 @@ export class MissionControlStub {
     }
 
     const url = new URL(request.url ?? '/', 'http://localhost');
-    const body = request.method === 'POST' ? await this.readBody(request) : '';
+    const body =
+      request.method === 'POST' ? await StubRequest.body(request) : '';
     const reply = this.route({
       path: url.pathname.replace(/^\/api\/auth/u, ''),
       session: this.sessionOf(request),
@@ -148,6 +152,8 @@ export class MissionControlStub {
         return this.rename(props.body);
       case '/passkey/delete-passkey':
         return this.remove(props.body);
+      case '/appearance/update':
+        return this.appearance.save(props.body);
       case '/service-accounts/list':
         return this.serviceAccounts.route(props);
       default:
@@ -163,6 +169,7 @@ export class MissionControlStub {
     this.passkeys = [];
     this.sessions = new Set();
     this.sessionStale = false;
+    this.appearance.reset();
     this.serviceAccounts.reset();
     return { status: 200, body: { status: true } };
   }
@@ -181,9 +188,10 @@ export class MissionControlStub {
     if (session === null || this.person === null) {
       return { status: 200, body: null };
     }
+    const user = this.appearance.withAppearance(this.person);
     return {
       status: 200,
-      body: { session: { token: session }, user: this.person },
+      body: { session: { token: session }, user },
     };
   }
 
@@ -321,13 +329,5 @@ export class MissionControlStub {
 
   private fail(status: number, code: string): StubReply {
     return { status, body: { code, message: code } };
-  }
-
-  private async readBody(request: IncomingMessage): Promise<string> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) {
-      chunks.push(Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks).toString('utf8');
   }
 }

@@ -7,6 +7,7 @@
   import { PasskeyAuthError } from '#lib/auth/passkey-auth-error.ts';
   import { passkeyWording } from '#lib/auth/passkey-wording.ts';
   import RemovePasskeyDialog from '#lib/auth-ui/RemovePasskeyDialog.svelte';
+  import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -193,6 +194,8 @@
     </form>
   </section>
 
+  <AppearanceSettings />
+
   <section class="panel account" aria-labelledby="service-accounts-title">
     <div>
       <h2 id="service-accounts-title">Service accounts</h2>
@@ -233,7 +236,7 @@
   .panel {
     display: grid;
     gap: var(--space-4);
-    padding: var(--space-5);
+    padding: var(--density-panel);
     background: var(--surface);
     border: var(--border-hairline) solid var(--line);
     border-radius: var(--radius-panel);
@@ -271,7 +274,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    padding: var(--density-row-block) var(--density-row-inline);
   }
 
   .passkeys li + li {
