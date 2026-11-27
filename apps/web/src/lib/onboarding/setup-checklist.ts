@@ -59,7 +59,6 @@ export class SetupChecklist {
     return `${this.doneCount} of ${this.rows.length} done`;
   }
 
-  /** The card goes away once everything on it is done. */
   get visible(): boolean {
     return this.doneCount < this.rows.length;
   }

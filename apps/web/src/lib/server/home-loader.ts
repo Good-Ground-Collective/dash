@@ -36,6 +36,7 @@ export class MissionControlHomeLoader implements HomeLoader {
   readonly load = async (event: AuthPageLoadEvent): Promise<HomePageData> => {
     const shell = shellDataSchema.parse(await event.parent());
     if (shell.viewer === null) return { checklist: null };
+
     try {
       return { checklist: await this.reads(event).getSetupChecklist() };
     } catch (error) {

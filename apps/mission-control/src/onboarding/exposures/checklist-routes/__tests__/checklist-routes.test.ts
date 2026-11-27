@@ -40,6 +40,7 @@ class ChecklistServer {
       },
       connections: { exists: async () => props.connected },
     });
+
     const app = await new HttpServer({
       config: {
         corsOrigins: [webOrigin],

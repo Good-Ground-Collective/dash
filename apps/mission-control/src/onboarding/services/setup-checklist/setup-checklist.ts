@@ -41,6 +41,7 @@ export class SourcedSetupChecklist implements SetupChecklist {
       this.connections.exists({ provider: githubProvider }),
       this.passkeys.passkeyCount({ userId: props.userId }),
     ]);
+
     return {
       items: [
         { id: 'connectGitHub', done: connected },
