@@ -23,6 +23,10 @@ export const userTable = pgTable(
     kind: text('kind', { enum: ['user', 'service'] })
       .notNull()
       .default('user'),
+    theme: text('theme', { enum: ['characters'] })
+      .notNull()
+      .default('characters'),
+    colorMode: text('color_mode', { enum: ['light', 'dark'] }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -33,6 +37,10 @@ export const userTable = pgTable(
   },
   (table) => [
     check('user_kind_check', sql`${table.kind} in ('user', 'service')`),
+    check(
+      'user_color_mode_check',
+      sql`${table.colorMode} is null or ${table.colorMode} in ('light', 'dark')`,
+    ),
   ],
 );
 

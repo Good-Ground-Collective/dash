@@ -29,7 +29,13 @@ describe('HttpMissionControl', () => {
       respond: async () =>
         Response.json({
           session: { id: 's1' },
-          user: { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com' },
+          user: {
+            id: 'u1',
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            theme: 'characters',
+            colorMode: 'dark',
+          },
         }),
     });
     const missionControl = new HttpMissionControl({
@@ -41,6 +47,8 @@ describe('HttpMissionControl', () => {
       id: 'u1',
       name: 'Ada Lovelace',
       email: 'ada@example.com',
+      theme: 'characters',
+      colorMode: 'dark',
     });
     expect(recorder.calls[0]?.url).toBe(
       'https://api.example.test/api/auth/get-session',

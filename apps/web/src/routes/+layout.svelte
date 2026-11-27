@@ -10,7 +10,7 @@
     MissionControlSessionRenewer,
     type SessionRenewer,
   } from '#lib/session/session-renewer.ts';
-  import AppShell from '#lib/shell/AppShell.svelte';
+  import ThemeRoot from '#lib/theme-ui/ThemeRoot.svelte';
   import type { LayoutProps } from './$types';
 
   let { data, children }: LayoutProps = $props();
@@ -27,6 +27,6 @@
   });
 </script>
 
-<AppShell viewer={data.viewer}>
+<ThemeRoot saved={data.appearance} viewer={data.viewer}>
   {@render children()}
-</AppShell>
+</ThemeRoot>

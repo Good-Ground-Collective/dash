@@ -2,6 +2,18 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 const scopesSchema = z.array(z.enum(['heartbeat:write', 'telemetry:write']));
+const hueSchema = z
+  .enum([
+    'amber',
+    'green',
+    'blue',
+    'rose',
+    'violet',
+    'teal',
+    'orange',
+    'neutral',
+  ])
+  .default('neutral');
 
 const newAccountSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -9,6 +21,7 @@ const newAccountSchema = z.discriminatedUnion('kind', [
     name: z.string(),
     description: z.string(),
     benchId: z.string(),
+    hue: hueSchema,
     scopes: scopesSchema,
   }),
   z.object({
@@ -16,6 +29,7 @@ const newAccountSchema = z.discriminatedUnion('kind', [
     name: z.string(),
     description: z.string(),
     agentName: z.string(),
+    hue: hueSchema,
     scopes: scopesSchema,
   }),
 ]);
@@ -38,6 +52,7 @@ interface StubAccount {
   benchId: string | null;
   agentName: string | null;
   description: string;
+  hue: string;
   scopes: string[];
   createdAt: string;
   keys: StubKey[];
@@ -101,6 +116,7 @@ export class ServiceAccountsStub {
       benchId: input.kind === 'bench' ? input.benchId : null,
       agentName: input.kind === 'agent' ? input.agentName : null,
       description: input.description,
+      hue: input.hue,
       scopes: input.scopes,
       createdAt: new Date().toISOString(),
       keys: [],

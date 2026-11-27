@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 import {
+  colorModeSchema,
+  themeNameSchema,
+} from '#lib/theme/theme-preference-reader.ts';
+import {
   type ServiceAccount,
   serviceAccountListSchema,
 } from '#lib/api/service-account-contracts.ts';
@@ -11,6 +15,11 @@ export const viewerSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string(),
+  theme: themeNameSchema.catch('characters'),
+  colorMode: colorModeSchema
+    .nullable()
+    .catch(null)
+    .describe('`null` until the viewer picks a mode.'),
 });
 
 export const sessionResponseSchema = z

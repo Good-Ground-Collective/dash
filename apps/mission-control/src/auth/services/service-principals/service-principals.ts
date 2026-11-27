@@ -4,6 +4,7 @@ import {
   serviceEmailDomain,
   type ServicePrincipal,
 } from '#src/auth/contracts/principal.ts';
+import { characterHues } from '#src/auth/definitions/character-hues/character-hues.ts';
 import { ServicePrincipalOwnerError } from '#src/auth/errors.ts';
 import type { ServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 
@@ -41,6 +42,9 @@ export class StoredServicePrincipals implements ServicePrincipals {
       benchId: input.benchId ?? null,
       agentName: input.agentName ?? null,
       description: input.description,
+      hue:
+        input.hue ??
+        characterHues.forIdentifier(input.benchId ?? input.agentName ?? ''),
       scopes: input.scopes,
     });
   }
