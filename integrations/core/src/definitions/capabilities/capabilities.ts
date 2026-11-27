@@ -1,3 +1,4 @@
+import type { ActivityFeed } from '#src/contracts/activity-feed.ts';
 import type { ConnectFlow } from '#src/contracts/connect-flow.ts';
 import type { CustomFieldReader } from '#src/contracts/custom-fields.ts';
 import type { SourceControl } from '#src/contracts/source-control.ts';
@@ -19,4 +20,9 @@ export const customFieldsCapability = new Capability<CustomFieldReader>({
 /** Installing and authorizing a provider's app, for `owned` connections. */
 export const connectFlowCapability = new Capability<ConnectFlow>({
   name: 'connect-flow',
+});
+
+/** A person's open work through an installation of the provider's app, for `owned` connections. */
+export const activityFeedCapability = new Capability<ActivityFeed>({
+  name: 'activity-feed',
 });

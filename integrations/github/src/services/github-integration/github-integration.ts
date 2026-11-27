@@ -1,4 +1,5 @@
 import {
+  activityFeedCapability,
   type Capabilities,
   type Capability,
   CapabilitySet,
@@ -8,9 +9,11 @@ import {
   sourceControlCapability,
   taskTrackerCapability,
 } from '@dash/integrations-core';
+import { request as octokitRequest } from '@octokit/request';
 import { z } from 'zod';
 
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
+import { GithubActivityFeed } from '#src/services/github-activity-feed/github-activity-feed.ts';
 import { GithubConnectFlow } from '#src/services/github-connect-flow/github-connect-flow.ts';
 import { GithubProjectFields } from '#src/services/github-project-fields/github-project-fields.ts';
 import { GithubSourceControl } from '#src/services/github-source-control/github-source-control.ts';
@@ -22,7 +25,7 @@ export const githubIntegrationPropsSchema = z.object({
 
 /**
  * One GitHub connection. Offers task tracking, source control and Project custom fields, and
- * the App's connect flow when the App is configured.
+ * the App's connect flow and activity feed when the App is configured.
  */
 export class GithubIntegration implements Integration {
   readonly id: string;
@@ -40,13 +43,22 @@ export class GithubIntegration implements Integration {
       .with(taskTrackerCapability, new GithubTaskTracker())
       .with(sourceControlCapability, new GithubSourceControl())
       .with(customFieldsCapability, new GithubProjectFields());
-    this.capabilities =
-      props.app === undefined
-        ? capabilities
-        : capabilities.with(
-            connectFlowCapability,
-            new GithubConnectFlow({ config: props.app }),
-          );
+    if (props.app === undefined) {
+      this.capabilities = capabilities;
+      return;
+    }
+    this.capabilities = capabilities
+      .with(connectFlowCapability, new GithubConnectFlow({ config: props.app }))
+      .with(
+        activityFeedCapability,
+        new GithubActivityFeed({
+          appId: props.app.appId,
+          privateKey: props.app.privateKey,
+          request: octokitRequest.defaults({
+            headers: { 'user-agent': 'dash-mission-control' },
+          }),
+        }),
+      );
   }
 
   capability<T extends object>(capability: Capability<T>): T | undefined {

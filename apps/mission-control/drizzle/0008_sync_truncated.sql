@@ -1,0 +1,1 @@
+ALTER TABLE "github_sync" ADD COLUMN "truncated" boolean;

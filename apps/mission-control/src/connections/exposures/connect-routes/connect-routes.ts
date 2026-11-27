@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
+import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
 import {
   callbackQuerySchema,
   type ConnectErrorReason,
@@ -38,6 +39,7 @@ export class ConnectRoutes {
   private readonly state: ConnectState;
   private readonly paths: ConnectPaths;
   private readonly webOrigin: string;
+  private readonly listener: ConnectListener | undefined;
 
   constructor(props: {
     connections: OwnedConnections;
@@ -46,6 +48,7 @@ export class ConnectRoutes {
     state: ConnectState;
     paths: ConnectPaths;
     webOrigin: string;
+    listener?: ConnectListener | undefined;
   }) {
     this.connections = props.connections;
     this.flow = props.flow;
@@ -53,6 +56,7 @@ export class ConnectRoutes {
     this.state = props.state;
     this.paths = props.paths;
     this.webOrigin = props.webOrigin;
+    this.listener = props.listener;
   }
 
   register(app: ZodFastifyInstance): void {
@@ -180,9 +184,11 @@ export class ConnectRoutes {
     }
 
     const installationId = state.installationId ?? query.installationId;
-    return installationId === undefined
-      ? this.finish({ reply, returnTo, outcome: 'linked' })
-      : this.install({ request, reply, userId, returnTo, installationId });
+    if (installationId !== undefined) {
+      return this.install({ request, reply, userId, returnTo, installationId });
+    }
+    await this.announce({ request, userId });
+    return this.finish({ reply, returnTo, outcome: 'linked' });
   }
 
   private async install(props: {
@@ -195,7 +201,6 @@ export class ConnectRoutes {
     const { request, reply, userId, returnTo, installationId } = props;
     try {
       await this.connections.recordInstallation({ userId, installationId });
-      return this.finish({ reply, returnTo, outcome: 'installed' });
     } catch (error) {
       if (error instanceof AccountNotLinkedError) {
         const state = this.state.issue({
@@ -212,6 +217,32 @@ export class ConnectRoutes {
         );
       }
       return this.fail({ request, reply, returnTo, error });
+    }
+    await this.announce({ request, userId });
+    return this.finish({ reply, returnTo, outcome: 'installed' });
+  }
+
+  /** A listener's failure is logged and never fails the connect: the next scheduled read catches up. */
+  private async announce(props: {
+    request: FastifyRequest;
+    userId: string;
+  }): Promise<void> {
+    try {
+      await this.listener?.connected({
+        provider: this.connections.provider,
+        userId: props.userId,
+      });
+    } catch (error) {
+      props.request.log.error(
+        {
+          provider: this.connections.provider,
+          error:
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : 'unknown',
+        },
+        'Starting a read after connecting failed',
+      );
     }
   }
 
