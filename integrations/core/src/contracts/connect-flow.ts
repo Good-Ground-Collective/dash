@@ -32,6 +32,8 @@ export interface ConnectFlow {
   listUserAccounts(props: { accessToken: string }): Promise<UserAccounts>;
   /** Reads one installation as the app: its account and the repositories it covers. */
   getInstallation(props: { installationId: string }): Promise<Installation>;
+  /** Whether the installation is suspended now. Reads only its own record as the app, which works while it is suspended and its repositories can't be read. */
+  isInstallationSuspended(props: { installationId: string }): Promise<boolean>;
   /** The delivery when its signature matches the webhook secret over the exact body bytes, otherwise null. The body is parsed only after the signature checks out. */
   verifyWebhook(props: {
     headers: WebhookHeaders;

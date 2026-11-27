@@ -88,6 +88,16 @@ export const authorizedUserSchema = z.object({
   grant: userGrantSchema,
 });
 
+/** How a webhook changes an installation Dash may have recorded as a connection. */
+export const installationChangeSchema = z.enum([
+  'removed',
+  'suspended',
+  'unsuspended',
+  'repositoriesChanged',
+]);
+
+export const webhookPayloadSchema = z.record(z.string(), z.json());
+
 /** A webhook delivery whose signature checked out. */
 export const webhookDeliverySchema = z.object({
   deliveryId: z
@@ -97,6 +107,11 @@ export const webhookDeliverySchema = z.object({
       'Unique per delivery and kept on redelivery, so it keys idempotency.',
     ),
   event: z.string().min(1),
+  action: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe('What happened within the event, such as `opened`.'),
   installationId: z
     .string()
     .min(1)
@@ -106,6 +121,16 @@ export const webhookDeliverySchema = z.object({
     .boolean()
     .describe(
       'True when the event is about the installation itself, such as its creation or a change to its repositories. These can arrive before Dash has recorded the installation.',
+    ),
+  installationChange: installationChangeSchema
+    .nullable()
+    .describe(
+      'How the event changes a recorded installation, or null when it changes none.',
+    ),
+  payload: webhookPayloadSchema
+    .nullable()
+    .describe(
+      'The parsed body, kept for debugging. Null when it is not a JSON object.',
     ),
 });
 
@@ -124,3 +149,5 @@ export type UserAccounts = z.infer<typeof userAccountsSchema>;
 export type UserGrant = z.infer<typeof userGrantSchema>;
 export type AuthorizedUser = z.infer<typeof authorizedUserSchema>;
 export type WebhookDelivery = z.infer<typeof webhookDeliverySchema>;
+export type InstallationChange = z.infer<typeof installationChangeSchema>;
+export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;

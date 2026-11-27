@@ -4,15 +4,26 @@ import {
   type ConnectFlow,
   GrantRevokedError,
   type Installation,
+  type InstallationChange,
   type UserAccounts,
   type UserGrant,
   type UserInstallation,
   type WebhookDelivery,
   type WebhookHeaders,
+  webhookPayloadSchema,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
 export const providerHost = 'https://forge.test';
+
+/** The fake's stand-in for a provider outage. */
+export class ProviderUnavailableError extends Error {
+  override name = 'ProviderUnavailableError';
+
+  constructor() {
+    super('The provider is unavailable');
+  }
+}
 
 const deliveryBodySchema = z
   .string()
@@ -24,7 +35,20 @@ const deliveryBodySchema = z
       return z.NEVER;
     }
   })
-  .pipe(z.object({ installation: z.object({ id: z.number() }) }));
+  .pipe(webhookPayloadSchema);
+
+const deliveryFieldsSchema = z.object({
+  action: z.string().optional(),
+  installation: z.object({ id: z.number() }),
+});
+
+const installationChanges: ReadonlyMap<string, InstallationChange> = new Map([
+  ['installation.deleted', 'removed'],
+  ['installation.suspend', 'suspended'],
+  ['installation.unsuspend', 'unsuspended'],
+  ['installation_repositories.added', 'repositoriesChanged'],
+  ['installation_repositories.removed', 'repositoriesChanged'],
+]);
 
 export const octocatAccount = {
   provider: 'github',
@@ -85,6 +109,8 @@ export const acmeUserInstallation: UserInstallation = {
  * `refusesRefresh` is set. A webhook is authentic when `x-signature` is `signed:<body>`, and its event is
  * `x-event`: `installation` (the default) or `pull_request`. Its
  * installation is the body's `installation.id`, read only after the signature checks out.
+ * Installations in `suspendedInstallations` read as suspended, and the next `unavailableReads`
+ * installation reads throw `ProviderUnavailableError`, as a provider outage would.
  */
 export class FakeConnectFlow implements ConnectFlow {
   readonly refreshed: string[] = [];
@@ -103,6 +129,8 @@ export class FakeConnectFlow implements ConnectFlow {
     refreshTokenExpiresAt: '2027-05-27T12:00:00.000Z',
   };
   visible: UserInstallation[] = [acmeUserInstallation];
+  readonly suspendedInstallations = new Set<string>();
+  unavailableReads = 0;
   readonly manageable = new Map<string, readonly string[]>([
     ['access-1', ['42']],
     ['access-2', ['42']],
@@ -164,7 +192,23 @@ export class FakeConnectFlow implements ConnectFlow {
   async getInstallation(props: {
     installationId: string;
   }): Promise<Installation> {
-    return { ...acmeInstallation, externalId: props.installationId };
+    if (this.takeUnavailableRead()) {
+      throw new ProviderUnavailableError();
+    }
+    return {
+      ...acmeInstallation,
+      externalId: props.installationId,
+      suspended: this.suspendedInstallations.has(props.installationId),
+    };
+  }
+
+  async isInstallationSuspended(props: {
+    installationId: string;
+  }): Promise<boolean> {
+    if (this.takeUnavailableRead()) {
+      throw new ProviderUnavailableError();
+    }
+    return this.suspendedInstallations.has(props.installationId);
   }
 
   async verifyWebhook(props: {
@@ -174,7 +218,8 @@ export class FakeConnectFlow implements ConnectFlow {
     const text = Buffer.from(props.body).toString('utf8');
     const delivery = props.headers['x-delivery'];
     const event = z
-      .enum(['installation', 'pull_request'])
+      .string()
+      .min(1)
       .catch('installation')
       .parse(props.headers['x-event']);
     if (
@@ -185,11 +230,27 @@ export class FakeConnectFlow implements ConnectFlow {
       return null;
     }
     const body = deliveryBodySchema.safeParse(text);
+    const fields = deliveryFieldsSchema.safeParse(body.data);
+    const action = fields.success ? (fields.data.action ?? null) : null;
     return {
       deliveryId: String(delivery),
       event,
-      installationId: body.success ? String(body.data.installation.id) : null,
-      installationLifecycle: event === 'installation',
+      action,
+      installationId: fields.success
+        ? String(fields.data.installation.id)
+        : null,
+      installationLifecycle: event.startsWith('installation'),
+      installationChange:
+        installationChanges.get(`${event}.${action ?? ''}`) ?? null,
+      payload: body.success ? body.data : null,
     };
+  }
+
+  private takeUnavailableRead(): boolean {
+    if (this.unavailableReads === 0) {
+      return false;
+    }
+    this.unavailableReads -= 1;
+    return true;
   }
 }

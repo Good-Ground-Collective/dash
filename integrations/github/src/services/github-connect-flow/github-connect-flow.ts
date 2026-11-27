@@ -83,6 +83,12 @@ export class GithubConnectFlow implements ConnectFlow {
     return this.installations.get(props);
   }
 
+  async isInstallationSuspended(props: {
+    installationId: string;
+  }): Promise<boolean> {
+    return this.installations.isSuspended(props);
+  }
+
   async verifyWebhook(props: {
     headers: WebhookHeaders;
     body: Uint8Array;

@@ -233,6 +233,10 @@ class RecordingListener implements ConnectListener {
       throw this.failure;
     }
   }
+
+  async reinstated(): Promise<void> {
+    await Promise.resolve();
+  }
 }
 
 describe('ConnectionsModule connect listener', () => {

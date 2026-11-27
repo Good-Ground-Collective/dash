@@ -4,6 +4,7 @@ import {
   type IntegrationRegistry,
 } from '@dash/integrations-core';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 
 import type { Identity } from '#src/auth/services/identity/identity.ts';
 import type { ConnectListener } from '#src/connections/contracts/connect-listener.ts';
@@ -19,47 +20,86 @@ import {
   type ConnectState,
   SignedConnectState,
 } from '#src/connections/services/connect-state/connect-state.ts';
+import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
 import { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
+import { DbosSuspensionRecheck } from '#src/connections/services/suspension-recheck/suspension-recheck.ts';
 import { AesGcmTokenCipher } from '#src/connections/services/token-cipher/token-cipher.ts';
+import {
+  DbosWebhookDispatch,
+  type WebhookDispatch,
+} from '#src/connections/services/webhook-dispatch/webhook-dispatch.ts';
+import type { WebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
+import { DbosWebhookRetention } from '#src/connections/services/webhook-retention/webhook-retention.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
+import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts';
+import { webOriginSchema } from '#src/platform/definitions/config/app-config.ts';
 
-interface ConnectionsModuleProps {
-  registry: IntegrationRegistry;
-  identity: Pick<Identity, 'session'>;
-  connections: ConnectionRepository;
-  linkedAccounts: LinkedAccountRepository;
-  deliveries: WebhookDeliveryRepository;
-  /** Mission Control's auth secret. Keys for the connect state and the token cipher are derived from it. */
-  secret: string;
-  baseUrl: string;
-  webOrigin: string;
-  listener?: ConnectListener | undefined;
-}
+const connectionsModulePropsSchema = z.object({
+  registry: z.custom<IntegrationRegistry>(),
+  identity: z.custom<Pick<Identity, 'session'>>(),
+  connections: z.custom<ConnectionRepository>(),
+  linkedAccounts: z.custom<LinkedAccountRepository>(),
+  deliveries: z.custom<WebhookDeliveryRepository>(),
+  webhookEvents: z
+    .custom<WebhookEventRegistry>()
+    .describe('Where modules register the webhook events they act on.'),
+  secret: z
+    .string()
+    .min(32)
+    .describe(
+      "Mission Control's auth secret. Keys for the connect state and the token cipher are derived from it.",
+    ),
+  baseUrl: webOriginSchema,
+  webOrigin: webOriginSchema,
+  listener: z.custom<ConnectListener>().optional(),
+});
+
+type ConnectionsModuleProps = z.output<typeof connectionsModulePropsSchema>;
 
 type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
 
 /**
  * `owned` connections: for every registered integration that offers a connect flow, the
  * install and OAuth callbacks, the connectable accounts and the webhook endpoint under
- * `/integrations/<provider>`.
+ * `/integrations/<provider>`, the workflows that process and prune stored deliveries, and the
+ * one that lifts a suspension the provider no longer reports.
  * Provider-neutral: it reaches providers only through `connectFlowCapability`.
  */
-export class ConnectionsModule implements HttpModule {
+export class ConnectionsModule implements HttpModule, WorkflowModule {
   readonly plugin: FastifyPluginAsyncZod;
   /** Each provider's owned connections, by provider id. */
   readonly owned: ReadonlyMap<string, OwnedConnections>;
+  private readonly workflows: readonly WorkflowModule[];
 
-  constructor(props: ConnectionsModuleProps) {
+  constructor(input: z.input<typeof connectionsModulePropsSchema>) {
+    const props = connectionsModulePropsSchema.parse(input);
     const cipher = new AesGcmTokenCipher({ secret: props.secret });
     const state: ConnectState = new SignedConnectState({
       secret: props.secret,
     });
     const owned = new Map<string, OwnedConnections>();
     const routes: ProviderRoutes[] = [];
+    const offered = props.registry.offering(connectFlowCapability);
+    const flows = new Map(
+      offered.map(({ integration, implementation }) => [
+        integration.provider,
+        implementation,
+      ]),
+    );
+    const dispatch = new DbosWebhookDispatch({
+      registry: props.webhookEvents,
+      deliveries: props.deliveries,
+      changes: new OwnedInstallationChanges({
+        flows,
+        connections: props.connections,
+      }),
+    });
+    this.workflows = [
+      dispatch,
+      ...ConnectionsModule.scheduledWorkflows({ module: props, flows }),
+    ];
 
-    for (const { integration, implementation: flow } of props.registry.offering(
-      connectFlowCapability,
-    )) {
+    for (const { integration, implementation: flow } of offered) {
       const connections = new OwnedConnections({
         provider: integration.provider,
         flow,
@@ -74,6 +114,7 @@ export class ConnectionsModule implements HttpModule {
           flow,
           owned: connections,
           state,
+          dispatch,
         }),
       );
     }
@@ -86,11 +127,38 @@ export class ConnectionsModule implements HttpModule {
     };
   }
 
+  registerWorkflows(): void {
+    for (const workflows of this.workflows) {
+      workflows.registerWorkflows();
+    }
+  }
+
+  async activate(): Promise<void> {
+    for (const workflows of this.workflows) {
+      await workflows.activate();
+    }
+  }
+
+  private static scheduledWorkflows(props: {
+    module: ConnectionsModuleProps;
+    flows: ReadonlyMap<string, ConnectFlow>;
+  }): WorkflowModule[] {
+    return [
+      new DbosWebhookRetention({ deliveries: props.module.deliveries }),
+      new DbosSuspensionRecheck({
+        flows: props.flows,
+        connections: props.module.connections,
+        listener: props.module.listener,
+      }),
+    ];
+  }
+
   private static routesFor(props: {
     module: ConnectionsModuleProps;
     flow: ConnectFlow;
     owned: OwnedConnections;
     state: ConnectState;
+    dispatch: WebhookDispatch;
   }): ProviderRoutes[] {
     const { module, flow, owned, state } = props;
     const paths = new ConnectPaths({
@@ -123,6 +191,7 @@ export class ConnectionsModule implements HttpModule {
         flow,
         connections: module.connections,
         deliveries: module.deliveries,
+        dispatch: props.dispatch,
       }),
     ];
   }
