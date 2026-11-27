@@ -35,15 +35,19 @@ class RecordingReconcile implements GithubReconcile {
   }
 }
 
-/** Records each installation the suspension recheck reports reinstated. */
+/** Records each installation the suspension recheck reports reinstated, or throws `failure` when set. */
 class RecordingListener implements ConnectListener {
   readonly reinstatedInstallations: string[] = [];
+  failure: Error | null = null;
 
   async connected(): Promise<void> {
     await Promise.resolve();
   }
 
   async reinstated(props: { installationId: string }): Promise<void> {
+    if (this.failure !== null) {
+      throw this.failure;
+    }
     this.reinstatedInstallations.push(props.installationId);
     await Promise.resolve();
   }
@@ -56,7 +60,10 @@ class RecordingListener implements ConnectListener {
  */
 export class DbosConnectionsFixture {
   readonly listener = new RecordingListener();
-  readonly harness = new ConnectionsHarness({ listener: this.listener });
+  readonly other = new RecordingListener();
+  readonly harness = new ConnectionsHarness({
+    listeners: [this.listener, this.other],
+  });
   readonly reconcile = new RecordingReconcile();
   readonly reconcileWorkflows: GithubReconcileWorkflows;
   private runtime: DbosWorkflowRuntime | undefined;

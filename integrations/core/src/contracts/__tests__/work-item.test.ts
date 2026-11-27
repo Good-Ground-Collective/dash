@@ -11,6 +11,7 @@ const base = {
   priority: 'P1',
   dueDate: '2026-12-31',
   lastActivityAt: '2026-11-20T09:30:00Z',
+  position: 0,
 };
 
 describe('workItemSchema', () => {
@@ -27,7 +28,7 @@ describe('workItemSchema', () => {
     ).toMatchObject({ level: 'epic', initiativeIds: ['PVT_1'] });
     expect(
       workItemSchema.parse({ ...base, level: 'ticket', epicId: 'I_epic' }),
-    ).toMatchObject({ level: 'ticket', epicId: 'I_epic' });
+    ).toMatchObject({ level: 'ticket', epicId: 'I_epic', position: 0 });
   });
 
   it('accepts a missing priority and due date as null', () => {

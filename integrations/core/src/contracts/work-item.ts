@@ -43,6 +43,13 @@ export const ticketSchema = trackedItemSchema.extend({
     .describe(
       'External ID of the parent epic. Null when the ticket has no epic.',
     ),
+  position: z
+    .int()
+    .nonnegative()
+    .nullable()
+    .describe(
+      'Where the ticket sits among its epic’s tickets, from 0. Null when the ticket has no epic.',
+    ),
 });
 
 export const workItemSchema = z.discriminatedUnion('level', [

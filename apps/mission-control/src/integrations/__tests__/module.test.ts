@@ -36,18 +36,18 @@ const providerImport =
   "import { GithubIntegration } from '@dash/integrations-github';\n\nexport const integration = new GithubIntegration({ id: 'github' });\n";
 
 describe('IntegrationsModule', () => {
-  it('registers GitHub for task tracking and source control', () => {
+  it('registers GitHub for source control', () => {
     const { registry } = new IntegrationsModule({ githubApp: null });
     const ids = (offers: readonly { integration: { id: string } }[]) =>
       offers.map(({ integration }) => integration.id);
-    expect(ids(registry.offering(taskTrackerCapability))).toEqual(['github']);
     expect(ids(registry.offering(sourceControlCapability))).toEqual(['github']);
   });
 
-  it('offers no connect flow until the GitHub App is configured', () => {
+  it('offers no connect flow or task tracking until the GitHub App is configured', () => {
     const { registry } = new IntegrationsModule({ githubApp: null });
 
     expect(registry.offering(connectFlowCapability)).toEqual([]);
+    expect(registry.offering(taskTrackerCapability)).toEqual([]);
   });
 });
 

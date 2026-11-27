@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { CustomFieldReader } from '#src/contracts/custom-fields.ts';
 import type { TaskTracker } from '#src/contracts/task-tracker.ts';
+import type { TrackerSnapshot } from '#src/contracts/task-tracker-records.ts';
 import {
   customFieldsCapability,
   taskTrackerCapability,
@@ -11,16 +12,14 @@ import { DuplicateCapabilityError } from '#src/errors.ts';
 import { CapabilitySet } from '#src/services/capability-set/capability-set.ts';
 
 class EmptyTaskTracker implements TaskTracker {
-  async listInitiatives(): Promise<[]> {
-    return [];
-  }
-
-  async listEpics(): Promise<[]> {
-    return [];
-  }
-
-  async listTickets(): Promise<[]> {
-    return [];
+  async read(): Promise<TrackerSnapshot> {
+    return {
+      initiatives: [],
+      epics: [],
+      tickets: [],
+      activity: [],
+      truncated: false,
+    };
   }
 }
 

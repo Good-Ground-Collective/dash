@@ -16,7 +16,7 @@ const suspensionRecheckPropsSchema = z.object({
     (value) => value instanceof Map,
   ),
   connections: z.custom<ConnectionRepository>(),
-  listener: z.custom<ConnectListener>().optional(),
+  listeners: z.array(z.custom<ConnectListener>()).readonly().default([]),
 });
 
 export type SuspendedInstallation = {
@@ -37,7 +37,7 @@ export interface SuspensionRecheck {
 /**
  * Every 15 minutes, asks the provider about each suspended connection in turn. A connection still
  * suspended, or one the provider failed to answer for, is touched, so the next run asks about
- * others first. One whose suspension has lifted is read again and announced to the listener, so
+ * others first. One whose suspension has lifted is read again and announced to the listeners, so
  * a lost unsuspend delivery heals by itself.
  */
 export class DbosSuspensionRecheck
@@ -45,14 +45,14 @@ export class DbosSuspensionRecheck
 {
   private readonly flows: ReadonlyMap<string, ConnectFlow>;
   private readonly connections: ConnectionRepository;
-  private readonly listener: ConnectListener | undefined;
+  private readonly listeners: readonly ConnectListener[];
   private scheduled: ScheduledWorkflow | null = null;
 
   constructor(props: z.input<typeof suspensionRecheckPropsSchema>) {
     const parsed = suspensionRecheckPropsSchema.parse(props);
     this.flows = parsed.flows;
     this.connections = parsed.connections;
-    this.listener = parsed.listener;
+    this.listeners = parsed.listeners;
   }
 
   async due(): Promise<SuspendedInstallation[]> {
@@ -156,15 +156,17 @@ export class DbosSuspensionRecheck
     return refreshed && !current.suspended;
   }
 
-  /** A listener's failure is logged: the connection is readable again, and the next scheduled read catches up. */
+  /** Each listener's failure is logged and never stops another: the connection is readable again, and the next scheduled read catches up. */
   private async announce(installation: SuspendedInstallation): Promise<void> {
-    try {
-      await this.listener?.reinstated(installation);
-    } catch (error) {
-      const reason = error instanceof Error ? error.name : 'unknown';
-      DBOS.logger.warn(
-        `Starting a read after reinstating ${installation.provider} installation ${installation.installationId} failed: ${reason}`,
-      );
+    for (const listener of this.listeners) {
+      try {
+        await listener.reinstated(installation);
+      } catch (error) {
+        const reason = error instanceof Error ? error.name : 'unknown';
+        DBOS.logger.warn(
+          `Starting a read after reinstating ${installation.provider} installation ${installation.installationId} failed: ${reason}`,
+        );
+      }
     }
   }
 }

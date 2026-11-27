@@ -6,25 +6,25 @@ import {
   type ActivityRepository,
   type ActivityRun,
 } from '@dash/integrations-core';
-import { createAppAuth } from '@octokit/auth-app';
 import { z } from 'zod';
 
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
 import { GithubActivityRecords } from '#src/contracts/github-activity-records.ts';
 import {
   githubDefaultBranchNodeSchema,
-  type GithubGraphqlData,
-  githubGraphqlEnvelopeSchema,
   type GithubGraphqlVariables,
 } from '#src/contracts/github-activity-response.ts';
 import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
-import { GithubGraphqlError } from '#src/errors.ts';
 import {
   GithubActivitySearch,
-  type GraphqlCall,
   type SearchedActivity,
 } from '#src/services/github-activity-feed/github-activity-search.ts';
+import {
+  AppGithubGraphql,
+  type GithubGraphql,
+  type GraphqlCall,
+} from '#src/services/github-graphql/github-graphql.ts';
 
 const maxDefaultBranchRepositories = 30;
 const defaultBranchBatchSize = 10;
@@ -60,23 +60,17 @@ const githubActivityQuerySchema = activityQuerySchema.extend({
  * three search requests and three branch requests.
  */
 export class GithubActivityFeed implements ActivityFeed {
-  private readonly request: GithubRequest;
-  private readonly auth: ReturnType<typeof createAppAuth>;
+  private readonly graphql: GithubGraphql;
 
   constructor(props: z.input<typeof githubActivityFeedPropsSchema>) {
-    const { appId, privateKey, request } =
-      githubActivityFeedPropsSchema.parse(props);
-    this.request = request;
-    this.auth = createAppAuth({ appId, privateKey, request });
+    this.graphql = new AppGithubGraphql(
+      githubActivityFeedPropsSchema.parse(props),
+    );
   }
 
   async read(query: ActivityQuery): Promise<Activity> {
     const parsed = githubActivityQuerySchema.parse(query);
-    const { token } = await this.auth({
-      type: 'installation',
-      installationId: parsed.installationId,
-    });
-    const graphql: GraphqlCall = (call) => this.graphql({ token, ...call });
+    const graphql = await this.graphql.forInstallation(parsed.installationId);
 
     const searched = await new GithubActivitySearch({ graphql }).run({
       viewerLogin: parsed.viewerLogin,
@@ -131,33 +125,6 @@ export class GithubActivityFeed implements ActivityFeed {
       }
     }
     return { repositories, runs };
-  }
-
-  private async graphql(props: {
-    token: string;
-    query: string;
-    variables: GithubGraphqlVariables;
-    tolerate?: ReadonlySet<string>;
-  }): Promise<GithubGraphqlData> {
-    const { data } = await this.request('POST /graphql', {
-      headers: { authorization: `token ${props.token}` },
-      query: props.query,
-      variables: props.variables,
-    });
-    const envelope = githubGraphqlEnvelopeSchema.parse(data);
-    const fatal = (envelope.errors ?? []).filter(
-      ({ type }) => type === undefined || !props.tolerate?.has(type),
-    );
-    if (
-      envelope.data === null ||
-      envelope.data === undefined ||
-      fatal.length > 0
-    ) {
-      throw new GithubGraphqlError({
-        messages: fatal.map(({ message }) => message),
-      });
-    }
-    return envelope.data;
   }
 
   private static repositoryVariables(fullNames: readonly string[]) {

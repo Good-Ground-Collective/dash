@@ -8,6 +8,7 @@ export type * from '#src/contracts/integration.ts';
 export type * from '#src/contracts/source-control.ts';
 export * from '#src/contracts/source-control-records.ts';
 export type * from '#src/contracts/task-tracker.ts';
+export * from '#src/contracts/task-tracker-records.ts';
 export * from '#src/contracts/work-item.ts';
 export * from '#src/definitions/capabilities/capabilities.ts';
 export * from '#src/definitions/capabilities/capability.ts';

@@ -1,18 +1,4 @@
-import {
-  and,
-  eq,
-  getTableColumns,
-  isNull,
-  lt,
-  lte,
-  type SQL,
-  sql,
-} from 'drizzle-orm';
-import {
-  getTableConfig,
-  type PgColumn,
-  type PgTable,
-} from 'drizzle-orm/pg-core';
+import { and, eq, isNull, lt, lte, sql } from 'drizzle-orm';
 
 import type { GithubRecords } from '#src/github-feed/contracts/github-records.ts';
 import {
@@ -26,8 +12,10 @@ import {
   githubWorkflowRunTable,
 } from '#src/github-feed/repositories/github-records/github-records-table.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
-
-type Transaction = Parameters<Parameters<Database['orm']['transaction']>[0]>[0];
+import {
+  ReplacedRows,
+  type Transaction,
+} from '#src/platform/services/replaced-rows/replaced-rows.ts';
 
 const prunedTables = [
   githubRepoTable,
@@ -206,28 +194,7 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     ] as const;
 
     for (const { table, rows } of writes) {
-      if (rows.length > 0) {
-        const target = getTableConfig(table).primaryKeys[0]?.columns ?? [];
-        await transaction
-          .insert(table)
-          .values(rows)
-          .onConflictDoUpdate({
-            target,
-            set: DrizzleGithubRecordWriter.excluded({ table, target }),
-          });
-      }
+      await ReplacedRows.upsert({ transaction, table, rows });
     }
-  }
-
-  /** Every column but the primary key, taken from the row that conflicted, so a repeated read overwrites in place. */
-  private static excluded(props: {
-    table: PgTable;
-    target: readonly PgColumn[];
-  }): Record<string, SQL> {
-    return Object.fromEntries(
-      Object.entries(getTableColumns(props.table))
-        .filter(([, column]) => !props.target.includes(column))
-        .map(([name, column]) => [name, sql.raw(`excluded."${column.name}"`)]),
-    );
   }
 }

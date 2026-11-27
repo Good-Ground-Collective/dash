@@ -24,8 +24,8 @@ export const githubIntegrationPropsSchema = z.object({
 });
 
 /**
- * One GitHub connection. Offers task tracking, source control and Project custom fields, and
- * the App's connect flow and activity feed when the App is configured.
+ * One GitHub connection. Offers source control and Project custom fields, and the App's
+ * connect flow, activity feed and task tracking when the App is configured.
  */
 export class GithubIntegration implements Integration {
   readonly id: string;
@@ -40,25 +40,23 @@ export class GithubIntegration implements Integration {
   ) {
     this.id = githubIntegrationPropsSchema.parse(props).id;
     const capabilities = CapabilitySet.empty()
-      .with(taskTrackerCapability, new GithubTaskTracker())
       .with(sourceControlCapability, new GithubSourceControl())
       .with(customFieldsCapability, new GithubProjectFields());
     if (props.app === undefined) {
       this.capabilities = capabilities;
       return;
     }
+    const installation = {
+      appId: props.app.appId,
+      privateKey: props.app.privateKey,
+      request: octokitRequest.defaults({
+        headers: { 'user-agent': 'dash-mission-control' },
+      }),
+    };
     this.capabilities = capabilities
       .with(connectFlowCapability, new GithubConnectFlow({ config: props.app }))
-      .with(
-        activityFeedCapability,
-        new GithubActivityFeed({
-          appId: props.app.appId,
-          privateKey: props.app.privateKey,
-          request: octokitRequest.defaults({
-            headers: { 'user-agent': 'dash-mission-control' },
-          }),
-        }),
-      );
+      .with(activityFeedCapability, new GithubActivityFeed(installation))
+      .with(taskTrackerCapability, new GithubTaskTracker(installation));
   }
 
   capability<T extends object>(capability: Capability<T>): T | undefined {

@@ -51,7 +51,13 @@ const connectionsModulePropsSchema = z.object({
     ),
   baseUrl: webOriginSchema,
   webOrigin: webOriginSchema,
-  listener: z.custom<ConnectListener>().optional(),
+  listeners: z
+    .array(z.custom<ConnectListener>())
+    .readonly()
+    .default([])
+    .describe(
+      'Told when a connection becomes readable, each on its own: one failing never stops the rest.',
+    ),
 });
 
 type ConnectionsModuleProps = z.output<typeof connectionsModulePropsSchema>;
@@ -148,7 +154,7 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
       new DbosSuspensionRecheck({
         flows: props.flows,
         connections: props.module.connections,
-        listener: props.module.listener,
+        listeners: props.module.listeners,
       }),
     ];
   }
@@ -173,7 +179,7 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
         state,
         paths,
         webOrigin: module.webOrigin,
-        listener: module.listener,
+        listeners: module.listeners,
       }),
       new AccountsRoutes({
         accounts: new ConnectableAccounts({
