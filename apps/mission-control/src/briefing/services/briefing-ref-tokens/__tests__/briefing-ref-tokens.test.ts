@@ -14,6 +14,9 @@ describe('BriefingRefTokens', () => {
     ['Done [pr1, pr2 and pr3].', 'Done.'],
     ['The card (pr1 is ready) today', 'The card (is ready) today'],
     ['merged ch3 and is4 today', 'merged and today'],
+    ['(due Friday, o3) soon', '(due Friday) soon'],
+    ['[due Friday; o3 and o4] soon', '[due Friday] soon'],
+    ['(see o1) today', 'today'],
   ])('removes the ids from %s', (leaked, clean) => {
     expect(BriefingRefTokens.strip(leaked)).toBe(clean);
   });

@@ -33,19 +33,26 @@ export const briefingParagraphSchema = z.object({
   segments: z.array(briefingSegmentSchema).min(1),
 });
 
-const sentencesBetweenSchema = (limits: { min: number; max: number }) =>
-  briefingParagraphSchema.refine(
-    ({ segments }) => {
-      const count = BriefingSentences.count(segments);
-      return count >= limits.min && count <= limits.max;
-    },
-    {
-      message: `Expected ${limits.min} to ${limits.max} sentences`,
-    },
-  );
-
-const framingSchema = sentencesBetweenSchema(briefingLimits.framingSentences);
-const actionSchema = sentencesBetweenSchema(briefingLimits.actionSentences);
+const framingSchema = briefingParagraphSchema.refine(
+  ({ segments }) =>
+    BriefingSentences.isWithin({
+      segments,
+      ...briefingLimits.framingSentences,
+    }),
+  {
+    message: `Expected ${briefingLimits.framingSentences.min} to ${briefingLimits.framingSentences.max} sentences`,
+  },
+);
+const actionSchema = briefingParagraphSchema.refine(
+  ({ segments }) =>
+    BriefingSentences.isWithin({
+      segments,
+      ...briefingLimits.actionSentences,
+    }),
+  {
+    message: `Expected ${briefingLimits.actionSentences.min} to ${briefingLimits.actionSentences.max} sentences`,
+  },
+);
 
 /** The briefing's fixed shape: what changed, what to do about it, and what the pace says comes next. */
 export const briefingWrittenTextSchema = z.object({

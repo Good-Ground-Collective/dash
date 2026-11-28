@@ -6,6 +6,16 @@ export class BriefingSentences {
     return BriefingSentences.sentencesOf(segments).length;
   }
 
+  /** Whether the segments hold between `min` and `max` sentences, both included. */
+  static isWithin(props: {
+    segments: readonly { text: string }[];
+    min: number;
+    max: number;
+  }): boolean {
+    const count = BriefingSentences.count(props.segments);
+    return count >= props.min && count <= props.max;
+  }
+
   /** The segments cut after their `limit`th sentence, or as they are when they hold no more. */
   static trim<T extends { text: string }>(props: {
     segments: readonly T[];

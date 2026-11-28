@@ -260,7 +260,7 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
     );
   }
 
-  /** Reads what changed since the person's previous successful briefing. */
+  /** Takes the full snapshot of the person's data, counting what changed from when their previous successful briefing read its data. */
   private async takeSnapshot(props: {
     userId: string;
     now: Date;
