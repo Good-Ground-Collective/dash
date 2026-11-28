@@ -25,7 +25,7 @@ export interface VisibilitySource {
   removeEventListener(type: 'visibilitychange', listener: () => void): void;
 }
 
-/** Keeps Home’s greeting and “since yesterday” window current in a tab left open: refreshes every interval and when the tab comes back into view. */
+/** Keeps time-relative copy current in a tab left open: refreshes every interval and when the tab comes back into view. */
 export class ClockRefresh {
   private readonly props: z.output<typeof clockRefreshPropsSchema>;
 

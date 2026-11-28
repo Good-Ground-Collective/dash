@@ -50,6 +50,13 @@ export class FeedRows {
     };
   }
 
+  /** A review request that also shows where its checks stand. */
+  static reviewRequestWithChecks(pull: GithubFeedPullRequest): FeedRow {
+    const row = FeedRows.reviewRequest(pull);
+    const checks = FeedRows.checks(pull.checks);
+    return checks === null ? row : { ...row, badges: [...row.badges, checks] };
+  }
+
   /** Your own pull request: its review state, conflicts and checks. */
   static myPullRequest(pull: GithubFeedPullRequest): FeedRow {
     const badges: FeedBadge[] = [];

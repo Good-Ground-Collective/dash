@@ -1,25 +1,42 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { page } from '$app/state';
   import {
     accountParam,
     GithubFeedView,
-    githubPagePath,
+    tabParam,
   } from '#lib/github-feed/feed-view.ts';
+  import { ClockRefresh } from '#lib/home/clock-refresh.ts';
   import AccountFilter from '#lib/github-feed-ui/AccountFilter.svelte';
   import ConnectionStatusList from '#lib/github-feed-ui/ConnectionStatusList.svelte';
   import FeedGroupCard from '#lib/github-feed-ui/FeedGroupCard.svelte';
   import FeedNotice from '#lib/github-feed-ui/FeedNotice.svelte';
+  import GithubTabs from '#lib/github-feed-ui/GithubTabs.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
 
-  let view = $derived(
-    data.github.status === 'loaded'
+  let now = $state(new Date());
+
+  let view = $derived.by(() => {
+    // Reading `now` re-derives the view on each clock tick so relative times stay current.
+    void now;
+    return data.github.status === 'loaded'
       ? new GithubFeedView({
           feed: data.github.feed,
           account: page.url.searchParams.get(accountParam),
+          tab: page.url.searchParams.get(tabParam),
         })
-      : null,
+      : null;
+  });
+
+  onMount(() =>
+    new ClockRefresh({
+      refresh: () => {
+        now = new Date();
+      },
+      visibility: document,
+    }).start(),
   );
 </script>
 
@@ -31,7 +48,11 @@
   <header class="intro">
     <h1 id="github-title">GitHub</h1>
     <p class="muted">
-      Your GitHub work across every connected account. Rows open on GitHub.
+      {#if view !== null && view.status !== 'not-connected'}
+        {view.freshness}
+      {:else}
+        Your GitHub work across every connected account. Rows open on GitHub.
+      {/if}
     </p>
   </header>
 
@@ -45,7 +66,7 @@
       {#if view.unknownAccount !== null}
         <p class="muted" role="status">
           No connection is called “{view.unknownAccount}”, so this shows every
-          account. <a href={githubPagePath}>Clear the filter</a>
+          account. <a href={view.clearAccountHref}>Clear the filter</a>
         </p>
       {/if}
       <ConnectionStatusList statuses={view.connectionStatuses} />
@@ -53,6 +74,7 @@
     {#if view.status === 'first-sync'}
       <FeedNotice kind="first-sync" />
     {:else}
+      <GithubTabs tabs={view.tabs} />
       <div class="groups">
         {#each view.groups as group (group.key)}
           <div class="group-panel">

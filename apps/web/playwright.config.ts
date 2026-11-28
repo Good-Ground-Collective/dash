@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, type Project } from '@playwright/test';
 
 const shellPort = 4319;
 const passkeyPort = 4320;
@@ -43,10 +43,27 @@ const needsYouPort = 4333;
 const needsYouStubPort = 59985;
 const agentsPort = 4334;
 const agentsStubPort = 59984;
+const githubTabsPort = 4335;
+const githubTabsStubPort = 59983;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
 const setupToken = process.env['DASH_E2E_SETUP_TOKEN'] ?? 'stub-setup-token';
+
+/** A project that owns one spec file, its own web server and its own Mission Control stub. */
+class StubProjects {
+  static of(name: string, port: number, stubPort: number): Project {
+    return {
+      name,
+      testMatch: `**/${name}.e2e.test.ts`,
+      metadata: { missionControlUrl: `http://localhost:${stubPort}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${port}`,
+      },
+    };
+  }
+}
 
 export default defineConfig({
   testDir: 'src',
@@ -68,6 +85,7 @@ export default defineConfig({
         '**/second-passkey.e2e.test.ts',
         '**/home.e2e.test.ts',
         '**/github-feed.e2e.test.ts',
+        '**/github-tabs.e2e.test.ts',
         '**/objectives.e2e.test.ts',
         '**/time-zone.e2e.test.ts',
         '**/needs-you.e2e.test.ts',
@@ -155,51 +173,12 @@ export default defineConfig({
         baseURL: `http://localhost:${homePort}`,
       },
     },
-    {
-      name: 'github-feed',
-      testMatch: '**/github-feed.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${feedStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${feedPort}`,
-      },
-    },
-    {
-      name: 'objectives',
-      testMatch: '**/objectives.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${objectivesStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${objectivesPort}`,
-      },
-    },
-    {
-      name: 'time-zone',
-      testMatch: '**/time-zone.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${timeZoneStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${timeZonePort}`,
-      },
-    },
-    {
-      name: 'needs-you',
-      testMatch: '**/needs-you.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${needsYouStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${needsYouPort}`,
-      },
-    },
-    {
-      name: 'agents',
-      testMatch: '**/agents.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${agentsStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${agentsPort}`,
-      },
-    },
+    StubProjects.of('github-feed', feedPort, feedStubPort),
+    StubProjects.of('github-tabs', githubTabsPort, githubTabsStubPort),
+    StubProjects.of('objectives', objectivesPort, objectivesStubPort),
+    StubProjects.of('time-zone', timeZonePort, timeZoneStubPort),
+    StubProjects.of('needs-you', needsYouPort, needsYouStubPort),
+    StubProjects.of('agents', agentsPort, agentsStubPort),
   ],
   webServer: [
     {
@@ -267,6 +246,7 @@ export default defineConfig({
       { port: timeZonePort, stubPort: timeZoneStubPort },
       { port: needsYouPort, stubPort: needsYouStubPort },
       { port: agentsPort, stubPort: agentsStubPort },
+      { port: githubTabsPort, stubPort: githubTabsStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',
