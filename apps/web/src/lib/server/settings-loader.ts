@@ -6,6 +6,7 @@ import {
   type AuthPageLoader,
   type AuthPageLoadEvent,
   MissionControlAuthPageLoader,
+  shellDataSchema,
   type SettingsPageData,
 } from '#lib/server/auth-page-loader.ts';
 import {
@@ -52,6 +53,11 @@ export class MissionControlSettingsLoader implements SettingsLoader {
   readonly load = async (
     event: AuthPageLoadEvent,
   ): Promise<SettingsWithConnectionsData> => {
+    const shell = shellDataSchema.parse(await event.parent());
+    if (shell.viewer === null) {
+      await this.auth.settings(event);
+      throw new Error('Signed-out settings must redirect to sign-in');
+    }
     const [settings, github, briefing] = await Promise.all([
       this.auth.settings(event),
       this.github.read(event),

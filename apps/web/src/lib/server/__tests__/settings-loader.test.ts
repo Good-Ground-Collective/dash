@@ -73,6 +73,38 @@ describe('MissionControlSettingsLoader', () => {
     });
   });
 
+  it('keeps the rest of settings when the briefing fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const event = Visit.of({
+      '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
+      '/integrations/github/feed': () => Response.json(feed),
+    });
+
+    await expect(loader.load(event)).resolves.toEqual({
+      viewer: ada,
+      passkeys: [],
+      github: { status: 'loaded', feed },
+      briefing: { status: 'failed' },
+    });
+  });
+
+  it('redirects a signed-out visitor without reading the briefing', async () => {
+    const fetched: string[] = [];
+    const event: AuthPageLoadEvent = {
+      parent: async () => ({ viewer: null, recoveryCodes: null }),
+      fetch: async (input) => {
+        fetched.push(new URL(String(input)).pathname);
+        return Response.json([]);
+      },
+    };
+
+    await expect(loader.load(event)).rejects.toMatchObject({
+      status: 303,
+      location: '/sign-in',
+    });
+    expect(fetched).not.toContain('/briefings');
+  });
+
   it('keeps the rest of settings when the feed fails', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const event = Visit.of({
