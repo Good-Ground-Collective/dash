@@ -298,6 +298,23 @@ describe('ClaudeCodeHeartbeatHook failures and upkeep', () => {
     expect(await state.log()).toContain('stuck.jsonl');
   });
 
+  it('keeps pruning other expired files when one cannot be deleted', async () => {
+    await state.run('stop', {
+      ...Payloads.for('stop'),
+      session_id: 'old-session',
+    });
+    const longAgo = new Date('2026-01-01T00:00:00Z');
+    await utimes(state.outboxPath('old-session'), longAgo, longAgo);
+    const stuck = path.join(state.config.outboxDirectory, 'a-stuck.jsonl');
+    await mkdir(stuck, { recursive: true });
+    await utimes(stuck, longAgo, longAgo);
+
+    await state.run('session-start', Payloads.for('session-start'));
+
+    expect(await state.heartbeats('old-session')).toEqual([]);
+    expect(await state.log()).toContain('OutboxRetentionError');
+  });
+
   it('keeps counting after the counter file is lost', async () => {
     await state.run('user-prompt-submit', Payloads.for('user-prompt-submit'));
     await state.run('stop', Payloads.for('stop'));

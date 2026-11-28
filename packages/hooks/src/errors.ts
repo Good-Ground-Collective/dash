@@ -28,3 +28,19 @@ export class HeartbeatTooLargeError extends Error {
     );
   }
 }
+
+/** Retention could not delete some expired outbox or session files; the rest were still pruned. */
+export class OutboxRetentionError extends Error {
+  override name = 'OutboxRetentionError';
+
+  constructor(props: { failures: { file: string; cause: unknown }[] }) {
+    super(
+      `Could not delete ${props.failures.length} expired file(s): ${props.failures
+        .map(
+          ({ file, cause }) =>
+            `${file} (${cause instanceof Error ? cause.message : String(cause)})`,
+        )
+        .join('; ')}`,
+    );
+  }
+}

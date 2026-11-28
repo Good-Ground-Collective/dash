@@ -20,6 +20,11 @@ const fileLockPropsSchema = z.object({
 
 export type FileLockProps = z.input<typeof fileLockPropsSchema>;
 
+/** Runs work while holding a lock that other processes respect. */
+export interface ProcessLock {
+  hold<T>(work: () => Promise<T>): Promise<T>;
+}
+
 /**
  * A lock file shared by separate hook processes. Each holder writes its own random token into the
  * lock, and the file is created with `link`, which fails if it exists, so only one process holds it
@@ -30,7 +35,7 @@ export type FileLockProps = z.input<typeof fileLockPropsSchema>;
  * only one process can do, and deletes it only if it holds the expected token. Otherwise it puts
  * the lock back, so a holder never deletes a lock another process acquired after it.
  */
-export class FileLock {
+export class FileLock implements ProcessLock {
   private readonly lockPath: string;
   private readonly staleMs: number;
   private readonly timeoutMs: number;
