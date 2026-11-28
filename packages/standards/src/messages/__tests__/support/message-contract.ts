@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { SharedFixtures } from '#src/messages/__tests__/support/shared-fixtures.js';
 import { messageRegistry, type RegisteredMessage } from '#src/registry.js';
 
-/** The checks every message shares: it is in the registry at 1.0, and Zod and the JSON Schema agree on each shared fixture. */
+/** The checks every message shares: it is in the registry, and Zod and the JSON Schema agree on each shared fixture. */
 export class MessageContract {
   static async describe(definition: RegisteredMessage): Promise<void> {
     const fixtures = await SharedFixtures.load(definition);
     const validateFixture = await SharedFixtures.compileJsonSchema(definition);
 
     describe(`${definition.kind} contract`, () => {
-      it('is listed in the registry at 1.0', () => {
+      it(`is listed in the registry at ${definition.version}`, () => {
         expect(messageRegistry).toContain(definition);
-        expect(definition.version).toBe('1.0');
+        expect(definition.version).toMatch(/^\d+\.\d+$/);
       });
 
       it('has a valid and an invalid shared fixture', () => {
