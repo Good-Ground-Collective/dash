@@ -9,6 +9,8 @@ import type { AgentHeartbeatRecord } from '#src/agents/contracts/agent-heartbeat
 import { DrizzleAgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import { agentHeartbeatTable } from '#src/agents/repositories/agent-heartbeats/agent-heartbeats-table.ts';
 import { DrizzleAgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
+import { DrizzleNeedsYouItemRepository } from '#src/agents/repositories/needs-you-items/needs-you-item-repository.ts';
+import { needsYouItemTable } from '#src/agents/repositories/needs-you-items/needs-you-items-table.ts';
 import { agentSessionTable } from '#src/agents/repositories/agent-sessions/agent-sessions-table.ts';
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
 import { PostgresDatabase } from '#src/platform/services/database/database.ts';
@@ -30,6 +32,7 @@ export class AgentRecordsDatabase {
   readonly database: PostgresDatabase;
   readonly heartbeats: DrizzleAgentHeartbeatRepository;
   readonly sessions: DrizzleAgentSessionRepository;
+  readonly needsYou: DrizzleNeedsYouItemRepository;
 
   private constructor(props: z.input<typeof agentRecordsDatabasePropsSchema>) {
     const parsed = agentRecordsDatabasePropsSchema.parse(props);
@@ -43,12 +46,16 @@ export class AgentRecordsDatabase {
     this.sessions = new DrizzleAgentSessionRepository({
       database: this.database,
     });
+    this.needsYou = new DrizzleNeedsYouItemRepository({
+      database: this.database,
+    });
   }
 
   async reset(): Promise<void> {
     const orm = this.database.orm;
     await orm.delete(agentHeartbeatTable);
     await orm.delete(agentSessionTable);
+    await orm.delete(needsYouItemTable);
     await orm
       .delete(userTable)
       .where(inArray(userTable.id, Object.values(reporterIds)));

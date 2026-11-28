@@ -9,11 +9,13 @@ import type {
 import { AgentMismatchError } from '#src/agents/errors.ts';
 import type { AgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import type { AgentCaller } from '#src/auth/contracts/service-account.ts';
+import type { NeedsYouTriage } from '#src/agents/services/needs-you-triage/needs-you-triage.ts';
 import type { LiveEvents } from '#src/live/services/live-events/live-events.ts';
 
 const callerCheckedAgentHeartbeatsPropsSchema = z.object({
   repository: z.custom<AgentHeartbeatRepository>(),
   liveEvents: z.custom<LiveEvents>(),
+  triage: z.custom<NeedsYouTriage>(),
 });
 
 export interface AgentHeartbeats {
@@ -31,15 +33,17 @@ export interface AgentHeartbeats {
   }): Promise<AgentHeartbeatBatchResult[]>;
 }
 
-/** Publishes `agent.session.updated` each time a heartbeat moves a session or subagent forward. */
+/** Publishes `agent.session.updated` and triages Needs you each time a heartbeat moves a session or subagent forward. */
 export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
   private readonly repository: AgentHeartbeatRepository;
   private readonly liveEvents: LiveEvents;
+  private readonly triage: NeedsYouTriage;
 
   constructor(props: z.input<typeof callerCheckedAgentHeartbeatsPropsSchema>) {
     const parsed = callerCheckedAgentHeartbeatsPropsSchema.parse(props);
     this.repository = parsed.repository;
     this.liveEvents = parsed.liveEvents;
+    this.triage = parsed.triage;
   }
 
   async report(props: {
@@ -87,6 +91,7 @@ export class CallerCheckedAgentHeartbeats implements AgentHeartbeats {
         type: 'agent.session.updated',
         data: z.json().parse(recorded.session),
       });
+      await this.triage.triage(recorded.session);
     }
     return { outcome: recorded.outcome, heartbeat: recorded.heartbeat };
   }

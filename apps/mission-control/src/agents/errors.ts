@@ -22,6 +22,17 @@ export class AgentSessionsSignInRequiredError extends Error {
   }
 }
 
+/** Fastify answers with `statusCode` and `code`. */
+export class NeedsYouSignInRequiredError extends Error {
+  override name = 'NeedsYouSignInRequiredError';
+  readonly statusCode = 401;
+  readonly code = 'SIGN_IN_REQUIRED';
+
+  constructor() {
+    super('Sign in to Dash as a person to see what needs you.');
+  }
+}
+
 /** The insert neither stored the heartbeat nor found the one already stored under its `(sessionId, seq)`. */
 export class AgentHeartbeatNotRecordedError extends Error {
   override name = 'AgentHeartbeatNotRecordedError';
