@@ -114,8 +114,10 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
    * Rolling back on purpose therefore needs `DASH_CLAIM_LATEST_VERSION=force`, which claims
    * regardless; the README's rollback steps set it. So does a failed deploy: the new container
    * claims "latest" at launch, before it listens, so if it then fails its health check the surviving
-   * old container no longer holds the marker and a plain restart will not reclaim it. Restart that
-   * container once with `DASH_CLAIM_LATEST_VERSION: force`, then remove the switch. The
+   * old container no longer holds the marker and a plain restart will not reclaim it. Set
+   * `DASH_CLAIM_LATEST_VERSION: force` and deploy the version still running; once it is healthy,
+   * remove the switch and deploy the same version again, because Kamal applies `env.clear` only
+   * when it creates a container (README, "Rolling back"). The
    * `holdsLatestVersion` gauge on `/healthz` reads 0 while the running container lacks the marker.
    */
   private async becomeLatestVersion(): Promise<void> {
