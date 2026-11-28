@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 import { EpicGeometries } from './support/objectives/epic-geometry.ts';
+import { HomeLayout } from './support/objectives/home-layout.ts';
 
 const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
 
@@ -129,6 +130,26 @@ test('an expanded epic lists its tasks, open first, with who has them', async ()
   await expect(
     tasks.nth(0).getByRole('link', { name: 'Rate-limit sign-in attempts' }),
   ).toHaveAttribute('href', 'https://github.com/acme-labs/api/issues/101');
+});
+
+test('an epic with more tasks than Mission Control sends links to the rest on GitHub', async () => {
+  await Objectives.scenario('populated');
+  await page.goto('/');
+
+  await Objectives.expand('Status page');
+  const epic = Objectives.panel().locator('[data-objective="E_status"]');
+  await expect(
+    epic
+      .getByRole('list', { name: 'Tasks in Status page' })
+      .getByRole('listitem'),
+  ).toHaveCount(25);
+  const more = epic.getByRole('link', { name: /more on GitHub/u });
+  await expect(more).toHaveText(/^2 more on GitHub/u);
+  await expect(more).toHaveAccessibleName(/Status page/u);
+  await expect(more).toHaveAttribute(
+    'href',
+    'https://github.com/acme-labs/api/issues/12',
+  );
 });
 
 test('active initiatives lead home, in Mission Control’s order, with their epics', async () => {
@@ -276,14 +297,14 @@ test('progress bars and the actions button line up whatever the count or due dat
     1,
   );
 
-  const boxes = await EpicGeometries.trackBoxes(Objectives.panel());
-  expect(boxes.length).toBeGreaterThanOrEqual(4);
-  expect(new Set(boxes.map((box) => box.x)).size).toBe(1);
-  expect(new Set(boxes.map((box) => box.width)).size).toBe(1);
+  const tracks = await EpicGeometries.trackLayout(Objectives.panel());
+  expect(tracks.count).toBeGreaterThanOrEqual(4);
+  expect(tracks.lefts, 'tracks share a left edge').toBe(1);
+  expect(tracks.widths, 'tracks share a width').toBe(1);
 
-  const geometry = await EpicGeometries.measure(Objectives.panel());
-  const passkeys = geometry.find(
-    (candidate) => candidate.title === 'Sign-in with passkeys',
+  const passkeys = await EpicGeometries.of(
+    Objectives.panel(),
+    'Sign-in with passkeys',
   );
   expect(passkeys?.chipBesideTitle, 'passkeys title sits beside its chip').toBe(
     true,
@@ -299,25 +320,21 @@ test('progress bars and the actions button line up whatever the count or due dat
     true,
   );
 
-  const menuX = async (title: string) =>
-    (
-      await Objectives.panel()
-        .getByRole('button', { name: `Change ${title}` })
-        .boundingBox()
-    )?.x;
-  const withDue = await menuX('Refresh API reference');
+  const withDue = await EpicGeometries.menuX(
+    Objectives.panel(),
+    'Refresh API reference',
+  );
   expect(withDue).toBeDefined();
-  expect(await menuX('Publish the changelog')).toBe(withDue);
-  expect(await menuX('Rewrite the guides')).toBe(withDue);
+  for (const title of ['Publish the changelog', 'Rewrite the guides']) {
+    expect(await EpicGeometries.menuX(Objectives.panel(), title)).toBe(withDue);
+  }
 
   for (const width of [1024, 900]) {
     await page.setViewportSize({ width, height: 800 });
-    const height = async (title: string) =>
-      (await docs.filter({ hasText: title }).boundingBox())?.height;
     expect(
-      await height('Publish the changelog'),
+      await EpicGeometries.rowHeight(docs, 'Publish the changelog'),
       `no-due row height at ${String(width)}px`,
-    ).toBe(await height('Refresh API reference'));
+    ).toBe(await EpicGeometries.rowHeight(docs, 'Refresh API reference'));
   }
   await page.setViewportSize({ width: 1280, height: 800 });
 });
@@ -327,22 +344,9 @@ test('home fits a phone and keeps Needs you clear of the last panel', async () =
   await page.goto('/');
   await expect(Objectives.panel()).toBeVisible();
 
-  const overflow = await page.evaluate(
-    () =>
-      document.documentElement.scrollWidth -
-      document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
-
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const pill = await page
-    .getByRole('button', { name: /^Needs you/u })
-    .boundingBox();
-  const last = await page
-    .getByRole('region', { name: 'Since yesterday', exact: true })
-    .boundingBox();
-  expect((last?.y ?? 0) + (last?.height ?? 0)).toBeLessThanOrEqual(
-    pill?.y ?? 0,
-  );
+  expect(await HomeLayout.sidewaysOverflow(page)).toBeLessThanOrEqual(0);
+  const gap = await HomeLayout.gapAboveNeedsYouPill(page);
+  expect(gap, 'region and pill both on the page').toBeDefined();
+  expect(gap).toBeGreaterThanOrEqual(0);
   await page.setViewportSize({ width: 1280, height: 800 });
 });

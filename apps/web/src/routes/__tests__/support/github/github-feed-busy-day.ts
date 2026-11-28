@@ -9,7 +9,7 @@ interface EpicWork {
 const epicWork: EpicWork[] = [
   { area: 'sign-in', issues: [100, 101, 102], merges: 11 },
   { area: 'billing', issues: [110, 111, 112, 113], merges: 8 },
-  { area: 'status page', issues: [120, 121, 122], merges: 6 },
+  { area: 'status page', issues: [200, 201, 202], merges: 6 },
   { area: 'guides', issues: [130, 131, 132], merges: 5 },
   { area: 'private beta', issues: [160, 161, 162, 163], merges: 4 },
   { area: 'API reference', issues: [140, 141], merges: 3 },

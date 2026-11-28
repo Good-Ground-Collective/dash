@@ -9,6 +9,8 @@ const screens = [
   { name: 'home', path: '/' },
   { name: 'home-all-objectives', path: '/?show=parked,done' },
   { name: 'github', path: '/github' },
+  { name: 'github-mine', path: '/github?tab=mine' },
+  { name: 'github-assigned', path: '/github?tab=assigned' },
   { name: 'settings-profile', path: '/settings/profile' },
   { name: 'settings-appearance', path: '/settings/appearance' },
   { name: 'settings-passkeys', path: '/settings/passkeys' },

@@ -25,6 +25,12 @@ const strandedWorkflowRecoveryPropsSchema = z.object({
     .describe(
       'How long after this recovery is created, at startup, before it counts or moves any work, so a previous container still draining is left to finish.',
     ),
+  findRegistration: z
+    .custom<typeof getFunctionRegistrationByName>()
+    .default(() => getFunctionRegistrationByName)
+    .describe(
+      'Looks up the workflow function this process registered under a class and workflow name. Defaults to the DBOS lookup; it is a prop so tests can simulate a changed DBOS lookup.',
+    ),
 });
 
 /** Gets queued work that a deploy left behind running again. */
@@ -75,10 +81,13 @@ export interface StrandedWorkflowRecovery {
  */
 export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   private readonly gateMs: number;
+  private readonly findRegistration: typeof getFunctionRegistrationByName;
   private readonly createdAt = Date.now();
 
   constructor(props: z.input<typeof strandedWorkflowRecoveryPropsSchema> = {}) {
-    this.gateMs = strandedWorkflowRecoveryPropsSchema.parse(props).gateMs;
+    const parsed = strandedWorkflowRecoveryPropsSchema.parse(props);
+    this.gateMs = parsed.gateMs;
+    this.findRegistration = parsed.findRegistration;
   }
 
   untilGateOpensMs(): number {
@@ -160,27 +169,26 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   }
 
   /**
-   * Whether this process registered a workflow function under the listed name. It reads
-   * `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`, a path semver
-   * does not cover: the catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0. The test 'the DBOS
-   * registration lookup that recovery depends on' in
-   * `__tests__/stranded-workflow-recovery.integration.test.ts` fails if the import stops resolving or
-   * stops finding a registered free-function workflow, and the test 'treats a class-based workflow
-   * whose class no longer exists as unregistered instead of throwing' in
-   * `__tests__/stranded-workflow-recovery.test.ts` pins the throw-on-unknown-class behaviour. Re-check
-   * both whenever that pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
-   * unknown class name, as when a class-based workflow has since been removed; that counts as not
-   * registered.
+   * Whether this process registered a workflow function under the listed name. The DBOS lookup
+   * returns `undefined` for an unknown workflow name but throws for an unknown class name, as when
+   * a class-based workflow has since been removed; recovery treats that throw as not registered.
+   * A throw for a free-function row (`workflowClassName === ''`) is not that case and propagates,
+   * so a change in DBOS cannot silently leave every stranded workflow alone.
+   *
+   * The lookup is `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`,
+   * an import path semver does not cover. The catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0;
+   * re-check this behaviour whenever that pin moves.
    */
   private isRegisteredHere(workflow: WorkflowStatus): boolean {
     try {
       return (
-        getFunctionRegistrationByName(
-          workflow.workflowClassName,
-          workflow.workflowName,
-        )?.workflowConfig !== undefined
+        this.findRegistration(workflow.workflowClassName, workflow.workflowName)
+          ?.workflowConfig !== undefined
       );
-    } catch {
+    } catch (error) {
+      if (workflow.workflowClassName === '') {
+        throw error;
+      }
       return false;
     }
   }

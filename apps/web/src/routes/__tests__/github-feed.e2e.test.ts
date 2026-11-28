@@ -79,19 +79,18 @@ test('while the first read runs, both say so', async () => {
   await expect(page.getByText('First sync in progress')).toBeVisible();
 });
 
-test('a connected account with nothing to do shows each group’s empty state', async () => {
+test('a connected account with nothing to do shows each tab’s empty state', async () => {
   await Feed.scenario('empty');
-  await page.goto('/github');
 
+  await page.goto('/github?tab=review');
   await expect(Feed.group('Review requests')).toContainText(
     'Nothing is waiting on your review.',
   );
+  await page.goto('/github?tab=mine');
   await expect(Feed.group('My pull requests')).toContainText(
     'You have no open pull requests.',
   );
-  await expect(Feed.group('Failed runs')).toContainText(
-    'No failed runs on your branches or default branches.',
-  );
+  await page.goto('/github?tab=assigned');
   await expect(Feed.group('Assigned issues')).toContainText(
     'No open issues are assigned to you.',
   );
@@ -157,12 +156,18 @@ test('Needs you says so when nothing waits on you', async () => {
   ).toContainText('Nothing merged or released in the last 24 hours');
 });
 
-test('the GitHub page lists every row with freshness and the last error', async () => {
+test('the GitHub page lists review requests oldest first with checks, freshness and the last error', async () => {
   await page.goto('/github');
 
-  await expect(Feed.group('Review requests').getByRole('listitem')).toHaveCount(
-    4,
-  );
+  const rows = Feed.group('Review requests').getByRole('listitem');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.first()).toContainText('Drop the legacy export job');
+  await expect(rows.first()).toContainText('1 check failing');
+  await expect(rows.last()).toContainText('Rate-limit the public search');
+  await expect(rows.last()).toContainText('Checks pass');
+  await expect(
+    page.getByText('3 accounts · reconciled 4 minutes ago'),
+  ).toBeVisible();
   const freshness = page.getByRole('list', { name: 'Connection freshness' });
   await expect(freshness).toContainText('Synced 4 minutes ago');
   await expect(freshness).toContainText('Synced 3 hours ago');
@@ -189,48 +194,25 @@ test('a connection whose last read hit a cap says only recent items show', async
   await expect(freshness).not.toContainText('Showing the most recent items');
 });
 
-test('the account filter narrows the groups and survives a reload', async () => {
-  await page.goto('/github');
-  const filter = page.getByRole('navigation', { name: 'Filter by account' });
-  await filter.getByRole('link', { name: 'night-shift' }).click();
-
-  await expect(page).toHaveURL('/github?account=night-shift');
-  await expect(Feed.group('Review requests').getByRole('listitem')).toHaveCount(
-    1,
-  );
-  await page.reload();
-  await expect(
-    filter.getByRole('link', { name: 'night-shift' }),
-  ).toHaveAttribute('aria-current', 'page');
-  await expect(Feed.group('Assigned issues')).toContainText(
-    'Document the on-call handover',
-  );
-  await expect(Feed.group('Assigned issues')).not.toContainText('Dark mode');
-
-  await filter.getByRole('link', { name: 'All accounts' }).click();
-  await expect(page).toHaveURL('/github');
-  await expect(Feed.group('Review requests').getByRole('listitem')).toHaveCount(
-    4,
-  );
-});
-
-test('an unknown account shows everything and says so', async () => {
-  await page.goto('/github?account=nobody');
-
-  await expect(
-    page.getByText('No connection is called “nobody”'),
-  ).toBeVisible();
-  await expect(Feed.group('Review requests').getByRole('listitem')).toHaveCount(
-    4,
-  );
-});
-
 test('the feed fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ['/', '/github', '/settings']) {
+  for (const path of [
+    '/',
+    '/github?tab=review',
+    '/github?tab=mine',
+    '/github?tab=assigned',
+    '/settings',
+  ]) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await Feed.overflow()).toBeLessThanOrEqual(0);
+  }
+  await page.goto('/github');
+  const tabs = page
+    .getByRole('navigation', { name: 'GitHub views' })
+    .getByRole('link');
+  for (const tab of await tabs.all()) {
+    expect((await tab.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
   await page.setViewportSize({ width: 1280, height: 800 });
 });
@@ -239,7 +221,12 @@ test('the last rows scroll clear of the Needs you pill', async () => {
   const pill = page.getByRole('button', { name: /^Needs you/u });
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 800 });
-    for (const path of ['/', '/github']) {
+    for (const path of [
+      '/',
+      '/github?tab=review',
+      '/github?tab=mine',
+      '/github?tab=assigned',
+    ]) {
       await page.goto(path);
       const last = page.getByRole('main').getByRole('listitem').last();
       const pillTop = (await pill.boundingBox())?.y ?? 0;
