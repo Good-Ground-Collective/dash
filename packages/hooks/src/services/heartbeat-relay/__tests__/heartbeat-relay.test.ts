@@ -28,24 +28,41 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await FakeTimers.runUntil(Promise.allSettled(runs), 10_000);
-  vi.restoreAllMocks();
-  vi.useRealTimers();
-  await ingest.stop();
-  await state.remove();
+  try {
+    await FakeTimers.runUntil(Promise.allSettled(runs));
+  } finally {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    await ingest.stop();
+    await state.remove();
+  }
 });
 
 /**
  * Moves fake time forward one timer at a time, with a real turn of the event loop before each step
- * so the relay's file and network I/O finishes before its next poll or backoff fires.
+ * so the relay's file and network I/O finishes before its next poll or backoff fires. Both drivers
+ * give up after `MAX_STEPS` turns and reject, so a hung or early-settling relay fails with a
+ * message instead of waiting out the test timeout.
  */
 class FakeTimers {
-  static async runUntil<T>(work: Promise<T>, maxSteps = Infinity): Promise<T> {
+  private static readonly MAX_STEPS = 10_000;
+
+  static async runUntil<T>(
+    work: Promise<T>,
+    maxSteps = FakeTimers.MAX_STEPS,
+  ): Promise<T> {
     let settled = false;
     const watched = work.finally(() => {
       settled = true;
     });
-    for (let step = 0; !settled && step < maxSteps; step += 1) {
+    watched.catch(() => undefined);
+
+    for (let step = 0; !settled; step += 1) {
+      if (step >= maxSteps) {
+        throw new Error(
+          `Relay still running after ${maxSteps} fake-timer steps; it looks hung.`,
+        );
+      }
       await nextTurn();
       if (vi.getTimerCount() > 0) {
         await vi.advanceTimersToNextTimerAsync();
@@ -55,10 +72,24 @@ class FakeTimers {
   }
 
   /** Fires `count` timers, then returns once the next one is pending, leaving it unfired. */
-  static async fire(count: number): Promise<void> {
+  static async fire(
+    running: Promise<RelayOutcome>,
+    count: number,
+  ): Promise<void> {
+    let settled = false;
+    const markSettled = (): void => {
+      settled = true;
+    };
+    running.then(markSettled, markSettled);
+
     let fired = 0;
-    for (;;) {
+    for (let step = 0; step < FakeTimers.MAX_STEPS; step += 1) {
       await nextTurn();
+      if (settled) {
+        throw new Error(
+          `Relay settled after ${fired} of ${count} timers fired, with the next still to come.`,
+        );
+      }
       if (vi.getTimerCount() === 0) {
         continue;
       }
@@ -68,18 +99,23 @@ class FakeTimers {
       await vi.advanceTimersToNextTimerAsync();
       fired += 1;
     }
+    throw new Error(
+      `Gave up after ${FakeTimers.MAX_STEPS} steps with ${fired} of ${count} timers fired.`,
+    );
   }
 }
 
 /** Relays against the fake ingest, each tracked so teardown waits for it before removing the state. */
 class TestRelay {
+  static readonly MAX_BACKOFF_MS = 40;
+
   static start(): Promise<RelayOutcome> {
     const running = new OutboxHeartbeatRelay({
       config: state.config,
       relayConfig: state.relayConfig(ingest.url),
       pollMs: 10,
       minBackoffMs: 10,
-      maxBackoffMs: 40,
+      maxBackoffMs: TestRelay.MAX_BACKOFF_MS,
     }).run();
     runs.push(running);
     return running;
@@ -121,23 +157,22 @@ describe('OutboxHeartbeatRelay', () => {
   it('queues heartbeats through an outage and delivers them in order, once each, when Mission Control returns', async () => {
     await state.writeTurns(2);
     await ingest.stop();
+    vi.spyOn(Math, 'random').mockReturnValue(1);
     const timeouts = vi.spyOn(globalThis, 'setTimeout');
 
     const running = TestRelay.start();
-    await FakeTimers.fire(2);
+    await FakeTimers.fire(running, 2);
+    const backoffs = timeouts.mock.calls
+      .map(([, ms]) => ms)
+      .filter((ms) => (ms ?? Infinity) <= TestRelay.MAX_BACKOFF_MS);
     await state.writeTurns(2);
     expect(ingest.stored).toEqual([]);
     await ingest.restart();
 
     expect(await FakeTimers.runUntil(running)).toBe('drained');
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(8));
-    const [first, second, third] = timeouts.mock.calls.map(([, ms]) => ms);
-    expect(first).toBeGreaterThanOrEqual(5);
-    expect(first).toBeLessThanOrEqual(10);
-    expect(second).toBeGreaterThanOrEqual(10);
-    expect(second).toBeLessThanOrEqual(20);
-    expect(third).toBeGreaterThanOrEqual(20);
-    expect(third).toBeLessThanOrEqual(40);
+    expect(backoffs).toEqual([10, 20, 40]);
+
     const log = await state.relayLog();
     expect(log.match(/MissionControlUnavailableError/g)).toHaveLength(1);
     expect(log).not.toContain(FakeIngest.API_KEY);
