@@ -6,6 +6,7 @@ import type {
   BriefingParagraph,
   BriefingPrices,
   BriefingRun,
+  BriefingSections,
 } from '#src/briefing/contracts/briefings.ts';
 import { BriefingNotSavedError } from '#src/briefing/errors.ts';
 import { briefingTable } from '#src/briefing/repositories/briefings/briefings-table.ts';
@@ -30,6 +31,7 @@ export interface NewBriefingRun {
   costMicroUsd: number;
   prices: BriefingPrices | null;
   sourceCounts: BriefingCounts | null;
+  sections: BriefingSections | null;
   paragraphs: BriefingParagraph[] | null;
   unknownRefs: number;
   error: string | null;
@@ -79,6 +81,7 @@ export class DrizzleBriefingRepository implements BriefingRepository {
         costMicroUsd: run.costMicroUsd,
         prices: run.prices,
         sourceCounts: run.sourceCounts,
+        sections: run.sections,
         paragraphs: run.paragraphs,
         unknownRefs: run.unknownRefs,
         error: run.error,
@@ -174,6 +177,7 @@ export class DrizzleBriefingRepository implements BriefingRepository {
       costUsd: row.costMicroUsd / microUsdPerUsd,
       prices: row.prices,
       sourceCounts: row.sourceCounts,
+      sections: row.sections,
       paragraphs: row.paragraphs,
       unknownRefs: row.unknownRefs,
       error: row.error,

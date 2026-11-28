@@ -25,19 +25,42 @@ export const prices = {
 };
 
 export const written: BriefingWritten = {
-  paragraphs: [
+  opening: {
+    segments: [{ text: 'Work continues on the card. It is close.', url: null }],
+  },
+  actions: [
     {
       segments: [
         { text: 'Review ', url: null },
         { text: 'the pull request', url: 'https://github.com/acme/web/pull/7' },
+        { text: '.', url: null },
       ],
     },
   ],
+  closing: {
+    segments: [
+      { text: 'The pace is too thin to call. Check back later.', url: null },
+    ],
+  },
   unknownRefs: 0,
   model: 'gpt-test',
   tokens: { input: 1000, cachedInput: 0, output: 200, reasoning: 0 },
   costMicroUsd: 250,
   prices,
+};
+
+export const writtenSections = {
+  opening: [{ text: 'Work continues on the card. It is close.', href: null }],
+  actions: [
+    [
+      { text: 'Review ', href: null },
+      { text: 'the pull request', href: 'https://github.com/acme/web/pull/7' },
+      { text: '.', href: null },
+    ],
+  ],
+  closing: [
+    { text: 'The pace is too thin to call. Check back later.', href: null },
+  ],
 };
 
 class RecordedSnapshot implements BriefingSnapshot {

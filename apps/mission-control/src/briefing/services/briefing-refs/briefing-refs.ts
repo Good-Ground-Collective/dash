@@ -15,6 +15,10 @@ export class BriefingRefs {
     const { draft } = props;
     return {
       takenAt: props.takenAt,
+      sinceLastBriefing: {
+        ...draft.sinceLastBriefing,
+        changes: BriefingRefs.numbered('ch', draft.sinceLastBriefing.changes),
+      },
       objectives: BriefingRefs.objectives(draft),
       github: {
         reviewRequests: BriefingRefs.numbered('rv', draft.reviewRequests),

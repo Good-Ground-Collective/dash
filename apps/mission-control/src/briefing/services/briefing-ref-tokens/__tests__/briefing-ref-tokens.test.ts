@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest';
+
+import { BriefingRefTokens } from '#src/briefing/services/briefing-ref-tokens/briefing-ref-tokens.ts';
+
+describe('BriefingRefTokens', () => {
+  it.each([
+    ['waiting on #348.pr1ag2', 'waiting on #348.'],
+    ['the closest deadline.o8', 'the closest deadline.'],
+    ['sources show no errors.cn1cn2', 'sources show no errors.'],
+    ['the card is ready [pr1] today', 'the card is ready today'],
+    ['two items (o1, o2) moved', 'two items moved'],
+    ['merged ch3 and is4 today', 'merged and today'],
+  ])('removes the ids from %s', (leaked, clean) => {
+    expect(BriefingRefTokens.strip(leaked)).toBe(clean);
+  });
+
+  it('leaves ordinary words and numbers alone', () => {
+    const text =
+      'Version 2 of the console is live, so run 5 tests, not pr or ag, on #348 and Go1.';
+
+    expect(BriefingRefTokens.strip(text)).toBe(text);
+  });
+});

@@ -67,6 +67,43 @@ const objectiveSchema = objectiveDraftSchema.extend({
     .describe('The initiative an epic sits under. `null` for an initiative.'),
 });
 
+const changeDraftSchema = z.object({
+  kind: z.enum(['initiative', 'epic']),
+  change: z
+    .enum(['closed', 'started', 'progressed'])
+    .describe(
+      '`closed` is closed in the tracker with activity since the last briefing. `started` is an open epic whose first closed tickets all closed since then. `progressed` is an open epic with tickets closed or pull requests merged since then.',
+    ),
+  title: titleSchema,
+  url: urlSchema,
+  initiativeTitle: titleSchema
+    .nullable()
+    .describe('The initiative an epic sits under. `null` for an initiative.'),
+  status: objectiveStatusSchema,
+  progress: objectiveProgressSchema,
+  ticketsClosed: z
+    .int()
+    .nonnegative()
+    .describe('Tickets of the epic closed since the last briefing.'),
+  pullRequestsMerged: z
+    .int()
+    .nonnegative()
+    .describe('Tickets of the epic with a pull request merged since then.'),
+});
+
+const changeTotalsSchema = z
+  .object({
+    initiativesClosed: z.int().nonnegative(),
+    epicsClosed: z.int().nonnegative(),
+    epicsStarted: z.int().nonnegative(),
+    epicsProgressed: z.int().nonnegative(),
+    ticketsClosed: z.int().nonnegative(),
+    pullRequestsMerged: z.int().nonnegative(),
+  })
+  .describe(
+    'Everything that changed since the last briefing, before trimming.',
+  );
+
 const pullRequestDraftSchema = z.object({
   url: urlSchema,
   repository: repositorySchema,
@@ -136,6 +173,17 @@ const connectionDraftSchema = z.object({
   lastError: textSchema.nullable(),
 });
 
+const sinceLastBriefingDraftSchema = z.object({
+  since: timestampSchema.describe(
+    'Where the changes start: the previous successful briefing, or 24 hours before this one when there is none.',
+  ),
+  previousBriefingAt: timestampSchema
+    .nullable()
+    .describe('When the previous successful briefing read its data.'),
+  totals: changeTotalsSchema,
+  changes: z.array(changeDraftSchema),
+});
+
 const githubItems = briefingLimits.githubItems;
 
 export const briefingCountsSchema = z
@@ -155,6 +203,18 @@ export const briefingCountsSchema = z
 /** What the briefing writer is handed: Dash's stored data for one person at one moment, trimmed to fixed caps. Every item has a `ref` to cite. */
 export const briefingSnapshotSchema = z.object({
   takenAt: timestampSchema,
+  sinceLastBriefing: sinceLastBriefingDraftSchema
+    .extend({
+      changes: z
+        .array(changeDraftSchema.extend(withRef))
+        .max(briefingLimits.changes)
+        .describe(
+          'Initiatives and epics that closed, started or progressed, the most substantial first.',
+        ),
+    })
+    .describe(
+      'What changed since this person’s previous successful briefing, so the opening can weigh substance.',
+    ),
   objectives: z
     .array(objectiveSchema)
     .max(briefingLimits.initiatives * (1 + briefingLimits.epicsPerInitiative))
@@ -187,6 +247,10 @@ export const briefingSnapshotSchema = z.object({
 export type BriefingSnapshotDigest = z.infer<typeof briefingSnapshotSchema>;
 export type BriefingCounts = BriefingSnapshotDigest['counts'];
 export type BriefingObjective = z.infer<typeof objectiveSchema>;
+export type BriefingChangeDraft = z.infer<typeof changeDraftSchema>;
+export type BriefingSinceLastBriefingDraft = z.infer<
+  typeof sinceLastBriefingDraftSchema
+>;
 export type BriefingObjectiveDraft = z.infer<typeof objectiveDraftSchema>;
 export type BriefingPullRequestDraft = z.infer<typeof pullRequestDraftSchema>;
 export type BriefingRunDraft = z.infer<typeof runDraftSchema>;

@@ -1,8 +1,9 @@
-/** What one briefing snapshot keeps: how many items each section holds, how long free text may run, and the size the whole serialized digest may reach. */
+/** What one briefing snapshot keeps: how many items each section holds, how long free text may run, and the size the whole serialized digest may reach. It also holds how long the written briefing may be: three actions, one sentence each, between an opening and a closing of two to three sentences. */
 export const briefingLimits = {
   initiatives: 10,
   epicsPerInitiative: 5,
   epicsKeptUnderPressure: 2,
+  changes: 15,
   githubItems: 10,
   agents: 10,
   benches: 10,
@@ -10,6 +11,10 @@ export const briefingLimits = {
   titleLength: 200,
   textLength: 300,
   nameLength: 100,
+  fallbackWindowMilliseconds: 24 * 60 * 60 * 1000,
   agentWindowMilliseconds: 24 * 60 * 60 * 1000,
   budgetCharacters: 24_000,
+  maxActions: 3,
+  framingSentences: { min: 2, max: 3 },
+  actionSentences: { min: 1, max: 1 },
 } as const;

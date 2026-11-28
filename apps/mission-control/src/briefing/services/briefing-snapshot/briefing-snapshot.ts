@@ -11,6 +11,7 @@ import {
 } from '#src/briefing/contracts/briefing-snapshot.ts';
 import { briefingLimits } from '#src/briefing/definitions/briefing-limits/briefing-limits.ts';
 import { BriefingAgentSections } from '#src/briefing/services/briefing-agent-sections/briefing-agent-sections.ts';
+import { BriefingChangeSections } from '#src/briefing/services/briefing-change-sections/briefing-change-sections.ts';
 import { BriefingFit } from '#src/briefing/services/briefing-fit/briefing-fit.ts';
 import { BriefingGithubSections } from '#src/briefing/services/briefing-github-sections/briefing-github-sections.ts';
 import { BriefingObjectiveSections } from '#src/briefing/services/briefing-objective-sections/briefing-objective-sections.ts';
@@ -30,8 +31,12 @@ const sourcedBriefingSnapshotPropsSchema = z.object({
 });
 
 export interface BriefingSnapshot {
-  /** One person's objectives, GitHub work, agents, benches and connection health as Dash stored them at `now`, trimmed to fixed caps and a character budget. Reads nothing from a provider. */
-  of(props: { userId: string; now: Date }): Promise<BriefingSnapshotDigest>;
+  /** One person's objectives, GitHub work, agents, benches and connection health as Dash stored them at `now`, trimmed to fixed caps and a character budget. Holds what changed since `previousBriefingAt`, or in the last 24 hours when the person has no earlier briefing. Reads nothing from a provider. */
+  of(props: {
+    userId: string;
+    now: Date;
+    previousBriefingAt: Date | null;
+  }): Promise<BriefingSnapshotDigest>;
 }
 
 /**
@@ -59,8 +64,9 @@ export class SourcedBriefingSnapshot implements BriefingSnapshot {
   async of(props: {
     userId: string;
     now: Date;
+    previousBriefingAt: Date | null;
   }): Promise<BriefingSnapshotDigest> {
-    const { userId, now } = props;
+    const { userId, now, previousBriefingAt } = props;
     const [objectiveRecords, overlays, githubRecords, states, principals] =
       await Promise.all([
         this.objectives.recordsFor({ connectedBy: userId }),
@@ -84,6 +90,12 @@ export class SourcedBriefingSnapshot implements BriefingSnapshot {
     const sessions = BriefingAgentSections.sessionsOf({ states, principals });
 
     const draft: BriefingDraft = {
+      sinceLastBriefing: SourcedBriefingSnapshot.changesSince({
+        connections: objectiveRecords,
+        overlays,
+        now,
+        previousBriefingAt,
+      }),
       initiatives: BriefingObjectiveSections.initiatives(objectives),
       ...BriefingGithubSections.sections(feed),
       agents: BriefingAgentSections.agents(sessions),
@@ -109,6 +121,30 @@ export class SourcedBriefingSnapshot implements BriefingSnapshot {
     return briefingSnapshotSchema.parse(
       BriefingFit.digest({ draft, takenAt: now.toISOString(), counts }),
     );
+  }
+
+  private static changesSince(props: {
+    connections: Parameters<
+      typeof ObjectivesAssembly.assemble
+    >[0]['connections'];
+    overlays: Parameters<typeof ObjectivesAssembly.assemble>[0]['overlays'];
+    now: Date;
+    previousBriefingAt: Date | null;
+  }): BriefingDraft['sinceLastBriefing'] {
+    const { now, previousBriefingAt } = props;
+    return BriefingChangeSections.since({
+      connections: props.connections,
+      objectives: ObjectivesAssembly.assemble({
+        connections: props.connections,
+        overlays: props.overlays,
+        statuses: ['active', 'parked', 'done'],
+        now,
+      }),
+      since:
+        previousBriefingAt ??
+        new Date(now.getTime() - briefingLimits.fallbackWindowMilliseconds),
+      previousBriefingAt,
+    });
   }
 
   private static connections(

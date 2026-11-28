@@ -17,6 +17,7 @@ import {
   BriefingWorkflowsFixture,
   settle,
   worstCaseMicroUsd,
+  writtenSections,
 } from '#src/briefing/__tests__/support/briefing-workflows-fixture.ts';
 import {
   BriefingNotConfiguredError,
@@ -145,15 +146,8 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows runs', () => {
     expect(recorded?.run).toMatchObject({
       trigger: 'manual',
       model: 'gpt-test',
-      paragraphs: [
-        [
-          { text: 'Review ', href: null },
-          {
-            text: 'the pull request',
-            href: 'https://github.com/acme/web/pull/7',
-          },
-        ],
-      ],
+      sections: writtenSections,
+      paragraphs: null,
     });
   }, 30_000);
 
@@ -258,7 +252,7 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows failures', () => {
     expect(stored?.run).toMatchObject({
       status: 'failed',
       model: 'gpt-test',
-      paragraphs: null,
+      sections: null,
       error: failure.message,
     });
     await expect(briefings.latestSucceeded({ userId: adaId })).resolves.toEqual(

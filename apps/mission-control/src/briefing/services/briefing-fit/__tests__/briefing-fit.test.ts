@@ -53,7 +53,9 @@ class Briefed {
         }),
       );
     }
-    return world.snapshot().of({ userId: briefedPersonId, now: fixedNow });
+    return world
+      .snapshot()
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
   }
 
   static size(digest: BriefingSnapshotDigest): number {

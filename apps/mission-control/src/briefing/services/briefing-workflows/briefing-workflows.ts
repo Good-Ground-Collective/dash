@@ -215,10 +215,10 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
       { name: 'briefingBudget' },
     );
     this.progress({ runId, stage: 'snapshot' });
-    const snapshot = await DBOS.runStep(
-      () => this.snapshot.of({ userId: props.userId, now: startedAt }),
-      { name: 'briefingSnapshot' },
-    );
+    const snapshot = await this.takeSnapshot({
+      userId: props.userId,
+      now: startedAt,
+    });
 
     const capMicroUsd = Math.round(
       generation.settings.monthlyBudgetUsd * microUsdPerUsd,
@@ -247,6 +247,28 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
         prices: generation.settings.prices,
       }),
     });
+  }
+
+  /** Reads what changed since the person's previous successful briefing. */
+  private async takeSnapshot(props: {
+    userId: string;
+    now: Date;
+  }): Promise<BriefingSnapshotDigest> {
+    const readAt = await DBOS.runStep(
+      async () => {
+        const previous = await this.briefings.latestSucceeded({
+          userId: props.userId,
+        });
+        return previous?.snapshotAt ?? previous?.startedAt ?? null;
+      },
+      { name: 'briefingPrevious' },
+    );
+    const previousBriefingAt = readAt === null ? null : new Date(readAt);
+
+    return DBOS.runStep(
+      () => this.snapshot.of({ ...props, previousBriefingAt }),
+      { name: 'briefingSnapshot' },
+    );
   }
 
   private async write(props: {

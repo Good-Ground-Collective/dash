@@ -21,17 +21,27 @@ const settings = {
 };
 
 const draft = {
-  paragraphs: [
+  opening: {
+    segments: [
+      { text: 'Your briefing work is ', ref: null },
+      { text: 'due on the 1st', ref: 'o1' },
+      { text: '. The card is up for review.', ref: null },
+    ],
+  },
+  actions: [
     {
       segments: [
-        { text: 'Your briefing work is ', ref: null },
-        { text: 'due on the 1st', ref: 'o1' },
-        { text: ', and ', ref: null },
-        { text: 'the card is up for review', ref: 'pr1' },
+        { text: 'Review ', ref: null },
+        { text: 'the card', ref: 'pr1' },
         { text: '.', ref: null },
       ],
     },
   ],
+  closing: {
+    segments: [
+      { text: 'The pace is too thin to call. Check back soon.', ref: null },
+    ],
+  },
 };
 
 class Harness {
@@ -67,13 +77,15 @@ describe('OpenAiBriefingWriter writing', () => {
 
     const written = await harness.writer.write(SampleSnapshot.build());
 
-    expect(written.paragraphs[0]?.segments).toEqual([
+    expect(written.opening.segments).toEqual([
       { text: 'Your briefing work is ', url: null },
       { text: 'due on the 1st', url: objectiveUrl },
-      { text: ', and ', url: null },
-      { text: 'the card is up for review', url: pullRequestUrl },
-      { text: '.', url: null },
+      { text: '. The card is up for review.', url: null },
     ]);
+    expect(written.actions[0]?.segments[1]).toEqual({
+      text: 'the card',
+      url: pullRequestUrl,
+    });
     expect(written).toMatchObject({
       unknownRefs: 0,
       model: 'gpt-test-2026-11-01',
@@ -123,41 +135,77 @@ describe('OpenAiBriefingWriter citing refs', () => {
     const harness = new Harness();
     harness.fake.replyWithDraft({
       draft: {
-        paragraphs: [
-          {
-            segments: [
-              { text: 'See ', ref: null },
-              { text: 'this invented item', ref: 'https://evil.example/x' },
-              { text: ' and ', ref: null },
-              { text: 'that one', ref: 'pr99' },
-              { text: '   ', ref: null },
-            ],
-          },
-          { segments: [{ text: '', ref: null }] },
-        ],
+        ...draft,
+        opening: {
+          segments: [
+            { text: 'See ', ref: null },
+            { text: 'this invented item', ref: 'https://other.example/x' },
+            { text: ' and ', ref: null },
+            { text: 'that one', ref: 'pr99' },
+            { text: '. Then rest.   ', ref: null },
+            { text: '', ref: null },
+          ],
+        },
       },
     });
 
     const written = await harness.writer.write(SampleSnapshot.build());
 
     expect(written.unknownRefs).toBe(2);
-    expect(written.paragraphs).toHaveLength(1);
-    expect(
-      written.paragraphs[0]?.segments.map((segment) => segment.url),
-    ).toEqual([null, null, null, null]);
-    expect(written.paragraphs[0]?.segments[1]?.text).toBe('this invented item');
+    expect(written.opening.segments.map((segment) => segment.url)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(written.opening.segments[1]?.text).toBe('this invented item');
   });
 
   it('gives no link to a cited item that has no page of its own', async () => {
     const harness = new Harness();
     harness.fake.replyWithDraft({
-      draft: { paragraphs: [{ segments: [{ text: 'Stale', ref: 'cn1' }] }] },
+      draft: {
+        ...draft,
+        closing: {
+          segments: [
+            { text: 'Stale', ref: 'cn1' },
+            { text: ' data. Too thin to call.', ref: null },
+          ],
+        },
+      },
     });
 
     const written = await harness.writer.write(SampleSnapshot.build());
 
     expect(written.unknownRefs).toBe(0);
-    expect(written.paragraphs[0]?.segments[0]?.url).toBeNull();
+    expect(written.closing.segments[0]?.url).toBeNull();
+  });
+});
+
+describe('OpenAiBriefingWriter holding to its length', () => {
+  it('fails with the spend when the opening is a single sentence', async () => {
+    const harness = new Harness();
+    harness.fake.replyWithDraft({
+      draft: {
+        ...draft,
+        opening: { segments: [{ text: 'Just one.', ref: null }] },
+      },
+    });
+
+    const error = await harness.failure();
+
+    expect(error.reason).toBe('unreadable');
+    expect(error.costMicroUsd).toBeGreaterThan(0);
+  });
+
+  it('allows no actions when nothing needs the owner', async () => {
+    const harness = new Harness();
+    harness.fake.replyWithDraft({ draft: { ...draft, actions: [] } });
+
+    const written = await harness.writer.write(SampleSnapshot.build());
+
+    expect(written.actions).toEqual([]);
   });
 });
 
@@ -211,7 +259,7 @@ describe('OpenAiBriefingWriter refusing and erroring', () => {
 
   it('fails with the spend when the answer is not a briefing', async () => {
     const harness = new Harness();
-    harness.fake.replyWithText({ text: '{"paragraphs": "none"}' });
+    harness.fake.replyWithText({ text: '{"opening": "none"}' });
 
     const error = await harness.failure();
 
@@ -292,7 +340,8 @@ describe('OpenAiBriefingWriter worstCaseCostMicroUsd', () => {
 describe('briefing instructions', () => {
   it.each([
     'data',
-    'short paragraphs',
+    'Never state or invent a due date',
+    'Work continues on X, Y and Z',
     'only items that are in the snapshot',
     'stale, truncated or erroring',
   ])('say %s', (phrase) => {

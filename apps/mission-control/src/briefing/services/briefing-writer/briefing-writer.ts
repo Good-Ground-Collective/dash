@@ -3,12 +3,16 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { Response } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 
-import { briefingCompositionSchema } from '#src/briefing/contracts/briefing-composition.ts';
+import {
+  briefingCompositionSchema,
+  briefingRawCompositionSchema,
+} from '#src/briefing/contracts/briefing-composition.ts';
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
-import type {
-  BriefingPrices,
-  BriefingTokens,
-  BriefingWritten,
+import {
+  type BriefingPrices,
+  type BriefingTokens,
+  type BriefingWritten,
+  briefingWrittenTextSchema,
 } from '#src/briefing/contracts/briefing-written.ts';
 import { briefingInstructions } from '#src/briefing/definitions/briefing-instructions/briefing-instructions.ts';
 import {
@@ -17,6 +21,7 @@ import {
 } from '#src/briefing/errors.ts';
 import { BriefingCost } from '#src/briefing/services/briefing-cost/briefing-cost.ts';
 import { BriefingRefLinks } from '#src/briefing/services/briefing-ref-links/briefing-ref-links.ts';
+import { BriefingLengthTrim } from '#src/briefing/services/briefing-length-trim/briefing-length-trim.ts';
 import {
   type OpenAiBriefingWriterProps,
   openAiBriefingWriterPropsSchema,
@@ -34,7 +39,7 @@ const compositionFromTextSchema = z
       return z.NEVER;
     }
   })
-  .pipe(briefingCompositionSchema);
+  .pipe(briefingRawCompositionSchema);
 
 export interface BriefingWriter {
   /** Writes the briefing for a snapshot. Throws `BriefingWriteFailedError`, carrying what the run cost, when no usable briefing came back. */
@@ -82,8 +87,15 @@ export class OpenAiBriefingWriter implements BriefingWriter {
     );
     if (!parsed.success) throw fail('unreadable', parsed.error);
 
+    const linked = BriefingLengthTrim.of(
+      BriefingRefLinks.attach({ composition: parsed.data, snapshot }),
+    );
+    const valid = briefingWrittenTextSchema.safeParse(linked);
+    if (!valid.success) throw fail('unreadable', valid.error);
+
     return {
-      ...BriefingRefLinks.attach({ composition: parsed.data, snapshot }),
+      ...valid.data,
+      unknownRefs: linked.unknownRefs,
       model: response.model,
       tokens,
       costMicroUsd,
