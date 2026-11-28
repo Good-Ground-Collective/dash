@@ -90,6 +90,8 @@ pnpm dev
 
 `pnpm dev` applies migrations, then starts the HTTP server and DBOS together and restarts on change. `pnpm dev` at the repository root does the same through Turborepo. Check it with `curl localhost:3000/healthz`.
 
+`/healthz` fails only when the database or workflows probe fails. It also reports gauges for operators, which never fail health: `gauges.strandedWorkflows` counts queued work a deploy stranded, `gauges.unregisteredStrandedWorkflows` counts queued work from other versions that the running version has no workflow for, and `gauges.holdsLatestVersion` is 1 when this container holds the "latest" application version and 0 when it does not (see Rolling back).
+
 | Command            | What it does                                                     |
 | ------------------ | ---------------------------------------------------------------- |
 | `pnpm db:up`       | Start the local Postgres container                               |
@@ -260,7 +262,7 @@ bin/image mission-control --push
 bin/kamal deploy -c deploy/mission-control.yml --skip-push --version "$(git rev-parse HEAD)"
 ```
 
-To roll back, deploy an older tag the same way, for example `--version v1.1.0`. The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
+The first deploy to a fresh box is `kamal setup` instead of `kamal deploy`, which also installs Docker and boots kamal-proxy. `bin/kamal app logs -c deploy/mission-control.yml` shows the logs, including the first boot's setup token.
 
 If someone has lost every passkey and every recovery code, print them a one-time sign-in link from the running container. Open it on the device that should get the new passkey within 15 minutes:
 
@@ -269,6 +271,16 @@ bin/kamal app exec -c deploy/mission-control.yml --interactive --reuse 'dash adm
 ```
 
 Mission Control migrates its database as the container boots, before it listens. kamal-proxy moves traffic to a new container only once its `/healthz` reports the database and workflows ok, so a failed migration leaves the old container serving. Migrations must therefore stay compatible with the version still running. Server-Sent Events on `/events` pass through kamal-proxy unbuffered: it stops buffering `text/event-stream` responses, and its 30-second response timeout covers only the wait for headers.
+
+#### Rolling back
+
+Mission Control's workflow runtime never takes the "latest" application version marker from a version created after its own, so a rolled-back or restarted old container leaves the scheduler and the stranded-work sweep targeting a version that no longer runs unless you force the claim.
+
+1. Add `DASH_CLAIM_LATEST_VERSION: force` under `env.clear` in `deploy/mission-control.yml`.
+2. Deploy the older version the same way, for example `--version v1.1.0`. After a deploy that failed its health check, deploy the version still running, which restarts it.
+3. Once the rollback is healthy, remove the line and deploy the same version again. Kamal applies `env.clear` only when it creates a container, so removing the line does nothing to the running one: until a deploy replaces it, that container keeps `force` and claims "latest" on every restart, including one during the next deploy's overlap.
+
+The switch is needed after a failed deploy too: the new container claims "latest" at launch, before it listens, so when Kamal keeps the old container because the new one failed its health check, the old one no longer holds the marker and a plain restart will not reclaim it. With the switch set the container claims "latest" at launch regardless; without it, the container logs that it left the marker alone.
 
 ## CI
 

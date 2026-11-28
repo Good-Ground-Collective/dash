@@ -1,116 +1,15 @@
-import {
-  DBOS,
-  type WorkflowHandle,
-  type VersionInfo,
-  type WorkflowStatus,
-} from '@dbos-inc/dbos-sdk';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  type MockInstance,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  Queued,
+  Spies,
+  Sweep,
+  startedAt,
+} from '#src/platform/services/workflows/__tests__/support/stranded-recovery-spies.ts';
 import {
   DbosStrandedWorkflowRecovery,
   previousContainerGoneAfterMs,
 } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
-
-DBOS.registerWorkflow(async () => undefined, {
-  name: 'githubReconcileConnection',
-});
-
-const startedAt = new Date('2026-11-27T10:00:00Z');
-
-class Queued {
-  static workflow(overrides: Partial<WorkflowStatus> = {}): WorkflowStatus {
-    return {
-      workflowID: 'wf-1',
-      workflowName: 'githubReconcileConnection',
-      workflowClassName: '',
-      status: 'ENQUEUED',
-      queueName: 'github-reconcile',
-      applicationVersion: 'previous-deploy',
-      priority: 0,
-      createdAt: startedAt.getTime(),
-      ...overrides,
-    };
-  }
-
-  static version(versionName: string): VersionInfo {
-    return {
-      versionId: 'v-1',
-      versionName,
-      versionTimestamp: startedAt.getTime(),
-      createdAt: startedAt.getTime(),
-    };
-  }
-
-  static queueless(workflowID: string): WorkflowStatus {
-    return {
-      workflowID,
-      workflowName: 'githubReconcileConnection',
-      workflowClassName: '',
-      status: 'PENDING',
-      applicationVersion: 'previous-deploy',
-      priority: 0,
-      createdAt: startedAt.getTime(),
-    };
-  }
-}
-
-class MovedHandle implements WorkflowHandle<undefined> {
-  readonly workflowID = 'moved';
-
-  async getStatus(): Promise<WorkflowStatus | null> {
-    return null;
-  }
-
-  async getResult(): Promise<undefined> {
-    return undefined;
-  }
-}
-
-class Sweep {
-  static openGate() {
-    vi.setSystemTime(
-      new Date(startedAt.getTime() + previousContainerGoneAfterMs),
-    );
-  }
-}
-
-class Spies {
-  readonly list: MockInstance<typeof DBOS.listQueuedWorkflows>;
-  readonly cancel: MockInstance<typeof DBOS.cancelWorkflow>;
-  readonly rewind: MockInstance<typeof DBOS.rewindWorkflow>;
-  readonly latest: MockInstance<typeof DBOS.getLatestApplicationVersion>;
-  readonly status: MockInstance<typeof DBOS.getWorkflowStatus>;
-  readonly warn = vi.fn();
-
-  constructor() {
-    vi.useFakeTimers({ toFake: ['Date'], now: startedAt });
-    this.list = vi.spyOn(DBOS, 'listQueuedWorkflows');
-    this.cancel = vi.spyOn(DBOS, 'cancelWorkflow').mockResolvedValue(undefined);
-    this.rewind = vi
-      .spyOn(DBOS, 'rewindWorkflow')
-      .mockResolvedValue(new MovedHandle());
-    this.latest = vi
-      .spyOn(DBOS, 'getLatestApplicationVersion')
-      .mockResolvedValue(Queued.version('current'));
-    this.status = vi
-      .spyOn(DBOS, 'getWorkflowStatus')
-      .mockImplementation(async (workflowID) =>
-        Queued.workflow({ workflowID }),
-      );
-    vi.spyOn(DBOS, 'applicationVersion', 'get').mockReturnValue('current');
-    const logger = DBOS.logger;
-    vi.spyOn(logger, 'warn').mockImplementation(this.warn);
-    vi.spyOn(DBOS, 'logger', 'get').mockReturnValue(logger);
-  }
-}
 
 let spies: Spies;
 
@@ -187,29 +86,6 @@ describe('DbosStrandedWorkflowRecovery work it must not move or cannot move', ()
 
     expect(await recovery.recover()).toBe(0);
     expect(spies.cancel).not.toHaveBeenCalled();
-  });
-
-  it('warns about a workflow this version has no function for, leaves it alone, and does not count it', async () => {
-    const recovery = new DbosStrandedWorkflowRecovery();
-    spies.list.mockResolvedValue([
-      Queued.workflow({
-        workflowID: 'removed',
-        workflowName: 'removedInThisVersion',
-        queueName: 'briefing',
-      }),
-      Queued.workflow({ workflowID: 'known' }),
-    ]);
-    Sweep.openGate();
-
-    expect(await recovery.count()).toBe(1);
-    expect(spies.warn).not.toHaveBeenCalled();
-    expect(await recovery.recover()).toBe(1);
-
-    expect(spies.cancel).toHaveBeenCalledTimes(1);
-    expect(spies.cancel).toHaveBeenCalledWith('known');
-    expect(spies.warn).toHaveBeenCalledWith(
-      expect.stringMatching(/removed.*removedInThisVersion.*briefing/),
-    );
   });
 
   it('keeps going when one workflow cannot be moved, and warns about it', async () => {
@@ -327,5 +203,70 @@ describe('DbosStrandedWorkflowRecovery when the rewind fails after the cancel', 
     expect(warning).toContain('half');
     expect(warning).toContain('RangeError');
     expect(warning).toContain('manual re-run');
+  });
+});
+
+describe('DbosStrandedWorkflowRecovery work this version has no workflow for', () => {
+  it('warns about a workflow this version has no function for, leaves it alone, and does not count it', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([
+      Queued.workflow({
+        workflowID: 'removed',
+        workflowName: 'removedInThisVersion',
+        queueName: 'briefing',
+      }),
+      Queued.workflow({ workflowID: 'known' }),
+    ]);
+    Sweep.openGate();
+
+    expect(await recovery.count()).toBe(1);
+    expect(spies.warn).not.toHaveBeenCalled();
+    expect(await recovery.recover()).toBe(1);
+
+    expect(spies.cancel).toHaveBeenCalledTimes(1);
+    expect(spies.cancel).toHaveBeenCalledWith('known');
+    expect(spies.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/removed.*removedInThisVersion.*briefing/),
+    );
+  });
+
+  it('treats a class-based workflow whose class no longer exists as unregistered instead of throwing', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([
+      Queued.workflow({
+        workflowID: 'removed-class',
+        workflowClassName: 'RemovedClass',
+        workflowName: 'removedMethod',
+      }),
+    ]);
+    Sweep.openGate();
+
+    expect(await recovery.count()).toBe(0);
+    expect(await recovery.countUnregistered()).toBe(1);
+    expect(await recovery.recover()).toBe(0);
+
+    expect(spies.cancel).not.toHaveBeenCalled();
+    expect(spies.rewind).not.toHaveBeenCalled();
+    expect(spies.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/removed-class.*removedMethod/),
+    );
+  });
+
+  it('counts unregistered work separately from what it would move, and none while the gate is closed', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([
+      Queued.workflow({
+        workflowID: 'removed',
+        workflowName: 'removedInThisVersion',
+      }),
+      Queued.workflow({ workflowID: 'known' }),
+    ]);
+
+    expect(await recovery.countUnregistered()).toBe(0);
+
+    Sweep.openGate();
+    expect(await recovery.countUnregistered()).toBe(1);
+    expect(await recovery.count()).toBe(1);
+    expect(spies.warn).not.toHaveBeenCalled();
   });
 });

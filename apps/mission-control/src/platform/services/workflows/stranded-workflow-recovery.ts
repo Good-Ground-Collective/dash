@@ -35,6 +35,9 @@ export interface StrandedWorkflowRecovery {
   /** How many queued workflows a deploy has stranded right now; zero while the gate is closed. */
   count(): Promise<number>;
 
+  /** How many queued workflows from another version this version has no workflow function for right now; zero while the gate is closed. They are left alone, so this is for operators to see work that needs a manual look. */
+  countUnregistered(): Promise<number>;
+
   /** Re-runs each stranded workflow on the running version, returning how many it moved. Does nothing while the gate is closed. */
   recover(): Promise<number>;
 }
@@ -83,16 +86,25 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   }
 
   async count(): Promise<number> {
-    return (await this.stranded()).length;
+    return (await this.partitionOtherVersionWork()).registered.length;
+  }
+
+  async countUnregistered(): Promise<number> {
+    return (await this.partitionOtherVersionWork()).unregistered.length;
   }
 
   async recover(): Promise<number> {
     const version = DBOS.applicationVersion;
     let moved = 0;
 
-    for (const workflow of await this.stranded({
-      warnAboutUnregistered: true,
-    })) {
+    const { registered, unregistered } = await this.partitionOtherVersionWork();
+    for (const workflow of unregistered) {
+      DBOS.logger.warn(
+        `Leaving stranded workflow ${workflow.workflowID} (${workflow.workflowName}) on queue ${workflow.queueName} alone: this version has no workflow of that name`,
+      );
+    }
+
+    for (const workflow of registered) {
       if (!(await this.isStillStranded(workflow.workflowID))) {
         continue;
       }
@@ -147,20 +159,38 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
     }
   }
 
+  /**
+   * Whether this process registered a workflow function under the listed name. It reads
+   * `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`, a path semver
+   * does not cover: the catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0. The test 'the DBOS
+   * registration lookup that recovery depends on' in
+   * `__tests__/stranded-workflow-recovery.integration.test.ts` fails if the import stops resolving or
+   * stops finding a registered free-function workflow, and the test 'treats a class-based workflow
+   * whose class no longer exists as unregistered instead of throwing' in
+   * `__tests__/stranded-workflow-recovery.test.ts` pins the throw-on-unknown-class behaviour. Re-check
+   * both whenever that pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
+   * unknown class name, as when a class-based workflow has since been removed; that counts as not
+   * registered.
+   */
   private isRegisteredHere(workflow: WorkflowStatus): boolean {
-    return (
-      getFunctionRegistrationByName(
-        workflow.workflowClassName,
-        workflow.workflowName,
-      )?.workflowConfig !== undefined
-    );
+    try {
+      return (
+        getFunctionRegistrationByName(
+          workflow.workflowClassName,
+          workflow.workflowName,
+        )?.workflowConfig !== undefined
+      );
+    } catch {
+      return false;
+    }
   }
 
-  private async stranded(
-    options: { warnAboutUnregistered?: boolean } = {},
-  ): Promise<(WorkflowStatus & { queueName: string })[]> {
+  private async partitionOtherVersionWork(): Promise<{
+    registered: (WorkflowStatus & { queueName: string })[];
+    unregistered: (WorkflowStatus & { queueName: string })[];
+  }> {
     if (this.untilGateOpensMs() > 0 || !(await this.runsLatestVersion())) {
-      return [];
+      return { registered: [], unregistered: [] };
     }
     const queued = await DBOS.listQueuedWorkflows({
       status: ['ENQUEUED', 'DELAYED', 'PENDING'],
@@ -176,16 +206,13 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
         : [],
     );
 
-    return otherVersions.filter((workflow) => {
-      if (this.isRegisteredHere(workflow)) {
-        return true;
-      }
-      if (options.warnAboutUnregistered === true) {
-        DBOS.logger.warn(
-          `Leaving stranded workflow ${workflow.workflowID} (${workflow.workflowName}) on queue ${workflow.queueName} alone: this version has no workflow of that name`,
-        );
-      }
-      return false;
-    });
+    const registered: (WorkflowStatus & { queueName: string })[] = [];
+    const unregistered: (WorkflowStatus & { queueName: string })[] = [];
+    for (const workflow of otherVersions) {
+      (this.isRegisteredHere(workflow) ? registered : unregistered).push(
+        workflow,
+      );
+    }
+    return { registered, unregistered };
   }
 }
