@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { ClockRefresh } from '#lib/home/clock-refresh.ts';
   import { HomeFeed } from '#lib/home/home-feed.ts';
   import { HomeGreeting } from '#lib/home/home-greeting.ts';
   import { SetupChecklist } from '#lib/onboarding/setup-checklist.ts';
@@ -14,9 +15,19 @@
 
   let now = $state(new Date());
 
-  onMount(() => {
+  $effect(() => {
+    void data;
     now = new Date();
   });
+
+  onMount(() =>
+    new ClockRefresh({
+      refresh: () => {
+        now = new Date();
+      },
+      visibility: document,
+    }).start(),
+  );
 
   let checklist = $derived(SetupChecklist.from(data.checklist));
   let greeting = $derived(

@@ -43,6 +43,10 @@ test.beforeAll(async ({ browser, baseURL }, testInfo) => {
   await page.request.post(`${missionControl}/api/auth/__stub/sign-in`);
 });
 
+test.beforeEach(async () => {
+  await Feed.scenario('populated');
+});
+
 test('before any connection, home and the GitHub page point to Connect GitHub', async () => {
   await Feed.scenario('not-connected');
 
@@ -130,7 +134,6 @@ test('Needs you says so when nothing waits on you', async () => {
   await expect(
     page.getByRole('region', { name: 'Since yesterday' }),
   ).toContainText('Nothing merged in the last 24 hours');
-  await Feed.scenario('populated');
 });
 
 test('the GitHub page lists every row with freshness and the last error', async () => {

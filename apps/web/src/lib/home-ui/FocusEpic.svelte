@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { ObjectiveEntry } from '#lib/objectives/objectives-view.ts';
+  import { ChipTones } from '#lib/objectives/chip-tones.ts';
+  import Chip from '#lib/objectives-ui/Chip.svelte';
   import DashFieldLabel from '#lib/objectives-ui/DashFieldLabel.svelte';
   import OverlayMenu from '#lib/objectives-ui/OverlayMenu.svelte';
   import ProgressMeter from '#lib/objectives-ui/ProgressMeter.svelte';
@@ -25,24 +27,24 @@
     >
       <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
       {#if row.priority !== null}
-        <span
-          class="chip {row.priority.label.toLowerCase()}"
-          class:dash={row.priority.fromDash}
+        <Chip
+          tone={ChipTones.forPriority(row.priority.label)}
+          dash={row.priority.fromDash}
         >
           <DashFieldLabel field={row.priority} />
-        </span>
+        </Chip>
       {/if}
       {#if row.status !== 'active'}
-        <span class="chip neutral">
+        <Chip tone="neutral">
           {row.status === 'parked' ? 'Parked' : 'Done'}
-        </span>
+        </Chip>
       {/if}
       <span class="title">{row.title}</span>
       {#if row.dueAfterInitiative}
-        <span class="chip warn">Due after its initiative</span>
+        <Chip tone="warn">Due after its initiative</Chip>
       {/if}
       {#each row.hints as hint (hint)}
-        <span class="chip hint">{hint}</span>
+        <Chip tone="hint" plain>{hint}</Chip>
       {/each}
       <span class="meter"><ProgressMeter progress={row.progress} /></span>
       {#if row.due !== null}
@@ -111,46 +113,9 @@
     color: var(--ink-muted);
   }
 
-  .chip {
-    flex: none;
-    padding: 1px var(--space-2);
-    border: var(--border-hairline) solid transparent;
-    border-radius: var(--radius-pill);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .chip.dash,
   .due.dash {
     border-style: dashed;
     border-color: var(--ink-muted);
-  }
-
-  .p1 {
-    background: var(--bad-surface);
-    color: var(--bad);
-  }
-
-  .p2 {
-    background: var(--warn-surface);
-    color: var(--warn);
-  }
-
-  .p3,
-  .neutral {
-    background: var(--faint);
-    color: var(--ink-muted);
-  }
-
-  .warn {
-    background: var(--warn-surface);
-    color: var(--warn);
-  }
-
-  .hint {
-    border-color: var(--line);
-    font-weight: var(--font-weight-regular);
-    color: var(--ink-muted);
   }
 
   .title {
