@@ -63,6 +63,15 @@ export class ObjectivesItems {
             progress: null,
             hints: ['no_recent_activity'],
           },
+          {
+            ...ObjectivesItems.base('E_reference', 'Refresh API reference', 21),
+            dueDate: '2027-05-28',
+            progress: { done: 12, total: 12 },
+          },
+          {
+            ...ObjectivesItems.base('E_changelog', 'Publish the changelog', 22),
+            progress: { done: 3, total: 5 },
+          },
         ],
       },
       {

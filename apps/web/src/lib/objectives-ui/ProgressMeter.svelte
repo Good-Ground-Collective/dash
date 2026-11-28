@@ -22,10 +22,9 @@
 <style>
   .progress {
     display: inline-grid;
-    grid-template-columns: 5rem 15ch;
+    grid-template-columns: 5rem 13ch;
     align-items: center;
     gap: var(--space-2);
-    max-width: 100%;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
   }
