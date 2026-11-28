@@ -1,9 +1,9 @@
 import { appendFile, readdir, stat, utimes, writeFile } from 'node:fs/promises';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeIngest } from '#src/__tests__/support/fake-ingest.js';
-import { ManualRelayClock } from '#src/__tests__/support/manual-relay-clock.js';
 import { RecordedPayloads } from '#src/__tests__/support/recorded-payloads.js';
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
 import { RelayConfig } from '#src/config/relay-config.js';
@@ -18,38 +18,75 @@ import { FileSessionLedger } from '#src/services/session-ledger/session-ledger.j
 
 let state: ScratchState;
 let ingest: FakeIngest;
-let clock: ManualRelayClock;
 let runs: Promise<RelayOutcome>[];
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
   state = new ScratchState();
   ingest = await FakeIngest.start();
-  clock = new ManualRelayClock();
   runs = [];
 });
 
 afterEach(async () => {
-  clock.stop();
-  await Promise.allSettled(runs);
+  await FakeTimers.runUntil(Promise.allSettled(runs), 10_000);
   vi.restoreAllMocks();
+  vi.useRealTimers();
   await ingest.stop();
   await state.remove();
 });
 
-/** Relays against the fake ingest on the test's manual clock, each awaited before the test's state is removed. */
+/**
+ * Moves fake time forward one timer at a time, with a real turn of the event loop before each step
+ * so the relay's file and network I/O finishes before its next poll or backoff fires.
+ */
+class FakeTimers {
+  static async runUntil<T>(work: Promise<T>, maxSteps = Infinity): Promise<T> {
+    let settled = false;
+    const watched = work.finally(() => {
+      settled = true;
+    });
+    for (let step = 0; !settled && step < maxSteps; step += 1) {
+      await nextTurn();
+      if (vi.getTimerCount() > 0) {
+        await vi.advanceTimersToNextTimerAsync();
+      }
+    }
+    return watched;
+  }
+
+  /** Fires `count` timers, then returns once the next one is pending, leaving it unfired. */
+  static async fire(count: number): Promise<void> {
+    let fired = 0;
+    for (;;) {
+      await nextTurn();
+      if (vi.getTimerCount() === 0) {
+        continue;
+      }
+      if (fired === count) {
+        return;
+      }
+      await vi.advanceTimersToNextTimerAsync();
+      fired += 1;
+    }
+  }
+}
+
+/** Relays against the fake ingest, each tracked so teardown waits for it before removing the state. */
 class TestRelay {
-  static run(): Promise<RelayOutcome> {
-    const relay = new OutboxHeartbeatRelay({
+  static start(): Promise<RelayOutcome> {
+    const running = new OutboxHeartbeatRelay({
       config: state.config,
       relayConfig: state.relayConfig(ingest.url),
       pollMs: 10,
       minBackoffMs: 10,
       maxBackoffMs: 40,
-      clock,
-    });
-    const running = relay.run();
+    }).run();
     runs.push(running);
     return running;
+  }
+
+  static run(): Promise<RelayOutcome> {
+    return FakeTimers.runUntil(TestRelay.start());
   }
 
   static seqsUpTo(count: number): number[] {
@@ -84,18 +121,17 @@ describe('OutboxHeartbeatRelay', () => {
   it('queues heartbeats through an outage and delivers them in order, once each, when Mission Control returns', async () => {
     await state.writeTurns(2);
     await ingest.stop();
-    const outage = clock.holdAt(3);
+    const timeouts = vi.spyOn(globalThis, 'setTimeout');
 
-    const running = TestRelay.run();
-    const release = await outage;
+    const running = TestRelay.start();
+    await FakeTimers.fire(2);
     await state.writeTurns(2);
     expect(ingest.stored).toEqual([]);
     await ingest.restart();
-    release();
 
-    expect(await running).toBe('drained');
+    expect(await FakeTimers.runUntil(running)).toBe('drained');
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(8));
-    const [first, second, third] = clock.sleeps;
+    const [first, second, third] = timeouts.mock.calls.map(([, ms]) => ms);
     expect(first).toBeGreaterThanOrEqual(5);
     expect(first).toBeLessThanOrEqual(10);
     expect(second).toBeGreaterThanOrEqual(10);
@@ -228,7 +264,7 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
     ).toBe(true);
   });
 
-  it('starts a resumed session from the top once retention has deleted its outbox and cursor', async () => {
+  it('deletes the relay cursor along with an expired outbox, and relays the resumed session in full', async () => {
     const paths = { cwd: state.directory, transcriptPath: 'unused' };
     const outboxPath = state.outboxPath(RecordedPayloads.SESSION_ID);
     const cursorPath = RelayCursorStore.cursorPath(

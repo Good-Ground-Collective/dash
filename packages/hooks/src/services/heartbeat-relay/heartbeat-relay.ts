@@ -6,10 +6,6 @@ import { MissionControlRefusedKeyError } from '#src/errors.js';
 import { FileHookLog, type HookLog } from '#src/services/hook-log/hook-log.js';
 import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
 import { OutboxDelivery } from '#src/services/outbox-delivery/outbox-delivery.js';
-import {
-  type RelayClock,
-  SystemRelayClock,
-} from '#src/services/relay-clock/relay-clock.js';
 import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
 
@@ -29,10 +25,6 @@ const outboxHeartbeatRelayPropsSchema = z.object({
     .describe(
       'The longest wait between attempts while Mission Control is unreachable. The relay keeps trying for as long as it is.',
     ),
-  clock: z
-    .custom<RelayClock>()
-    .default(() => new SystemRelayClock())
-    .describe('Real time and timers unless a test drives them.'),
 });
 
 export type OutboxHeartbeatRelayProps = z.input<
@@ -65,7 +57,6 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   private readonly log: HookLog;
   private readonly lock: RelayLock;
   private readonly delivery: OutboxDelivery;
-  private readonly clock: RelayClock;
 
   constructor(props: OutboxHeartbeatRelayProps) {
     const valid = outboxHeartbeatRelayPropsSchema.parse(props);
@@ -75,7 +66,6 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
     this.pollMs = valid.pollMs;
     this.minBackoffMs = valid.minBackoffMs;
     this.maxBackoffMs = valid.maxBackoffMs;
-    this.clock = valid.clock;
     this.log = new FileHookLog({ logPath: valid.config.relayLogPath });
     this.lock = new RelayLock({ pidPath: valid.config.relayPidPath });
     this.delivery = new OutboxDelivery({
@@ -114,21 +104,18 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   }
 
   private async relayUntilIdle(): Promise<'drained' | 'halted'> {
-    let quietSince = this.clock.now();
+    let quietSince = Date.now();
     let failures = 0;
 
     for (;;) {
       try {
         if (await this.delivery.deliverAll()) {
-          quietSince = this.clock.now();
-        } else if (
-          this.clock.now() - quietSince >=
-          this.relayConfig.idleExitMs
-        ) {
+          quietSince = Date.now();
+        } else if (Date.now() - quietSince >= this.relayConfig.idleExitMs) {
           return 'drained';
         }
         failures = 0;
-        await this.clock.sleep(this.pollMs);
+        await OutboxHeartbeatRelay.sleep(this.pollMs);
       } catch (cause) {
         if (cause instanceof MissionControlRefusedKeyError) {
           await this.halt(cause);
@@ -138,7 +125,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
           this.log.failure({ event: 'relay', cause, now: new Date() });
         }
         failures += 1;
-        await this.clock.sleep(this.backoffMs(failures));
+        await OutboxHeartbeatRelay.sleep(this.backoffMs(failures));
       }
     }
   }
@@ -168,5 +155,12 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
       this.minBackoffMs * 2 ** Math.min(failures - 1, 30),
     );
     return Math.round(ceiling * (0.5 + Math.random() / 2));
+  }
+
+  /** The global `setTimeout`, so tests can drive polls and backoff with fake timers. */
+  private static sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 }

@@ -63,7 +63,7 @@ export class OutboxDelivery {
       }
     }
 
-    await this.forgetCursorsWithoutOutbox(stems);
+    await this.forgetCursorsWithoutOutbox();
     return progressed;
   }
 
@@ -158,9 +158,12 @@ export class OutboxDelivery {
     }
   }
 
-  /** Drops cursors whose outbox retention deleted, so a session resumed later starts its new file from the top. */
-  private async forgetCursorsWithoutOutbox(stems: string[]): Promise<void> {
-    const live = new Set(stems);
+  /**
+   * Drops cursors whose outbox retention deleted, so a session resumed later starts its new file from
+   * the top. It lists the outbox again rather than reusing the pass's list, which can be stale by now.
+   */
+  private async forgetCursorsWithoutOutbox(): Promise<void> {
+    const live = new Set(await this.outboxStems());
     const names = await readdir(this.cursorsDirectory).catch(() => []);
 
     for (const name of names) {
