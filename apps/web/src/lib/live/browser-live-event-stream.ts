@@ -9,6 +9,8 @@ import type {
   LiveSubscription,
 } from '#lib/live/live-event-stream.ts';
 
+const maxReconnectDelayMs = 60_000;
+
 export const browserLiveEventStreamPropsSchema = z.object({
   baseUrl: missionControlBaseUrlSchema,
   reconnectDelayMs: z
@@ -17,7 +19,7 @@ export const browserLiveEventStreamPropsSchema = z.object({
     .positive()
     .default(5000)
     .describe(
-      'How long to wait before reopening a connection the browser gave up on, such as after a refused session.',
+      'How long to wait before reopening a connection the browser gave up on, such as after a refused session. It doubles with each failed attempt, up to a minute, and starts over once a connection opens.',
     ),
 });
 
@@ -42,6 +44,7 @@ export class BrowserLiveEventStream implements LiveEventStream {
   private source: EventSource | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private interrupted = false;
+  private reconnectDelay: number;
 
   constructor(props: BrowserLiveEventStreamProps) {
     const valid = browserLiveEventStreamPropsSchema.parse(props);
@@ -49,6 +52,7 @@ export class BrowserLiveEventStream implements LiveEventStream {
       'events',
     );
     this.reconnectDelayMs = valid.reconnectDelayMs;
+    this.reconnectDelay = valid.reconnectDelayMs;
   }
 
   subscribe<T>(subscription: LiveSubscription<T>): () => void {
@@ -92,6 +96,7 @@ export class BrowserLiveEventStream implements LiveEventStream {
       if (this.source !== source) return;
       const reconnected = this.interrupted;
       this.interrupted = false;
+      this.reconnectDelay = this.reconnectDelayMs;
       for (const registration of [...this.registrations]) {
         registration.onOpen?.({ reconnected });
       }
@@ -122,7 +127,11 @@ export class BrowserLiveEventStream implements LiveEventStream {
     this.retry = setTimeout(() => {
       this.retry = null;
       if (this.registrations.size > 0) this.connect();
-    }, this.reconnectDelayMs);
+    }, this.reconnectDelay);
+    this.reconnectDelay = Math.min(
+      this.reconnectDelay * 2,
+      maxReconnectDelayMs,
+    );
   }
 
   private release(registration: Registration): void {
@@ -149,5 +158,6 @@ export class BrowserLiveEventStream implements LiveEventStream {
     this.source = null;
     this.listeners.clear();
     this.interrupted = false;
+    this.reconnectDelay = this.reconnectDelayMs;
   }
 }

@@ -33,7 +33,7 @@ export interface NeedsYouFeed {
   readonly count: number;
   /** Where the item's agent is running, such as “claude-code on studio-mini”. `null` until its session is known. */
   where(item: NeedsYouItem): string | null;
-  /** Replaces the list with what the server just rendered. */
+  /** Replaces the list with what the server just rendered, unless a live event landed since the last read of the list. Then the snapshot may be older than the event, so the list is read again instead. */
   reset(props: {
     items: readonly NeedsYouItem[];
     sessions: readonly NeedsYouSession[];
@@ -56,6 +56,7 @@ export class LiveNeedsYou implements NeedsYouFeed {
   private open: OpenNeedsYouItems;
   private sessions: NeedsYouSessions;
   private changes = 0;
+  private changesAtLastRead = 0;
   private readingSessions = false;
 
   constructor(props: LiveNeedsYouProps) {
@@ -85,8 +86,13 @@ export class LiveNeedsYou implements NeedsYouFeed {
     items: readonly NeedsYouItem[];
     sessions: readonly NeedsYouSession[];
   }): void {
+    if (this.changes !== this.changesAtLastRead) {
+      void this.resync();
+      return;
+    }
     this.sessions = NeedsYouSessions.of(props.sessions);
     this.replace(OpenNeedsYouItems.of(props.items));
+    this.changesAtLastRead = this.changes;
   }
 
   start(): () => void {
@@ -145,6 +151,7 @@ export class LiveNeedsYou implements NeedsYouFeed {
         if (this.changes === before) {
           if (sessions !== null) this.sessions = NeedsYouSessions.of(sessions);
           this.replace(OpenNeedsYouItems.of(items));
+          this.changesAtLastRead = this.changes;
           return;
         }
       } catch {

@@ -201,6 +201,42 @@ describe('LiveNeedsYou resync', () => {
     expect(feed.count).toBe(0);
     expect(reads.calls).toBe(2);
   });
+});
+
+describe('LiveNeedsYou reset', () => {
+  it('reads again instead of overwriting a live event with an older snapshot', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    FakeEventSource.latest().send({
+      type: 'needs-you.opened',
+      data: Wire.frame(first),
+    });
+    reads.answers = [[first]];
+
+    feed.reset({ items: [], sessions: [] });
+    expect(feed.items).toEqual([first]);
+    await Following.flush();
+
+    expect(reads.calls).toBe(1);
+    expect(feed.items).toEqual([first]);
+  });
+
+  it('applies a snapshot again once the list has been read since the last event', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    FakeEventSource.latest().send({
+      type: 'needs-you.opened',
+      data: Wire.frame(first),
+    });
+    reads.answers = [[first]];
+    feed.reset({ items: [], sessions: [] });
+    await Following.flush();
+
+    feed.reset({ items: [second], sessions: [] });
+
+    expect(feed.items).toEqual([second]);
+    expect(reads.calls).toBe(1);
+  });
 
   it('replaces the list when the server renders a new one', () => {
     const { feed } = Following.of({ initial: [first] });

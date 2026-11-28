@@ -30,7 +30,7 @@
     <p class="meta">
       <span class="agent">{NeedsYouWording.agent(item)}</span>
       <span aria-hidden="true">·</span>
-      <span>{NeedsYouWording.place({ item, where })}</span>
+      <span>{NeedsYouWording.place(where)}</span>
       <span aria-hidden="true">·</span>
       <time datetime={item.openedAt.toISOString()}>{waiting}</time>
     </p>

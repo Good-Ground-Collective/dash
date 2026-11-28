@@ -166,6 +166,31 @@ describe('BrowserLiveEventStream opening and reconnecting', () => {
     expect(opens).toEqual([false, true]);
     expect(received).toEqual([{ n: 3 }]);
   });
+});
+
+describe('BrowserLiveEventStream backoff', () => {
+  it('waits twice as long after each failed reopen, up to a minute, and starts over once open', () => {
+    const live = new BrowserLiveEventStream({
+      baseUrl: 'https://api.example.test',
+      reconnectDelayMs: 20_000,
+    });
+    live.subscribe({ definition: ping, onEvent: () => undefined });
+    const reopenAfter = (milliseconds: number): void => {
+      const before = FakeEventSource.INSTANCES.length;
+      FakeEventSource.latest().refuse();
+      vi.advanceTimersByTime(milliseconds - 1);
+      expect(FakeEventSource.INSTANCES).toHaveLength(before);
+      vi.advanceTimersByTime(1);
+      expect(FakeEventSource.INSTANCES).toHaveLength(before + 1);
+    };
+
+    reopenAfter(20_000);
+    reopenAfter(40_000);
+    reopenAfter(60_000);
+    reopenAfter(60_000);
+    FakeEventSource.latest().open();
+    reopenAfter(20_000);
+  });
 
   it('does not reopen after the last subscriber left during the wait', () => {
     const live = Streams.create();

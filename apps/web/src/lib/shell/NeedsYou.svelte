@@ -9,6 +9,14 @@
 
   let count = $derived(feed.count);
   let now = $state(new Date());
+  let announcement = $state('');
+  let announcedCount = feed.count;
+
+  $effect(() => {
+    if (count === announcedCount) return;
+    announcedCount = count;
+    announcement = `${count} waiting`;
+  });
 
   onMount(() =>
     new ClockRefresh({
@@ -21,6 +29,7 @@
 </script>
 
 <div class="needs-you">
+  <p class="visually-hidden" aria-live="polite">{announcement}</p>
   <Popover.Root>
     <Popover.Trigger>
       {#snippet child({ props })}
@@ -40,8 +49,14 @@
         {#snippet child({ wrapperProps, props, open })}
           {#if open}
             <div {...wrapperProps}>
-              <div {...props} class="panel">
-                <h2 class="panel-title">Needs you</h2>
+              <div
+                {...props}
+                class="panel"
+                aria-labelledby="needs-you-panel-title"
+              >
+                <h2 id="needs-you-panel-title" class="panel-title">
+                  Needs you
+                </h2>
                 {#if count === 0}
                   <p class="empty">Nothing needs you right now.</p>
                 {:else}

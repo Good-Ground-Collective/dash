@@ -72,7 +72,11 @@ class Bubble {
   }
 
   static panel(): ReturnType<Page['getByRole']> {
-    return page.getByRole('dialog');
+    return page.getByRole('dialog', { name: 'Needs you' });
+  }
+
+  static announcement(): ReturnType<Page['locator']> {
+    return page.locator('.needs-you [aria-live="polite"]');
   }
 
   static rows(): ReturnType<Page['locator']> {
@@ -121,6 +125,7 @@ test('an empty list keeps the empty state', async () => {
   await page.goto('/');
 
   await expect(Bubble.button(0)).toBeVisible();
+  await expect(Bubble.announcement()).toHaveText('');
   await Bubble.open();
   await expect(page.getByText('Nothing needs you right now.')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -135,6 +140,7 @@ test('an item appears when Mission Control opens it and goes when it resolves, w
 
   await Bubble.opened('outbox');
   await expect(Bubble.button(1)).toBeVisible();
+  await expect(Bubble.announcement()).toHaveText('1 waiting');
   await Bubble.open();
   await expect(Bubble.rows()).toHaveCount(1);
   await expect(Bubble.rows().first()).toContainText(
@@ -191,7 +197,7 @@ test('agent-provided text shows as plain text', async () => {
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
   await expect(Bubble.panel()).toContainText('An agent is waiting for you');
   await expect(Bubble.panel()).toContainText('claude-code on studio-mini');
-  await expect(Bubble.panel()).toContainText('session session-');
+  await expect(Bubble.panel()).toContainText('Unknown bench');
   await page.keyboard.press('Escape');
 });
 
