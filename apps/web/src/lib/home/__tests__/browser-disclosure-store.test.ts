@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrowserDisclosureStore } from '#lib/home/browser-disclosure-store.ts';
 
 class FakeArea {
@@ -17,9 +17,14 @@ class FakeArea {
 }
 
 describe('BrowserDisclosureStore', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('reads back what it wrote', () => {
     const storage = new FakeArea();
-    const store = new BrowserDisclosureStore({ key: 'open', storage });
+    vi.stubGlobal('localStorage', storage);
+    const store = new BrowserDisclosureStore({ key: 'open' });
 
     store.writeOpenIds(['epic:E_1', 'releases']);
 
@@ -27,10 +32,8 @@ describe('BrowserDisclosureStore', () => {
   });
 
   it('starts with nothing expanded', () => {
-    const store = new BrowserDisclosureStore({
-      key: 'open',
-      storage: new FakeArea(),
-    });
+    vi.stubGlobal('localStorage', new FakeArea());
+    const store = new BrowserDisclosureStore({ key: 'open' });
 
     expect(store.readOpenIds()).toEqual([]);
   });
@@ -39,17 +42,19 @@ describe('BrowserDisclosureStore', () => {
     for (const raw of ['{not json', '{"a":1}', '[1,2]']) {
       const storage = new FakeArea();
       storage.setItem('open', raw);
+      vi.stubGlobal('localStorage', storage);
 
-      expect(
-        new BrowserDisclosureStore({ key: 'open', storage }).readOpenIds(),
-      ).toEqual([]);
+      expect(new BrowserDisclosureStore({ key: 'open' }).readOpenIds()).toEqual(
+        [],
+      );
     }
   });
 
   it('keeps working when storage refuses reads and writes', () => {
     const storage = new FakeArea();
     storage.blocked = true;
-    const store = new BrowserDisclosureStore({ key: 'open', storage });
+    vi.stubGlobal('localStorage', storage);
+    const store = new BrowserDisclosureStore({ key: 'open' });
 
     expect(() => {
       store.writeOpenIds(['releases']);
@@ -58,6 +63,7 @@ describe('BrowserDisclosureStore', () => {
   });
 
   it('keeps working when the browser has no storage', () => {
+    vi.stubGlobal('localStorage', undefined);
     const store = new BrowserDisclosureStore({ key: 'open' });
 
     expect(() => {

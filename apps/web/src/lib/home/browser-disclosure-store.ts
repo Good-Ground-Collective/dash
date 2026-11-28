@@ -4,7 +4,6 @@ type StorageArea = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const browserDisclosureStorePropsSchema = z.object({
   key: z.string().min(1),
-  storage: z.custom<StorageArea>().optional(),
 });
 
 export type BrowserDisclosureStoreProps = z.input<
@@ -25,12 +24,10 @@ const openIdsSchema = z.string().transform((raw, context): string[] => {
  */
 export class BrowserDisclosureStore {
   private readonly key: string;
-  private readonly storage: StorageArea | undefined;
 
   constructor(props: BrowserDisclosureStoreProps) {
     const valid = browserDisclosureStorePropsSchema.parse(props);
     this.key = valid.key;
-    this.storage = valid.storage;
   }
 
   readOpenIds(): string[] {
@@ -53,6 +50,6 @@ export class BrowserDisclosureStore {
   }
 
   private area(): StorageArea {
-    return this.storage ?? localStorage;
+    return localStorage;
   }
 }

@@ -136,6 +136,7 @@ export class ObjectivesItems {
         )
         .slice(0, maxTasksPerEpic),
       total: tasks.length,
+      urls: tasks.map(({ url }) => url),
     };
   }
 

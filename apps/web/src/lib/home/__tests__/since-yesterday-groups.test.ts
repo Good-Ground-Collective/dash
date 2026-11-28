@@ -40,6 +40,20 @@ describe('SinceYesterdayGroups attribution', () => {
     expect(groups.map(({ id }) => id)).toEqual(['epic:E_b']);
   });
 
+  it('places a merge under an epic with more than 25 open tasks when the task it closes is past the listed ones', () => {
+    const crowded = SampleObjectives.initiative({
+      epics: [Fixtures.epic({ id: 'E_big', own: 10, first: 100, tasks: 30 })],
+    });
+
+    const groups = Fixtures.groups({
+      merges: [Fixtures.merge({ id: 'm1', closes: [128] })],
+      objectives: Fixtures.state([crowded]),
+    });
+
+    expect(groups.map(({ id }) => id)).toEqual(['epic:E_big']);
+    expect(groups[0]).toMatchObject({ summary: '1 merged · 1 closed' });
+  });
+
   it('puts a merge that closes nothing under Other merges', () => {
     const groups = Fixtures.groups({
       merges: [Fixtures.merge({ id: 'm1' })],

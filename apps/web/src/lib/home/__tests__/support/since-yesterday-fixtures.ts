@@ -5,6 +5,8 @@ import { SinceYesterdayGroups } from '#lib/home/since-yesterday-groups.ts';
 import { SampleObjectives } from '#lib/objectives/__tests__/support/sample-objectives.ts';
 import type { ObjectivesState } from '#lib/objectives/objectives-view.ts';
 
+const maxTasksListed = 25;
+
 export const now = new Date('2026-11-27T12:00:00Z');
 
 /** Epics, merges and the grouping call for the Since yesterday tests, with only what a test cares about spelled out. */
@@ -27,14 +29,20 @@ export class Fixtures {
       title: `Epic ${props.id}`,
       url: `https://github.com/acme-labs/api/issues/${String(props.own)}`,
       tasks: {
-        items: Array.from({ length: count }, (_, index) => ({
-          id: `${props.id}-${String(index)}`,
-          title: `Task ${String(props.first + index)}`,
-          url: `https://github.com/acme-labs/api/issues/${String(props.first + index)}`,
-          state: 'open' as const,
-          assignees: [],
-        })),
+        items: Array.from(
+          { length: Math.min(count, maxTasksListed) },
+          (_, index) => ({
+            id: `${props.id}-${String(index)}`,
+            title: `Task ${String(props.first + index)}`,
+            url: Fixtures.taskUrl(props.first + index),
+            state: 'open' as const,
+            assignees: [],
+          }),
+        ),
         total: count,
+        urls: Array.from({ length: count }, (_, index) =>
+          Fixtures.taskUrl(props.first + index),
+        ),
       },
       ...props.overrides,
     });
@@ -90,5 +98,9 @@ export class Fixtures {
         }),
       ),
     );
+  }
+
+  private static taskUrl(issue: number): string {
+    return `https://github.com/acme-labs/api/issues/${String(issue)}`;
   }
 }

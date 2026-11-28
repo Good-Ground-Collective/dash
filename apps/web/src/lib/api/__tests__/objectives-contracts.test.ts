@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  epicTasksSchema,
   objectivesSchema,
   overlayChangesSchema,
 } from '#lib/api/objectives-contracts.ts';
@@ -29,6 +30,10 @@ const epic = {
   },
   tasks: {
     total: 2,
+    urls: [
+      'https://github.com/acme/app/issues/13',
+      'https://github.com/acme/app/issues/14',
+    ],
     items: [
       {
         id: 'I_13',
@@ -75,6 +80,14 @@ describe('objectivesSchema', () => {
       source: 'manual',
       percent: 40,
     });
+  });
+});
+
+describe('epicTasksSchema', () => {
+  it('reads an older Mission Control’s tasks, with no URL list, as having none', () => {
+    const { urls: _urls, ...older } = epic.tasks;
+
+    expect(epicTasksSchema.parse(older).urls).toEqual([]);
   });
 });
 

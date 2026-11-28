@@ -40,7 +40,7 @@ export class TicketEpicLookup {
       for (const epic of initiative.epics) {
         const placement = { epic, initiative };
         this.remember(epic.url, placement);
-        for (const task of epic.tasks.items) this.remember(task.url, placement);
+        for (const url of epic.tasks.urls) this.remember(url, placement);
       }
     }
   }

@@ -47,6 +47,7 @@ class Rolled {
         tickets: Array.from({ length: 30 }, (_, position) => ({
           ...template!,
           nodeId: `X${position}`,
+          url: `https://github.com/acme/app/issues/X${String(position)}`,
           epicNodeId: 'E2',
           position,
           state: position < 28 ? ('closed' as const) : ('open' as const),
@@ -191,11 +192,20 @@ describe('ObjectiveRollup tasks', () => {
           assignees: [],
         },
       ],
+      urls: [
+        'https://github.com/acme/app/issues/T1',
+        'https://github.com/acme/app/issues/T2',
+        'https://github.com/acme/app/issues/T3',
+      ],
     });
   });
 
   it('gives an epic with no tickets an empty list', () => {
-    expect(Rolled.epic('E2')?.tasks).toEqual({ items: [], total: 0 });
+    expect(Rolled.epic('E2')?.tasks).toEqual({
+      items: [],
+      total: 0,
+      urls: [],
+    });
   });
 
   it('caps the list at 25 open-first tasks and still reports the total', () => {
@@ -207,5 +217,12 @@ describe('ObjectiveRollup tasks', () => {
       'X28',
       'X29',
     ]);
+  });
+
+  it('lists every task URL, closed ones included, whatever the cap', () => {
+    const epic = Rolled.crowdedEpic();
+
+    expect(epic?.tasks.urls).toHaveLength(30);
+    expect(epic?.tasks.urls).toContain('https://github.com/acme/app/issues/X0');
   });
 });

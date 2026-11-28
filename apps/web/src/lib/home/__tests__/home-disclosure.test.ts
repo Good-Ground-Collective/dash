@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { EpicDisclosure } from '#lib/home/epic-disclosure.ts';
+import { HomeDisclosure } from '#lib/home/home-disclosure.ts';
 
-describe('EpicDisclosure', () => {
-  it('starts with every epic collapsed', () => {
-    const disclosure = new EpicDisclosure();
+describe('HomeDisclosure', () => {
+  it('starts with every item collapsed', () => {
+    const disclosure = new HomeDisclosure();
 
     expect(disclosure.isOpen('E_passkeys')).toBe(false);
   });
 
-  it('expands one epic and collapses it again without touching the others', () => {
-    const opened = new EpicDisclosure()
+  it('expands one item and collapses it again without touching the others', () => {
+    const opened = new HomeDisclosure()
       .toggled('E_passkeys')
       .toggled('E_billing');
 
@@ -22,7 +22,7 @@ describe('EpicDisclosure', () => {
   });
 
   it('leaves the original untouched when toggled', () => {
-    const original = new EpicDisclosure();
+    const original = new HomeDisclosure();
     original.toggled('E_passkeys');
 
     expect(original.isOpen('E_passkeys')).toBe(false);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { BrowserDisclosureStore } from '#lib/home/browser-disclosure-store.ts';
-  import { EpicDisclosure } from '#lib/home/epic-disclosure.ts';
+  import { HomeDisclosure } from '#lib/home/home-disclosure.ts';
   import type { HomeFeed } from '#lib/home/home-feed.ts';
   import HomeSection from '#lib/home-ui/HomeSection.svelte';
   import SinceYesterdayGroupItem from '#lib/home-ui/SinceYesterdayGroupItem.svelte';
@@ -14,10 +14,10 @@
   const store = new BrowserDisclosureStore({
     key: 'dash:home:since-yesterday:open',
   });
-  let disclosure = $state(new EpicDisclosure());
+  let disclosure = $state(new HomeDisclosure());
 
   onMount(() => {
-    disclosure = new EpicDisclosure({ open: store.readOpenIds() });
+    disclosure = new HomeDisclosure({ open: store.readOpenIds() });
   });
 
   function toggle(id: string): void {
