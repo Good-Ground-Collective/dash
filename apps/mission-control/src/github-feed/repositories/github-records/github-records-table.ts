@@ -62,7 +62,27 @@ export const githubPullRequestTable = pgTable(
     author: text('author'),
     headRef: text('head_ref').notNull(),
     headSha: text('head_sha').notNull(),
+    mergedAt: timestamp('merged_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.connectionId, table.nodeId] })],
+);
+
+export const githubReleaseTable = pgTable(
+  'github_release',
+  {
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => connectionTable.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    repositoryNodeId: text('repository_node_id').notNull(),
+    tagName: text('tag_name').notNull(),
+    name: text('name'),
+    url: text('url').notNull(),
+    author: text('author'),
+    prerelease: boolean('prerelease').notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull(),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.connectionId, table.nodeId] })],

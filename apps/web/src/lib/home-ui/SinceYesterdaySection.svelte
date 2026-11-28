@@ -14,7 +14,7 @@
   {#if status !== 'ready'}
     <p class="empty">No GitHub activity to show</p>
   {:else if rows.length === 0}
-    <p class="empty">Nothing merged in the last 24 hours</p>
+    <p class="empty">Nothing merged or released in the last 24 hours</p>
   {:else}
     <ul class="rows">
       {#each rows as row (row.id)}

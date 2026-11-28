@@ -2,23 +2,24 @@ import type {
   GithubFeed,
   GithubFeedIssue,
   GithubFeedPullRequest,
+  GithubFeedRelease,
   GithubFeedRun,
 } from '#src/github-feed/contracts/github-feed.ts';
 import type {
   GithubIssueRecord,
   GithubPullRequestRecord,
   GithubRecords,
+  GithubReleaseRecord,
   GithubRepositoryRecord,
 } from '#src/github-feed/contracts/github-records.ts';
 import type { ConnectionRecords } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 
 interface Item {
   id: string;
-  updatedAt: string;
 }
 
 /**
- * The feed's four groups, built from stored rows. It reads every connection the same way,
+ * The feed's groups, built from stored rows. It reads every connection the same way,
  * whatever its kind, and filters by the login each connection was read for. An item two
  * connections both see appears once.
  */
@@ -36,18 +37,30 @@ export class GithubFeedAssembly {
         lastError: connection.lastError,
         truncated: connection.truncated,
       })),
-      reviewRequests: GithubFeedAssembly.newest(
-        groups.flatMap((group) => group.reviewRequests),
-      ),
-      myPullRequests: GithubFeedAssembly.newest(
-        groups.flatMap((group) => group.myPullRequests),
-      ),
-      failedRuns: GithubFeedAssembly.newest(
-        groups.flatMap((group) => group.failedRuns),
-      ),
-      assignedIssues: GithubFeedAssembly.newest(
-        groups.flatMap((group) => group.assignedIssues),
-      ),
+      reviewRequests: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.reviewRequests),
+        timeOf: ({ updatedAt }) => updatedAt,
+      }),
+      myPullRequests: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.myPullRequests),
+        timeOf: ({ updatedAt }) => updatedAt,
+      }),
+      recentMerges: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.recentMerges),
+        timeOf: ({ mergedAt }) => mergedAt ?? '',
+      }),
+      releases: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.releases),
+        timeOf: ({ publishedAt }) => publishedAt,
+      }),
+      failedRuns: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.failedRuns),
+        timeOf: ({ updatedAt }) => updatedAt,
+      }),
+      assignedIssues: GithubFeedAssembly.newest({
+        items: groups.flatMap((group) => group.assignedIssues),
+        timeOf: ({ updatedAt }) => updatedAt,
+      }),
     };
   }
 
@@ -67,13 +80,26 @@ export class GithubFeedAssembly {
     const mine = assigned('assignee');
     const view = new FeedView({ connection });
 
+    const open = records.pullRequests.filter(
+      (pullRequest) => pullRequest.state === 'open',
+    );
+
     return {
-      reviewRequests: records.pullRequests
+      reviewRequests: open
         .filter((pullRequest) => requested.has(pullRequest.nodeId))
         .map((pullRequest) => view.pullRequest(pullRequest)),
-      myPullRequests: records.pullRequests
+      myPullRequests: open
         .filter((pullRequest) => pullRequest.author?.toLowerCase() === me)
         .map((pullRequest) => view.pullRequest(pullRequest)),
+      recentMerges: records.pullRequests
+        .filter(
+          (pullRequest) =>
+            pullRequest.state === 'merged' &&
+            pullRequest.mergedAt !== null &&
+            pullRequest.author?.toLowerCase() === me,
+        )
+        .map((pullRequest) => view.pullRequest(pullRequest)),
+      releases: records.releases.map((release) => view.release(release)),
       failedRuns: records.workflowRuns.map((run) => view.run(run)),
       assignedIssues: records.issues
         .filter((issue) => mine.has(issue.nodeId))
@@ -81,15 +107,18 @@ export class GithubFeedAssembly {
     };
   }
 
-  private static newest<T extends Item>(items: readonly T[]): T[] {
+  private static newest<T extends Item>(props: {
+    items: readonly T[];
+    timeOf: (item: T) => string;
+  }): T[] {
     const unique = new Map<string, T>();
-    for (const item of items) {
+    for (const item of props.items) {
       if (!unique.has(item.id)) {
         unique.set(item.id, item);
       }
     }
     return [...unique.values()].toSorted((left, right) =>
-      right.updatedAt.localeCompare(left.updatedAt),
+      props.timeOf(right).localeCompare(props.timeOf(left)),
     );
   }
 }
@@ -119,6 +148,8 @@ class FeedView {
     );
     return {
       ...this.item(record),
+      updatedAt: record.updatedAt,
+      mergedAt: record.mergedAt,
       number: record.number,
       title: record.title,
       author: record.author,
@@ -148,6 +179,7 @@ class FeedView {
   run(record: GithubRecords['workflowRuns'][number]): GithubFeedRun {
     return {
       ...this.item(record),
+      updatedAt: record.updatedAt,
       workflowName: record.workflowName,
       runNumber: record.runNumber,
       branch: record.branch,
@@ -161,6 +193,7 @@ class FeedView {
   issue(record: GithubIssueRecord): GithubFeedIssue {
     return {
       ...this.item(record),
+      updatedAt: record.updatedAt,
       number: record.number,
       title: record.title,
       author: record.author,
@@ -174,12 +207,22 @@ class FeedView {
     };
   }
 
+  release(record: GithubReleaseRecord): GithubFeedRelease {
+    return {
+      ...this.item(record),
+      tagName: record.tagName,
+      name: record.name,
+      author: record.author,
+      prerelease: record.prerelease,
+      publishedAt: record.publishedAt,
+    };
+  }
+
   /** A repository that went missing from a read still shows, by the URL's own path. */
   private item(record: {
     nodeId: string;
     repositoryNodeId: string;
     url: string;
-    updatedAt: string;
   }) {
     const repository = this.repositories.get(record.repositoryNodeId);
     const [, owner = '', name = ''] = new URL(record.url).pathname.split('/');
@@ -191,7 +234,6 @@ class FeedView {
         url: repository?.url ?? `https://github.com/${owner}/${name}`,
       },
       url: record.url,
-      updatedAt: record.updatedAt,
     };
   }
 }

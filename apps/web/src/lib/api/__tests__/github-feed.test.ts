@@ -29,6 +29,8 @@ const wire = {
   ],
   reviewRequests: [],
   myPullRequests: [],
+  recentMerges: [],
+  releases: [],
   failedRuns: [],
   assignedIssues: [
     {

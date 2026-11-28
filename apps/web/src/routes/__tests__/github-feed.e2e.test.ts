@@ -119,11 +119,20 @@ test('home lists what needs you and what merged since yesterday, each opening Gi
   await expect(needsYou).not.toContainText('Cache the objectives read');
 
   const since = page.getByRole('region', { name: 'Since yesterday' });
-  await expect(since.getByRole('listitem')).toHaveCount(1);
+  await expect(since.getByRole('listitem')).toHaveCount(2);
   await expect(
     since.getByRole('link', { name: /Cache the objectives read/u }),
   ).toHaveAttribute('href', 'https://github.com/acme-labs/api/pull/409');
   await expect(since).toContainText('Merged');
+  await expect(
+    since.getByRole('link', { name: /API 2\.4\.0/u }),
+  ).toHaveAttribute(
+    'href',
+    'https://github.com/acme-labs/api/releases/tag/v2.4.0',
+  );
+  await expect(since).toContainText('Shipped');
+  await expect(since).not.toContainText('Retire the old settings tabs');
+  await expect(since).not.toContainText('Web 1.9.0');
 });
 
 test('Needs you says so when nothing waits on you', async () => {
@@ -133,7 +142,7 @@ test('Needs you says so when nothing waits on you', async () => {
   await expect(Feed.needsYou()).toContainText('Nothing needs you');
   await expect(
     page.getByRole('region', { name: 'Since yesterday' }),
-  ).toContainText('Nothing merged in the last 24 hours');
+  ).toContainText('Nothing merged or released in the last 24 hours');
 });
 
 test('the GitHub page lists every row with freshness and the last error', async () => {

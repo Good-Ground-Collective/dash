@@ -34,6 +34,7 @@ export const githubFeedEvents: readonly {
     event: 'issues',
     actions: ['assigned', 'unassigned', 'closed', 'reopened', 'edited'],
   },
+  { event: 'release', actions: ['published', 'deleted'] },
   { event: 'installation', actions: ['suspend', 'unsuspend'] },
   { event: 'installation_repositories', actions: ['added', 'removed'] },
 ];

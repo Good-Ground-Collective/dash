@@ -34,6 +34,10 @@ const feedItemSchema = z.object({
 });
 
 export const githubFeedPullRequestSchema = feedItemSchema.extend({
+  mergedAt: z.coerce
+    .date()
+    .nullable()
+    .describe('When the pull request was merged. Null while it is not merged.'),
   number: z.number().int(),
   title: z.string(),
   author: z.string().nullable(),
@@ -67,6 +71,19 @@ export const githubFeedRunSchema = feedItemSchema.extend({
   pullRequestId: z.string().nullable(),
 });
 
+export const githubFeedReleaseSchema = feedItemSchema
+  .omit({ updatedAt: true })
+  .extend({
+    tagName: z.string(),
+    name: z
+      .string()
+      .nullable()
+      .describe('Null when the release has no title of its own.'),
+    author: z.string().nullable(),
+    prerelease: z.boolean(),
+    publishedAt: z.coerce.date(),
+  });
+
 export const githubFeedIssueSchema = feedItemSchema.extend({
   number: z.number().int(),
   title: z.string(),
@@ -79,6 +96,16 @@ export const githubFeedSchema = z.object({
   connections: z.array(githubFeedConnectionSchema),
   reviewRequests: z.array(githubFeedPullRequestSchema),
   myPullRequests: z.array(githubFeedPullRequestSchema),
+  recentMerges: z
+    .array(githubFeedPullRequestSchema)
+    .describe(
+      'The viewer’s pull requests merged in the last 48 hours; Home shows the last 24.',
+    ),
+  releases: z
+    .array(githubFeedReleaseSchema)
+    .describe(
+      'Releases published in the last 48 hours; Home shows the last 24.',
+    ),
   failedRuns: z.array(githubFeedRunSchema),
   assignedIssues: z.array(githubFeedIssueSchema),
 });
@@ -86,5 +113,6 @@ export const githubFeedSchema = z.object({
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
+export type GithubFeedRelease = z.infer<typeof githubFeedReleaseSchema>;
 export type GithubFeedRun = z.infer<typeof githubFeedRunSchema>;
 export type GithubFeedIssue = z.infer<typeof githubFeedIssueSchema>;

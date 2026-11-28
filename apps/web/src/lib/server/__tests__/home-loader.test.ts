@@ -22,6 +22,8 @@ const feed = {
   connections: [],
   reviewRequests: [],
   myPullRequests: [],
+  recentMerges: [],
+  releases: [],
   failedRuns: [],
   assignedIssues: [],
 };

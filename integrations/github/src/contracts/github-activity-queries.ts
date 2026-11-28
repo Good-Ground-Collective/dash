@@ -7,7 +7,7 @@ const failedSuiteFields = `conclusion workflowRun { id runNumber url event updat
 
 const pullRequestFields = `
   ... on PullRequest {
-    id number title url state isDraft mergeable reviewDecision updatedAt headRefName headRefOid
+    id number title url state isDraft mergeable reviewDecision mergedAt updatedAt headRefName headRefOid
     author { login }
     repository { ${repositoryFields} defaultBranchRef { name } }
     reviewRequests(first: 10) {
@@ -45,6 +45,15 @@ const issueFields = `
     assignees(first: 10) { nodes { login } }
   }`;
 
+const releaseFields = `id name tagName url isDraft isPrerelease publishedAt author { login }`;
+
+/**
+ * How many of a repository's newest releases one read asks for. GitHub orders them only by
+ * creation time or name, so a release published recently from one created before the newest
+ * `githubReleaseCount` (drafts included) is missed until the repository has fewer of them.
+ */
+export const githubReleaseCount = 10;
+
 const pageInfo = 'pageInfo { hasNextPage endCursor }';
 
 const searchDocument = `
@@ -53,6 +62,7 @@ query DashActivity(
   $reviewQuery: String!, $reviewAfter: String, $withReview: Boolean!
   $authoredQuery: String!, $authoredAfter: String, $withAuthored: Boolean!
   $assignedQuery: String!, $assignedAfter: String, $withAssigned: Boolean!
+  $mergedQuery: String!, $mergedAfter: String, $withMerged: Boolean!
 ) {
   review: search(type: ISSUE, query: $reviewQuery, first: $pageSize, after: $reviewAfter) @include(if: $withReview) {
     ${pageInfo} nodes { ${pullRequestFields} }
@@ -63,7 +73,28 @@ query DashActivity(
   assigned: search(type: ISSUE, query: $assignedQuery, first: $pageSize, after: $assignedAfter) @include(if: $withAssigned) {
     ${pageInfo} nodes { ${issueFields} }
   }
+  merged: search(type: ISSUE, query: $mergedQuery, first: $pageSize, after: $mergedAfter) @include(if: $withMerged) {
+    ${pageInfo} nodes { ${pullRequestFields} }
+  }
 }`;
+
+class RepositoryBatch {
+  static variables(count: number): string {
+    return Array.from(
+      { length: count },
+      (_, index) => `$owner${index}: String!, $name${index}: String!`,
+    ).join(', ');
+  }
+
+  static aliases(props: { count: number; fields: string }): string {
+    return Array.from(
+      { length: props.count },
+      (_, index) => `
+  repository${index}: repository(owner: $owner${index}, name: $name${index}) {${props.fields}
+  }`,
+    ).join('');
+  }
+}
 
 /**
  * The GraphQL documents the activity feed sends. Repositories are batched as aliases
@@ -73,14 +104,10 @@ export const githubActivityQueries = {
   search: searchDocument,
 
   defaultBranches(count: number): string {
-    const indexes = Array.from({ length: count }, (_, index) => index);
-    const variables = indexes
-      .map((index) => `$owner${index}: String!, $name${index}: String!`)
-      .join(', ');
-    const fields = indexes
-      .map(
-        (index) => `
-  repository${index}: repository(owner: $owner${index}, name: $name${index}) {
+    return `query DashDefaultBranches(${RepositoryBatch.variables(count)}) {${RepositoryBatch.aliases(
+      {
+        count,
+        fields: `
     ${repositoryFields}
     defaultBranchRef {
       name
@@ -90,10 +117,23 @@ export const githubActivityQueries = {
           checkSuites(first: 20, filterBy: { appId: ${actionsAppId} }) { nodes { ${failedSuiteFields} } }
         }
       }
-    }
-  }`,
-      )
-      .join('');
-    return `query DashDefaultBranches(${variables}) {${fields}\n}`;
+    }`,
+      },
+    )}\n}`;
+  },
+
+  /**
+   * Read apart from the default branches: an installation without Contents access may be
+   * refused a repository's releases, and that must cost only the releases, not the runs.
+   */
+  releases(count: number): string {
+    return `query DashReleases(${RepositoryBatch.variables(count)}) {${RepositoryBatch.aliases(
+      {
+        count,
+        fields: `
+    id
+    releases(first: ${githubReleaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }`,
+      },
+    )}\n}`;
   },
 };

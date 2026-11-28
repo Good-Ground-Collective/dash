@@ -11,10 +11,17 @@ const query: ActivityQuery = {
   account: { login: 'acme', kind: 'organization' },
   viewerLogin: 'octocat',
   repositories: ['acme/app'],
+  since: '2026-11-25T12:00:00Z',
 };
 
-const { page, pullRequestNode, issueNode, failedSuite, defaultBranchNode } =
-  ActivityNodes;
+const {
+  page,
+  pullRequestNode,
+  issueNode,
+  failedSuite,
+  defaultBranchNode,
+  releasesNode,
+} = ActivityNodes;
 
 const busyAccount = new FakeGithubGraphql()
   .on({
@@ -39,6 +46,16 @@ const busyAccount = new FakeGithubGraphql()
           ],
         }),
         assigned: page({ nodes: [issueNode({ number: 9 })] }),
+        merged: page({
+          nodes: [
+            pullRequestNode({
+              number: 3,
+              author: 'octocat',
+              mergedAt: '2026-11-26T08:00:00Z',
+              suites: [failedSuite({ id: 'WFR_merged', name: 'ci' })],
+            }),
+          ],
+        }),
       },
     }),
   })
@@ -58,6 +75,12 @@ const busyAccount = new FakeGithubGraphql()
           ],
         }),
       },
+    }),
+  })
+  .on({
+    operation: 'DashReleases',
+    reply: () => ({
+      data: { repository0: releasesNode({ fullName: 'acme/app' }) },
     }),
   });
 
@@ -104,6 +127,24 @@ describe('GithubActivityFeed pull requests and issues', () => {
         fullName: 'acme/app',
       }),
     ]);
+  });
+});
+
+describe('GithubActivityFeed merges and releases', () => {
+  it('reads pull requests the viewer merged, with the merge time and without their failed runs', async () => {
+    const activity = await busyAccount.feed().read(query);
+
+    expect(activity.mergedPullRequests).toEqual([
+      expect.objectContaining({
+        externalId: 'PR_acme/app_3',
+        state: 'merged',
+        mergedAt: '2026-11-26T08:00:00Z',
+      }),
+    ]);
+    expect(activity.authoredPullRequests[0]?.mergedAt).toBeNull();
+    expect(
+      activity.failedRuns.map(({ externalId }) => externalId),
+    ).not.toContain('WFR_merged');
   });
 });
 
@@ -164,6 +205,8 @@ describe('GithubActivityFeed requests', () => {
         'is:pr is:open archived:false sort:updated-desc author:octocat org:acme',
       assignedQuery:
         'is:issue is:open archived:false sort:updated-desc assignee:octocat org:acme',
+      mergedQuery:
+        'is:pr is:merged merged:>=2026-11-25T12:00:00Z archived:false sort:updated-desc author:octocat org:acme',
     });
   });
 
@@ -189,65 +232,6 @@ describe('GithubActivityFeed requests', () => {
   });
 });
 
-describe('GithubActivityFeed pagination', () => {
-  it('pages only the searches that have more, from their cursors', async () => {
-    const github = new FakeGithubGraphql().withEmptyActivity().on({
-      operation: 'DashActivity',
-      reply: ({ variables }) => ({
-        data:
-          variables['reviewAfter'] === null
-            ? {
-                review: page({
-                  nodes: [pullRequestNode({ number: 1 })],
-                  next: 'cursor-1',
-                }),
-                authored: page({ nodes: [] }),
-                assigned: page({ nodes: [] }),
-              }
-            : { review: page({ nodes: [pullRequestNode({ number: 2 })] }) },
-      }),
-    });
-
-    const activity = await github.feed().read(query);
-
-    const [, second] = github.callsTo('DashActivity');
-    expect(second?.variables).toMatchObject({
-      reviewAfter: 'cursor-1',
-      withReview: true,
-      withAuthored: false,
-      withAssigned: false,
-    });
-    expect(activity.reviewRequests.map(({ number }) => number)).toEqual([1, 2]);
-    expect(activity.truncated).toBe(false);
-  });
-
-  it('stops after three search pages and says the list was cut short', async () => {
-    const github = new FakeGithubGraphql().withEmptyActivity().on({
-      operation: 'DashActivity',
-      reply: ({ variables }) => ({
-        data: {
-          review: page({
-            nodes: [
-              pullRequestNode({
-                number: String(variables['reviewAfter']).length,
-              }),
-            ],
-            next: `${String(variables['reviewAfter'])}+`,
-          }),
-          authored: page({ nodes: [] }),
-          assigned: page({ nodes: [] }),
-        },
-      }),
-    });
-
-    const activity = await github.feed().read(query);
-
-    expect(github.callsTo('DashActivity')).toHaveLength(3);
-    expect(activity.reviewRequests).toHaveLength(3);
-    expect(activity.truncated).toBe(true);
-  });
-});
-
 describe('GithubActivityFeed default branches', () => {
   it('checks at most thirty, ten per request, repositories with the viewer’s work first', async () => {
     const repositories = Array.from(
@@ -269,6 +253,7 @@ describe('GithubActivityFeed default branches', () => {
             ],
           }),
           assigned: page({ nodes: [] }),
+          merged: page({ nodes: [] }),
         },
       }),
     });

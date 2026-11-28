@@ -1,8 +1,10 @@
 import type {
   ConnectionKind,
   GithubRecords,
+  GithubReleaseRead,
 } from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.ts';
+import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-retention/feed-retention.ts';
 import type {
   ConnectionRecords,
   GithubRecordReader,
@@ -75,6 +77,7 @@ export class InMemoryGithubRecords
     connectionId: string;
     viewerLogin: string;
     records: GithubRecords;
+    releaseReads: readonly GithubReleaseRead[];
     truncated: boolean;
     syncedAt: Date;
   }): Promise<{ applied: boolean }> {
@@ -94,7 +97,12 @@ export class InMemoryGithubRecords
       lastAttemptedAt: triedLater ? stored.lastAttemptedAt : props.syncedAt,
       lastError: triedLater ? stored.lastError : null,
       truncated: props.truncated,
-      records: props.records,
+      records: InMemoryGithubRecords.withRetained({
+        read: props.records,
+        releaseReads: props.releaseReads,
+        stored: stored?.records ?? null,
+        now: props.syncedAt,
+      }),
     });
     return { applied: true };
   }
@@ -130,11 +138,66 @@ export class InMemoryGithubRecords
     return {
       repositories: [],
       pullRequests: [],
+      releases: [],
       reviewRequests: [],
       checkRollups: [],
       workflowRuns: [],
       issues: [],
       assignments: [],
+    };
+  }
+
+  /** What a read found plus the merged pull requests and releases from before it that are still within their retention. */
+  private static withRetained(props: {
+    read: GithubRecords;
+    releaseReads: readonly GithubReleaseRead[];
+    stored: GithubRecords | null;
+    now: Date;
+  }): GithubRecords {
+    const since = new Date(
+      props.now.getTime() - recentActivityRetentionMs,
+    ).toISOString();
+    const readPullRequests = new Set(
+      props.read.pullRequests.map(({ nodeId }) => nodeId),
+    );
+    const readReleases = new Set(
+      props.read.releases.map(({ nodeId }) => nodeId),
+    );
+    const merged = (record: GithubRecords['pullRequests'][number]) =>
+      record.state === 'merged' &&
+      record.mergedAt !== null &&
+      record.mergedAt >= since;
+    const published = (record: GithubRecords['releases'][number]) =>
+      record.publishedAt >= since;
+    const unreported = (record: GithubRecords['releases'][number]) =>
+      props.releaseReads.some(
+        (read) =>
+          read.repositoryNodeId === record.repositoryNodeId &&
+          (read.exhaustive ||
+            (read.oldestPublishedAt !== null &&
+              Date.parse(record.publishedAt) >=
+                Date.parse(read.oldestPublishedAt))),
+      );
+
+    return {
+      ...props.read,
+      pullRequests: [
+        ...props.read.pullRequests.filter(
+          (record) => record.state !== 'merged' || merged(record),
+        ),
+        ...(props.stored?.pullRequests ?? []).filter(
+          (record) => !readPullRequests.has(record.nodeId) && merged(record),
+        ),
+      ],
+      releases: [
+        ...props.read.releases.filter(published),
+        ...(props.stored?.releases ?? []).filter(
+          (record) =>
+            !readReleases.has(record.nodeId) &&
+            published(record) &&
+            !unreported(record),
+        ),
+      ],
     };
   }
 }

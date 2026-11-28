@@ -10,12 +10,14 @@ import { z } from 'zod';
 
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
 import { GithubActivityRecords } from '#src/contracts/github-activity-records.ts';
-import {
-  githubDefaultBranchNodeSchema,
-  type GithubGraphqlVariables,
-} from '#src/contracts/github-activity-response.ts';
+import { githubDefaultBranchNodeSchema } from '#src/contracts/github-activity-response.ts';
 import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
+import { GithubRepositoryBatches } from '#src/contracts/github-repository-batches.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
+import {
+  GithubActivityReleases,
+  type ReadReleases,
+} from '#src/services/github-activity-feed/github-activity-releases.ts';
 import {
   GithubActivitySearch,
   type SearchedActivity,
@@ -27,7 +29,6 @@ import {
 } from '#src/services/github-graphql/github-graphql.ts';
 
 const maxDefaultBranchRepositories = 30;
-const defaultBranchBatchSize = 10;
 const toleratedRepositoryErrors = new Set(['NOT_FOUND', 'FORBIDDEN']);
 
 interface DefaultBranches {
@@ -54,10 +55,11 @@ const githubActivityQuerySchema = activityQuerySchema.extend({
 });
 
 /**
- * A person's open work in one installation, read with an installation token: three issue
- * searches share each GraphQL request, and default branches are read in batches of
- * repository aliases. Pages and repositories are capped, so a busy account costs at most
- * three search requests and three branch requests.
+ * A person's work in one installation, read with an installation token: four issue
+ * searches share each GraphQL request, and default branches and recent releases are
+ * read in separate batches of repository aliases. Pages and repositories are capped, so
+ * a busy account costs at most three search requests, three branch requests and three
+ * release requests.
  */
 export class GithubActivityFeed implements ActivityFeed {
   private readonly graphql: GithubGraphql;
@@ -75,19 +77,23 @@ export class GithubActivityFeed implements ActivityFeed {
     const searched = await new GithubActivitySearch({ graphql }).run({
       viewerLogin: parsed.viewerLogin,
       account: parsed.account,
+      mergedSince: GithubActivityFeed.searchDate(parsed.since),
     });
     const candidates = GithubActivityFeed.branchCandidates({
       searched,
       repositories: parsed.repositories,
     });
-    const branches = await this.defaultBranches({
-      graphql,
-      fullNames: candidates.slice(0, maxDefaultBranchRepositories),
+    const fullNames = candidates.slice(0, maxDefaultBranchRepositories);
+    const branches = await this.defaultBranches({ graphql, fullNames });
+    const releases = await new GithubActivityReleases({ graphql }).read({
+      fullNames,
+      since: parsed.since,
     });
 
     return GithubActivityFeed.assemble({
       searched,
       branches,
+      releases,
       truncated:
         searched.truncated || candidates.length > maxDefaultBranchRepositories,
     });
@@ -99,18 +105,10 @@ export class GithubActivityFeed implements ActivityFeed {
   }): Promise<DefaultBranches> {
     const repositories: ActivityRepository[] = [];
     const runs: ActivityRun[] = [];
-    for (
-      let start = 0;
-      start < props.fullNames.length;
-      start += defaultBranchBatchSize
-    ) {
-      const batch = props.fullNames.slice(
-        start,
-        start + defaultBranchBatchSize,
-      );
+    for (const batch of GithubRepositoryBatches.split(props.fullNames)) {
       const data = await props.graphql({
         query: githubActivityQueries.defaultBranches(batch.length),
-        variables: GithubActivityFeed.repositoryVariables(batch),
+        variables: GithubRepositoryBatches.variables(batch),
         tolerate: toleratedRepositoryErrors,
       });
       for (const index of batch.keys()) {
@@ -127,16 +125,9 @@ export class GithubActivityFeed implements ActivityFeed {
     return { repositories, runs };
   }
 
-  private static repositoryVariables(fullNames: readonly string[]) {
-    return Object.fromEntries(
-      fullNames.flatMap((fullName, index) => {
-        const [owner = '', name = ''] = fullName.split('/');
-        return [
-          [`owner${index}`, owner],
-          [`name${index}`, name],
-        ];
-      }),
-    ) satisfies GithubGraphqlVariables;
+  /** GitHub's search takes whole seconds in UTC. */
+  private static searchDate(since: string): string {
+    return new Date(since).toISOString().replace(/\.\d{3}Z$/u, 'Z');
   }
 
   /** The repositories the viewer's own work is in first, then the rest the caller named. */
@@ -144,8 +135,8 @@ export class GithubActivityFeed implements ActivityFeed {
     searched: SearchedActivity;
     repositories: readonly string[];
   }): string[] {
-    const { review, authored, assigned } = props.searched;
-    const touched = [...review, ...authored, ...assigned]
+    const { review, authored, assigned, merged } = props.searched;
+    const touched = [...review, ...authored, ...assigned, ...merged]
       .filter(({ repository }) => !repository.archived)
       .map(({ repository }) => repository.fullName);
     return [...new Set([...touched, ...props.repositories])];
@@ -154,12 +145,15 @@ export class GithubActivityFeed implements ActivityFeed {
   private static assemble(props: {
     searched: SearchedActivity;
     branches: DefaultBranches;
+    releases: ReadReleases;
     truncated: boolean;
   }): Activity {
-    const { review, authored, assigned } = props.searched;
+    const { review, authored, assigned, merged } = props.searched;
     const repositories = new Map<string, ActivityRepository>();
     for (const repository of [
-      ...[...review, ...authored, ...assigned].map((node) => node.repository),
+      ...[...review, ...authored, ...assigned, ...merged].map(
+        (node) => node.repository,
+      ),
       ...props.branches.repositories,
     ]) {
       repositories.set(repository.externalId, repository);
@@ -182,6 +176,11 @@ export class GithubActivityFeed implements ActivityFeed {
       authoredPullRequests: authored.map((node) =>
         GithubActivityRecords.pullRequest(node),
       ),
+      mergedPullRequests: merged.map((node) =>
+        GithubActivityRecords.pullRequest(node),
+      ),
+      releases: props.releases.releases,
+      releaseReads: props.releases.releaseReads,
       failedRuns: [...runs.values()],
       assignedIssues: assigned.map((node) => GithubActivityRecords.issue(node)),
       truncated: props.truncated,

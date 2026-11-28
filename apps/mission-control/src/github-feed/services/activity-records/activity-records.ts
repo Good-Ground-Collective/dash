@@ -1,4 +1,8 @@
-import type { Activity, ActivityPullRequest } from '@dash/integrations-core';
+import type {
+  Activity,
+  ActivityPullRequest,
+  ActivityRelease,
+} from '@dash/integrations-core';
 
 import type {
   GithubAssignmentRecord,
@@ -6,6 +10,8 @@ import type {
   GithubIssueRecord,
   GithubPullRequestRecord,
   GithubRecords,
+  GithubReleaseRead,
+  GithubReleaseRecord,
   GithubReviewRequestRecord,
   GithubWorkflowRunRecord,
 } from '#src/github-feed/contracts/github-records.ts';
@@ -22,7 +28,11 @@ export class ActivityRecords {
   }): GithubRecords {
     const { activity, viewerLogin } = props;
     const pullRequests = ActivityRecords.unique(
-      [...activity.reviewRequests, ...activity.authoredPullRequests],
+      [
+        ...activity.reviewRequests,
+        ...activity.authoredPullRequests,
+        ...activity.mergedPullRequests,
+      ],
       (pullRequest) => pullRequest.externalId,
     );
 
@@ -40,6 +50,10 @@ export class ActivityRecords {
       pullRequests: pullRequests.map((pullRequest) =>
         ActivityRecords.pullRequest(pullRequest),
       ),
+      releases: ActivityRecords.unique(
+        activity.releases.map((release) => ActivityRecords.release(release)),
+        (release) => release.nodeId,
+      ),
       reviewRequests: ActivityRecords.unique(
         pullRequests.flatMap((pullRequest) =>
           ActivityRecords.reviewRequests(pullRequest),
@@ -54,6 +68,20 @@ export class ActivityRecords {
       issues: ActivityRecords.issues(activity),
       assignments: ActivityRecords.assignments({ activity, viewerLogin }),
     };
+  }
+
+  static releaseReads(activity: Activity): GithubReleaseRead[] {
+    return ActivityRecords.unique(
+      activity.releaseReads.map((read) => ({
+        repositoryNodeId: read.repositoryId,
+        exhaustive: read.exhaustive,
+        oldestPublishedAt:
+          read.oldestPublishedAt === null
+            ? null
+            : new Date(read.oldestPublishedAt).toISOString(),
+      })),
+      (read) => read.repositoryNodeId,
+    );
   }
 
   private static assignments(props: {
@@ -134,7 +162,24 @@ export class ActivityRecords {
       author: pullRequest.author,
       headRef: pullRequest.headRef,
       headSha: pullRequest.headSha,
+      mergedAt:
+        pullRequest.mergedAt === null
+          ? null
+          : new Date(pullRequest.mergedAt).toISOString(),
       updatedAt: new Date(pullRequest.updatedAt).toISOString(),
+    };
+  }
+
+  private static release(release: ActivityRelease): GithubReleaseRecord {
+    return {
+      nodeId: release.externalId,
+      repositoryNodeId: release.repositoryId,
+      tagName: release.tagName,
+      name: release.name,
+      url: release.url,
+      author: release.author,
+      prerelease: release.prerelease,
+      publishedAt: new Date(release.publishedAt).toISOString(),
     };
   }
 

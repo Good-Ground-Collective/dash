@@ -55,7 +55,7 @@ export class FakeGithubGraphql {
     return this;
   }
 
-  /** Empty searches, and every default branch asked for exists with no failed runs. */
+  /** Empty searches, and every repository asked for exists with no failed runs and no releases. */
   withEmptyActivity(): this {
     return this.on({
       operation: 'DashActivity',
@@ -64,25 +64,26 @@ export class FakeGithubGraphql {
           review: ActivityNodes.page({ nodes: [] }),
           authored: ActivityNodes.page({ nodes: [] }),
           assigned: ActivityNodes.page({ nodes: [] }),
+          merged: ActivityNodes.page({ nodes: [] }),
         },
       }),
-    }).on({
-      operation: 'DashDefaultBranches',
-      reply: ({ variables }) => ({
-        data: Object.fromEntries(
-          Object.keys(variables)
-            .filter((key) => key.startsWith('owner'))
-            .map((key) => {
-              const index = key.slice('owner'.length);
-              const fullName = `${String(variables[key])}/${String(variables[`name${index}`])}`;
-              return [
-                `repository${index}`,
-                ActivityNodes.defaultBranchNode({ fullName }),
-              ];
-            }),
-        ),
-      }),
-    });
+    })
+      .on({
+        operation: 'DashDefaultBranches',
+        reply: ({ variables }) => ({
+          data: FakeGithubGraphql.repositories(variables, (fullName) =>
+            ActivityNodes.defaultBranchNode({ fullName }),
+          ),
+        }),
+      })
+      .on({
+        operation: 'DashReleases',
+        reply: ({ variables }) => ({
+          data: FakeGithubGraphql.repositories(variables, (fullName) =>
+            ActivityNodes.releasesNode({ fullName }),
+          ),
+        }),
+      });
   }
 
   feed(
@@ -148,6 +149,21 @@ export class FakeGithubGraphql {
       reply === undefined
         ? { data: null, errors: [{ message: `No route for ${operation}` }] }
         : reply(call),
+    );
+  }
+
+  private static repositories(
+    variables: GraphqlVariables,
+    node: (fullName: string) => GithubJson,
+  ): GithubJson {
+    return Object.fromEntries(
+      Object.keys(variables)
+        .filter((key) => key.startsWith('owner'))
+        .map((key) => {
+          const index = key.slice('owner'.length);
+          const fullName = `${String(variables[key])}/${String(variables[`name${index}`])}`;
+          return [`repository${index}`, node(fullName)];
+        }),
     );
   }
 }

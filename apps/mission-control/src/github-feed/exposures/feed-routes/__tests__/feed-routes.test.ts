@@ -76,6 +76,7 @@ describe('GET /integrations/github/feed', () => {
       repository: { fullName: 'acme/app', url: 'https://github.com/acme/app' },
       url: 'https://github.com/acme/app/pull/1',
       updatedAt: '2026-11-26T10:00:00.000Z',
+      mergedAt: null,
       number: 1,
       title: 'Change 1',
       author: 'grace',
@@ -99,9 +100,148 @@ describe('GET /integrations/github/feed', () => {
       connections: [],
       reviewRequests: [],
       myPullRequests: [],
+      recentMerges: [],
+      releases: [],
       failedRuns: [],
       assignedIssues: [],
     });
+  });
+});
+
+class Reads {
+  static merged(mergedAt: string, number = 3) {
+    return GithubFeedFixtures.mergedPullRequest({ number, mergedAt });
+  }
+
+  static release(id: string, publishedAt: string) {
+    return GithubFeedFixtures.release({ id, publishedAt });
+  }
+
+  static async activity(
+    harness: GithubFeedHarness,
+    activity: Partial<ReturnType<typeof GithubFeedFixtures.activity>>,
+  ): Promise<void> {
+    harness.feed.activity = {
+      ...GithubFeedFixtures.activity(),
+      ...activity,
+    };
+    await harness.module.reconcile.syncConnection({
+      connectionId: ownedId,
+    });
+  }
+}
+
+describe('GET /integrations/github/feed recent merges and releases', () => {
+  it('lists merges and releases by when they happened, newest first, with their own links', async () => {
+    const harness = await Served.synced();
+    await Reads.activity(harness, {
+      mergedPullRequests: [
+        Reads.merged('2026-11-26T06:00:00Z', 3),
+        Reads.merged('2026-11-26T09:00:00Z', 4),
+      ],
+      releases: [
+        Reads.release('v1.0.0', '2026-11-26T07:00:00Z'),
+        Reads.release('v1.1.0', '2026-11-26T08:00:00Z'),
+      ],
+    });
+
+    const feed = await Served.feedOf(harness, adaId);
+
+    expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_4', 'PR_3']);
+    expect(feed.recentMerges[0]?.mergedAt).toBe('2026-11-26T09:00:00.000Z');
+    expect(feed.releases.map(({ tagName }) => tagName)).toEqual([
+      'v1.1.0',
+      'v1.0.0',
+    ]);
+    expect(feed.releases[0]).toMatchObject({
+      url: 'https://github.com/acme/app/releases/tag/v1.1.0',
+      repository: { fullName: 'acme/app' },
+      publishedAt: '2026-11-26T08:00:00.000Z',
+    });
+    expect(feed.myPullRequests.map(({ id }) => id)).toEqual(['PR_2']);
+  });
+});
+
+describe('GET /integrations/github/feed retention', () => {
+  it('keeps them across a read that no longer reports them', async () => {
+    const harness = await Served.synced();
+    await Reads.activity(harness, {
+      mergedPullRequests: [Reads.merged('2026-11-26T09:00:00Z')],
+      releases: [Reads.release('v1.0.0', '2026-11-26T07:00:00Z')],
+    });
+    vi.setSystemTime(new Date(fixedNow.getTime() + 15 * 60_000));
+
+    await Reads.activity(harness, {});
+    const feed = await Served.feedOf(harness, adaId);
+
+    expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_3']);
+    expect(feed.releases.map(({ tagName }) => tagName)).toEqual(['v1.0.0']);
+  });
+
+  it('ages them out 48 hours after they happened', async () => {
+    const harness = await Served.synced();
+    const mergedAt = '2026-11-26T09:00:00Z';
+    await Reads.activity(harness, {
+      mergedPullRequests: [Reads.merged(mergedAt)],
+      releases: [Reads.release('v1.0.0', mergedAt)],
+    });
+    const atTheBoundary = new Date(Date.parse(mergedAt) + 48 * 3_600_000);
+
+    vi.setSystemTime(atTheBoundary);
+    await Reads.activity(harness, {});
+    const kept = await Served.feedOf(harness, adaId);
+
+    vi.setSystemTime(new Date(atTheBoundary.getTime() + 1000));
+    await Reads.activity(harness, {});
+    const aged = await Served.feedOf(harness, adaId);
+
+    expect(kept.recentMerges).toHaveLength(1);
+    expect(kept.releases).toHaveLength(1);
+    expect(aged.recentMerges).toEqual([]);
+    expect(aged.releases).toEqual([]);
+  });
+});
+
+describe('GET /integrations/github/feed releases deleted on GitHub', () => {
+  it('drops the release of a repository the read saw empty, and keeps an unread repository’s and a merge', async () => {
+    const harness = await Served.synced();
+    const other = {
+      ...GithubFeedFixtures.activity().repositories[0]!,
+      externalId: 'R_other',
+      fullName: 'acme/other',
+      url: 'https://github.com/acme/other',
+    };
+    const repositories = [...GithubFeedFixtures.activity().repositories, other];
+    await Reads.activity(harness, {
+      repositories,
+      mergedPullRequests: [Reads.merged('2026-11-26T09:00:00Z')],
+      releases: [
+        Reads.release('v1.0.0', '2026-11-26T07:00:00Z'),
+        {
+          ...Reads.release('other-v1.0.0', '2026-11-26T07:30:00Z'),
+          repositoryId: 'R_other',
+        },
+      ],
+    });
+    vi.setSystemTime(new Date(fixedNow.getTime() + 15 * 60_000));
+
+    await Reads.activity(harness, {
+      repositories,
+      releases: [],
+      releaseReads: [
+        {
+          repositoryId: 'R_app',
+          exhaustive: true,
+          oldestPublishedAt: null,
+        },
+      ],
+    });
+    const feed = await Served.feedOf(harness, adaId);
+
+    expect(feed.releases.map(({ tagName }) => tagName)).toEqual([
+      'other-v1.0.0',
+    ]);
+    expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_3']);
   });
 });
 
@@ -127,6 +267,7 @@ describe('GET /integrations/github/feed across connection kinds', () => {
         activity: GithubFeedFixtures.activity(),
         viewerLogin: 'ada',
       }),
+      releaseReads: [],
       truncated: false,
       syncedAt: fixedNow,
     });
