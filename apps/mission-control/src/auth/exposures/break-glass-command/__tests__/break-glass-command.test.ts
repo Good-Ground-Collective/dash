@@ -4,19 +4,13 @@ import { PasskeyIdentity } from '#src/auth/__tests__/support/passkey-identity.ts
 import { BreakGlassCommand } from '#src/auth/exposures/break-glass-command/break-glass-command.ts';
 
 class EnrolmentLink {
-  private readonly stdout: string;
+  static readonly TOKEN_PATTERN = /^recovery-enrolment:[\w-]{32}$/u;
 
-  constructor(stdout: string) {
-    this.stdout = stdout;
-  }
-
-  enrolment(): string | null {
-    const link = /http:\/\/\S+/u.exec(this.stdout)?.[0];
+  static enrolmentIn(stdout: string): string | null {
+    const link = /http:\/\/\S+/u.exec(stdout)?.[0];
     if (link === undefined) return null;
     return new URLSearchParams(new URL(link).hash.slice(1)).get('enrolment');
   }
-
-  static readonly TOKEN_PATTERN = /^recovery-enrolment:[\w-]{32}$/u;
 }
 
 class Captured {
@@ -49,7 +43,7 @@ describe('BreakGlassCommand', () => {
     expect(run.stdout.text).toContain(
       'http://localhost:5173/recover/passkey#enrolment=recovery-enrolment%3A',
     );
-    expect(new EnrolmentLink(run.stdout.text).enrolment()).toMatch(
+    expect(EnrolmentLink.enrolmentIn(run.stdout.text)).toMatch(
       EnrolmentLink.TOKEN_PATTERN,
     );
     expect(run.stdout.text).toContain('expires at');
@@ -60,14 +54,10 @@ describe('BreakGlassCommand', () => {
     const token = '-a_Z9-'.padEnd(32, 'k');
     const stdout = `Open http://localhost:5173/recover/passkey#enrolment=recovery-enrolment%3A${token}\nexpires at soon\n`;
 
-    expect(token).toHaveLength(32);
-    expect(new EnrolmentLink(stdout).enrolment()).toBe(
-      `recovery-enrolment:${token}`,
-    );
-    expect(new EnrolmentLink(stdout).enrolment()).toMatch(
-      EnrolmentLink.TOKEN_PATTERN,
-    );
-    expect(stdout).not.toMatch(/recovery-enrolment%3A\w+/u);
+    const enrolment = EnrolmentLink.enrolmentIn(stdout);
+
+    expect(enrolment).toBe(`recovery-enrolment:${token}`);
+    expect(enrolment).toMatch(EnrolmentLink.TOKEN_PATTERN);
   });
 
   it('says so when nobody has that email', async () => {
