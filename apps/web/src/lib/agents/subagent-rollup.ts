@@ -49,7 +49,6 @@ export class SubagentRollup {
       .join(', ');
   }
 
-  /** “3 subagents”. */
   static total(subagents: readonly Subagent[]): string {
     const count = subagents.length;
     return `${count} subagent${count === 1 ? '' : 's'}`;

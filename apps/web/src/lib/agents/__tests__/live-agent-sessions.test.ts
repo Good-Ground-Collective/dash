@@ -10,9 +10,11 @@ const { session, subagent, update, wire } = SampleAgentSessions;
 class Reads {
   calls = 0;
   answers: (AgentSession[] | Error)[] = [];
+  during: () => void = () => undefined;
 
   list = async (): Promise<AgentSession[]> => {
     this.calls += 1;
+    this.during();
     const answer = this.answers.shift() ?? [];
     if (answer instanceof Error) throw answer;
     return answer;
@@ -163,6 +165,27 @@ describe('LiveAgentSessions resync', () => {
     await Following.flush();
     expect(feed.loaded).toBe(true);
     expect(feed.sessions.list).toHaveLength(1);
+  });
+});
+
+describe('LiveAgentSessions resync under constant change', () => {
+  it('adopts the last snapshot with the events that landed during it when every read is interrupted', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    reads.answers = [[session('one')], [session('two')], [session('three')]];
+    reads.during = () =>
+      Frames.send(
+        update({ sessionId: `during-${reads.calls}`, agentId: null }),
+      );
+
+    FakeEventSource.latest().open();
+    await Following.flush();
+
+    expect(reads.calls).toBe(3);
+    expect(feed.loaded).toBe(true);
+    expect(
+      feed.sessions.list.map((entry) => entry.sessionId).toSorted(),
+    ).toEqual(['during-3', 'three']);
   });
 });
 

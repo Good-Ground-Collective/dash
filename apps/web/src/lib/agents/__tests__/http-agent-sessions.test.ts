@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import { HttpAgentSessions } from '#lib/agents/http-agent-sessions.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
@@ -90,6 +91,6 @@ describe('HttpAgentSessions', () => {
       }).fetch,
     });
 
-    await expect(reads.list()).rejects.toThrow();
+    await expect(reads.list()).rejects.toBeInstanceOf(ZodError);
   });
 });

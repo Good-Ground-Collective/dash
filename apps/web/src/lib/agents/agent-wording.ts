@@ -28,6 +28,9 @@ const statusTones = {
 
 /** The words and tones the Agents page uses for what agents report. */
 export class AgentWording {
+  static readonly STALE_AFTER_MINUTES = 10;
+  static readonly LOST_AFTER_MINUTES = 30;
+
   /** Lowercase, so counts read “12 working, 3 done”. */
   static statusLabel(status: AgentStatus): string {
     return statusLabels[status];
@@ -57,8 +60,8 @@ export class AgentWording {
   static livenessHint(liveness: AgentLiveness): string | null {
     if (liveness === 'live') return null;
     return liveness === 'stale'
-      ? 'Working, but silent for over 10 minutes'
-      : 'Working, but silent for over 30 minutes';
+      ? `Working, but silent for over ${AgentWording.STALE_AFTER_MINUTES} minutes`
+      : `Working, but silent for over ${AgentWording.LOST_AFTER_MINUTES} minutes`;
   }
 
   /** What failed, as the agent reported it. */

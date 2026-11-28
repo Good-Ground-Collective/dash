@@ -144,6 +144,11 @@ test('subagents roll up into one row and expand to list each one', async () => {
     'true',
   );
   await expect(orchestrator.locator('li.subagent')).toHaveCount(7);
+  const listId =
+    await Sessions.toggle('studio-hooks').getAttribute('aria-controls');
+  expect(listId).not.toBeNull();
+  await expect(page.locator(`[id="${listId}"]`)).toBeVisible();
+  await expect(page.locator(`[id="${listId}"]`)).toHaveClass(/subagents/u);
   const asking = orchestrator.locator(
     'li.subagent[data-agent-id="schema-checker"]',
   );

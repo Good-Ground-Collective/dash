@@ -14,6 +14,8 @@
     focused,
   }: { session: AgentSession; now: Date; focused: boolean } = $props();
 
+  const subagentsId = $props.id();
+
   let expanded = $state(false);
   let element: HTMLLIElement | undefined = $state();
 
@@ -52,7 +54,7 @@
         class="toggle"
         type="button"
         aria-expanded={expanded}
-        aria-controls={`subagents-${key}`}
+        aria-controls={expanded ? subagentsId : undefined}
         aria-label={`Subagents of ${session.reporterName}`}
         onclick={() => {
           expanded = !expanded;
@@ -81,7 +83,7 @@
     <time class="since" datetime={reportedAt.toISOString()}>{since}</time>
   </div>
   {#if hasSubagents && expanded}
-    <ul class="subagents" id={`subagents-${key}`} aria-label="Subagents">
+    <ul class="subagents" id={subagentsId} aria-label="Subagents">
       {#each session.subagents as subagent (subagent.agentId)}
         <SubagentRow {subagent} {now} />
       {/each}

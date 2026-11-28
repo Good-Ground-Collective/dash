@@ -1,6 +1,9 @@
 import { createSubscriber } from 'svelte/reactivity';
 import { z } from 'zod';
-import type { AgentSession } from '#lib/agents/agent-session-contracts.ts';
+import type {
+  AgentSession,
+  AgentSessionState,
+} from '#lib/agents/agent-session-contracts.ts';
 import { AgentSessionLiveEvents } from '#lib/agents/agent-session-live-events.ts';
 import { AgentSessions } from '#lib/agents/agent-sessions.ts';
 import type { AgentSessionReads } from '#lib/agents/http-agent-sessions.ts';
@@ -49,7 +52,7 @@ export class LiveAgentSessions implements AgentSessionFeed {
   });
   private held: AgentSessions;
   private read: boolean;
-  private changes = 0;
+  private arrived: AgentSessionState[] = [];
 
   constructor(props: LiveAgentSessionsProps) {
     const valid = liveAgentSessionsPropsSchema.parse(props);
@@ -73,7 +76,7 @@ export class LiveAgentSessions implements AgentSessionFeed {
     return this.stream.subscribe({
       definition: AgentSessionLiveEvents.UPDATED,
       onEvent: (state) => {
-        this.changes += 1;
+        this.arrived.push(state);
         this.held = this.held.applyUpdate(state);
         this.notify();
       },
@@ -85,20 +88,25 @@ export class LiveAgentSessions implements AgentSessionFeed {
     for (const update of this.changed) update();
   }
 
-  /** An event that lands while the read is in flight makes the read stale, so it goes again. A read that fails leaves the sessions as they are. */
+  /** An event that lands while the read is in flight makes the read stale, so it goes again. When every read is interrupted, the last snapshot is adopted with the events that landed during it replayed on top. A read that fails leaves the sessions as they are. */
   private async resync(): Promise<void> {
     for (let attempt = 0; attempt < maxResyncAttempts; attempt += 1) {
-      const before = this.changes;
+      this.arrived = [];
       try {
         const sessions = await this.reads.list();
-        if (this.changes === before) {
-          this.held = AgentSessions.of(sessions);
-          this.read = true;
-          this.notify();
-          return;
-        }
+        const interrupted = this.arrived.length > 0;
+        if (interrupted && attempt < maxResyncAttempts - 1) continue;
+        this.held = this.arrived.reduce(
+          (held, state) => held.applyUpdate(state),
+          AgentSessions.of(sessions),
+        );
+        this.read = true;
+        this.notify();
+        return;
       } catch {
         return;
+      } finally {
+        this.arrived = [];
       }
     }
   }

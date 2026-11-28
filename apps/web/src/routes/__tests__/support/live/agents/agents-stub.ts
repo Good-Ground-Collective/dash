@@ -55,12 +55,14 @@ export class AgentsStub {
 
   private route(props: { url: URL; signedIn: boolean }): StubJson {
     const { pathname, searchParams } = props.url;
+
     if (pathname === '/api/agents/__stub/scenario') {
       const name = scenarioSchema.parse(searchParams.get('name'));
       const rows = name === 'several' ? AgentScenarios.several() : [];
       this.rows = new Map(rows.map((row) => [AgentSessionRows.key(row), row]));
       return { status: 200, body: { scenario: name } };
     }
+
     if (pathname === '/api/agents/__stub/change') {
       const name = changeSchema.parse(searchParams.get('name'));
       const row = AgentScenarios.change(name);
@@ -68,9 +70,11 @@ export class AgentsStub {
       this.events.publish({ type: 'agent.session.updated', data: row });
       return { status: 200, body: { changed: name } };
     }
+
     if (!props.signedIn) {
       return { status: 401, body: { code: 'SIGN_IN_REQUIRED' } };
     }
+
     return { status: 200, body: { sessions: this.sessions() } };
   }
 

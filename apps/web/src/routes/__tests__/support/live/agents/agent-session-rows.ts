@@ -61,6 +61,7 @@ export class AgentSessionRows {
     agentId: string | null;
     status: string;
     minutesAgo: number;
+    reportedBy?: string;
     reporterName?: string;
     benchId?: string | null;
     harness?: string;
@@ -74,7 +75,7 @@ export class AgentSessionRows {
   }): StubAgentRow {
     const at = AgentSessionRows.minutesAgo(props.minutesAgo);
     return {
-      reportedBy: stubReportedBy,
+      reportedBy: props.reportedBy ?? stubReportedBy,
       sessionId: props.sessionId,
       agentId: props.agentId,
       reporterName: props.reporterName ?? 'studio-hooks',
@@ -103,8 +104,10 @@ export class AgentSessionRows {
   /** Rolls rows up under their sessions, most recently updated first, as `GET /api/agents/sessions` does. */
   static sessions(rows: readonly StubAgentRow[]): StubAgentSessionRow[] {
     const sessions = new Map<string, StubAgentSessionRow>();
+
     for (const row of rows) {
       const key = `${row.reportedBy}/${row.sessionId}`;
+
       const session = sessions.get(key) ?? {
         reportedBy: row.reportedBy,
         sessionId: row.sessionId,
@@ -114,6 +117,7 @@ export class AgentSessionRows {
         parent: null,
         subagents: [],
       };
+
       const {
         reportedBy: _reportedBy,
         sessionId: _sessionId,
@@ -123,10 +127,12 @@ export class AgentSessionRows {
         agentId,
         ...activity
       } = row;
+
       if (agentId === null) session.parent = activity;
       else session.subagents.push({ ...activity, agentId });
       sessions.set(key, session);
     }
+
     return [...sessions.values()].toSorted(
       (left, right) =>
         AgentSessionRows.latest(right) - AgentSessionRows.latest(left),

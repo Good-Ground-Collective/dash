@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { API_BASE_URL } from '$app/env/public';
   import { page } from '$app/state';
+  import { AgentWording } from '#lib/agents/agent-wording.ts';
   import { AgentSessionLink } from '#lib/agents/agent-session-link.ts';
   import { HttpAgentSessions } from '#lib/agents/http-agent-sessions.ts';
   import { LiveAgentSessions } from '#lib/agents/live-agent-sessions.ts';
@@ -80,9 +81,9 @@
       {/if}
     </HomeSection>
     <p class="note">
-      Agents report through heartbeats. A working agent that goes quiet for 10
-      minutes shows as stale, and after 30 minutes as lost; its next heartbeat
-      brings it back.
+      Agents report through heartbeats. A working agent that goes quiet for {AgentWording.STALE_AFTER_MINUTES}
+      minutes shows as stale, and after {AgentWording.LOST_AFTER_MINUTES} minutes
+      as lost; its next heartbeat brings it back.
     </p>
   {/if}
 </section>

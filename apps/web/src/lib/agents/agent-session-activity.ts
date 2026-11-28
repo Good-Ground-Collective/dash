@@ -9,7 +9,7 @@ const endedStatuses: readonly AgentStatus[] = ['complete', 'failed', 'error'];
 
 /** What a whole session is doing, read from its own state and its subagents'. */
 export class AgentSessionActivity {
-  /** One session is its reporting key plus its session id. */
+  /** Two reporters sending the same session id are two sessions. */
   static key(props: { reportedBy: string; sessionId: string }): string {
     return `${props.reportedBy}/${props.sessionId}`;
   }
@@ -40,7 +40,6 @@ export class AgentSessionActivity {
     return subagents.includes('stale') ? 'stale' : 'live';
   }
 
-  /** Not ended, and still reporting. */
   static isActive(session: AgentSession): boolean {
     const status = AgentSessionActivity.status(session);
     const ended = status !== null && endedStatuses.includes(status);
