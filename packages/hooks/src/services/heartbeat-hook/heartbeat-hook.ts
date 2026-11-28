@@ -70,17 +70,32 @@ export class ClaudeCodeHeartbeatHook implements HeartbeatHook {
     const event = HookEventNames.fromCommand(invocation.command);
     const input = hookStdinSchema.parse(invocation.stdin.trim());
 
-    if (event === 'SessionStart') {
-      await OutboxRetention.prune(this.config, invocation.now);
-    }
-
     const plan = HeartbeatMapper.plan({
       event,
       input,
       machine: this.config.machine,
     });
-    return plan === undefined
-      ? undefined
-      : this.ledger.record(plan, invocation.now);
+    const heartbeat =
+      plan === undefined
+        ? undefined
+        : await this.ledger.record(plan, invocation.now);
+
+    if (event === 'SessionStart') {
+      await this.pruneOutbox(invocation);
+    }
+    return heartbeat;
+  }
+
+  /** Runs after the heartbeat is written and logs its own failures, so housekeeping never costs a heartbeat. */
+  private async pruneOutbox(invocation: HookInvocation): Promise<void> {
+    try {
+      await OutboxRetention.prune(this.config, invocation.now);
+    } catch (cause) {
+      this.log.failure({
+        event: invocation.command ?? '',
+        cause,
+        now: invocation.now,
+      });
+    }
   }
 }

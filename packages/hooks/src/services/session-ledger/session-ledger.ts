@@ -68,7 +68,7 @@ export class FileSessionLedger implements SessionLedger {
     await mkdir(this.config.sessionsDirectory, { recursive: true });
     await mkdir(this.config.outboxDirectory, { recursive: true });
 
-    return FileLock.hold(`${statePath}.lock`, async () => {
+    return new FileLock({ lockPath: `${statePath}.lock` }).hold(async () => {
       const state = await this.load(statePath, outboxPath);
       if (!this.shouldWrite(plan, state, now)) {
         return undefined;

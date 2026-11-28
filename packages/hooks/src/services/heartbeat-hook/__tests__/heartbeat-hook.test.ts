@@ -1,4 +1,4 @@
-import { rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -283,6 +283,19 @@ describe('ClaudeCodeHeartbeatHook failures and upkeep', () => {
 
     expect(await state.heartbeats('old-session')).toEqual([]);
     expect(await state.heartbeats(sessionId)).toHaveLength(1);
+  });
+
+  it('still writes the session-start heartbeat when pruning fails, and logs why', async () => {
+    const stuck = path.join(state.config.outboxDirectory, 'stuck.jsonl');
+    await mkdir(stuck, { recursive: true });
+    const longAgo = new Date('2026-01-01T00:00:00Z');
+    await utimes(stuck, longAgo, longAgo);
+
+    await state.run('session-start', Payloads.for('session-start'));
+
+    expect(await state.heartbeats(sessionId)).toHaveLength(1);
+    expect(await state.log()).toContain('session-start');
+    expect(await state.log()).toContain('stuck.jsonl');
   });
 
   it('keeps counting after the counter file is lost', async () => {

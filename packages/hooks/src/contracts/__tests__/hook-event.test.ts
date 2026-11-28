@@ -36,6 +36,59 @@ const hooksFileSchema = z.object({
   ),
 });
 
+const versionSchema = z
+  .string()
+  .regex(/^\d+\.\d+\.\d+$/)
+  .transform((version) => version.split('.').map(Number));
+
+const pluginManifestSchema = z.object({ version: versionSchema });
+
+const pluginPackageSchema = z.object({
+  dependencies: z.object({
+    '@good-ground-collective/dash-hooks': z
+      .string()
+      .regex(/^\^\d+\.\d+\.\d+$/)
+      .transform((range) => range.slice(1))
+      .pipe(versionSchema),
+  }),
+});
+
+/**
+ * The dash-heartbeats plugin's own version and the dash-hooks version it pins. Claude Code keeps
+ * an installed plugin on its cached copy until `plugin.json`'s version changes, so a raised pin
+ * only reaches users alongside a version bump.
+ */
+class DashHeartbeatsPlugin {
+  static readonly DIRECTORY = new URL(
+    '../../../../../plugins/dash-heartbeats/',
+    import.meta.url,
+  );
+
+  static async version(): Promise<number[]> {
+    const manifest = await DashHeartbeatsPlugin.read(
+      '.claude-plugin/plugin.json',
+      pluginManifestSchema,
+    );
+    return manifest.version;
+  }
+
+  static async pinnedHooksVersion(): Promise<number[]> {
+    const pkg = await DashHeartbeatsPlugin.read(
+      'package.json',
+      pluginPackageSchema,
+    );
+    return pkg.dependencies['@good-ground-collective/dash-hooks'];
+  }
+
+  private static async read<T extends z.ZodType>(
+    file: string,
+    schema: T,
+  ): Promise<z.output<T>> {
+    const url = new URL(file, DashHeartbeatsPlugin.DIRECTORY);
+    return schema.parse(JSON.parse(await readFile(url, 'utf8')));
+  }
+}
+
 class Registrations {
   static readonly PACKAGE = new URL(
     '../../../hooks/hooks.json',
@@ -194,5 +247,16 @@ describe('hook commands as Claude Code runs them', () => {
     expect((await exec.received()).sort()).toEqual(
       Object.keys(hookCommands).sort(),
     );
+  });
+});
+
+describe('dash-heartbeats plugin version', () => {
+  it('moves with the dash-hooks version the plugin pins', async () => {
+    const [major, minor, patch] = await DashHeartbeatsPlugin.version();
+    const [pinMajor, pinMinor, pinPatch] =
+      await DashHeartbeatsPlugin.pinnedHooksVersion();
+
+    expect([major, minor]).toEqual([pinMajor, pinMinor]);
+    expect(patch).toBeGreaterThanOrEqual(pinPatch ?? 0);
   });
 });
