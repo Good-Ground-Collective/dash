@@ -1,3 +1,5 @@
+import { GithubFeedBranches } from './github-feed-branches.ts';
+
 export const acme = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0001';
 export const night = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0002';
 export const ada = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0003';
@@ -10,6 +12,7 @@ export class GithubFeedItems {
       myPullRequests: GithubFeedItems.myPullRequests(),
       recentMerges: GithubFeedItems.recentMerges(),
       releases: GithubFeedItems.releases(),
+      defaultBranches: GithubFeedBranches.all(),
       ...GithubFeedItems.runsAndIssues(),
     };
   }
@@ -59,33 +62,51 @@ export class GithubFeedItems {
   private static myPullRequests() {
     const pull = GithubFeedItems.pull;
     return [
-      pull({
-        repo: 'acme-labs/api',
-        number: 418,
-        title: 'Retry webhooks with backoff',
-        minutes: 30,
-        review: 'approved',
-        checks: { state: 'success', success: 6, failure: 0, pending: 0 },
-      }),
-      pull({
-        repo: 'acme-labs/web',
-        number: 90,
-        title: 'Show sync freshness on the dashboard',
-        minutes: 75,
-        review: 'changes_requested',
-        checks: { state: 'failure', success: 4, failure: 2, pending: 0 },
-      }),
-      pull({
-        repo: 'night-shift/ops',
-        number: 33,
-        title: 'Pin the runner image',
-        minutes: 300,
-        review: 'review_required',
-        mergeable: 'conflicting',
-        mergeState: 'dirty',
-        checks: { state: 'pending', success: 2, failure: 0, pending: 3 },
-        connection: night,
-      }),
+      {
+        ...pull({
+          repo: 'acme-labs/api',
+          number: 418,
+          title: 'Retry webhooks with backoff',
+          minutes: 30,
+          review: 'approved',
+          checks: { state: 'success', success: 6, failure: 0, pending: 0 },
+        }),
+        failingChecks: [],
+        checkCount: 6,
+      },
+      {
+        ...pull({
+          repo: 'acme-labs/web',
+          number: 90,
+          title: 'Show sync freshness on the dashboard',
+          minutes: 75,
+          review: 'changes_requested',
+          checks: { state: 'failure', success: 4, failure: 2, pending: 0 },
+        }),
+        failingChecks: [
+          {
+            name: 'build',
+            url: 'https://github.com/acme-labs/web/actions/runs/1284',
+          },
+          { name: 'codecov/patch', url: null },
+        ],
+        checkCount: 6,
+      },
+      {
+        ...pull({
+          repo: 'night-shift/ops',
+          number: 33,
+          title: 'Pin the runner image',
+          minutes: 300,
+          review: 'review_required',
+          mergeable: 'conflicting',
+          mergeState: 'dirty',
+          checks: { state: 'pending', success: 2, failure: 0, pending: 3 },
+          connection: night,
+        }),
+        failingChecks: [],
+        checkCount: 5,
+      },
     ];
   }
 

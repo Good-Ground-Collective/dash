@@ -6,7 +6,11 @@ export interface EpicGeometry {
   rowHeight: number;
 }
 
-/** Where each epic's chip, title and row sit, measured in the browser. */
+/**
+ * Browser-measured layout of the objectives tree: epic rows (chip, title,
+ * height), progress tracks, actions-button position, and an initiative's
+ * count text.
+ */
 export class EpicGeometries {
   static async measure(panel: Locator): Promise<EpicGeometry[]> {
     return panel.locator('[aria-label^="Epics in"] > li').evaluateAll((items) =>
@@ -33,11 +37,20 @@ export class EpicGeometries {
     );
   }
 
-  /** The left edge and width of every epic's progress track. */
-  static async trackBoxes(
+  /** One epic's geometry, by title. */
+  static async of(
     panel: Locator,
-  ): Promise<{ x: number; width: number }[]> {
-    return panel
+    title: string,
+  ): Promise<EpicGeometry | undefined> {
+    const all = await EpicGeometries.measure(panel);
+    return all.find((candidate) => candidate.title === title);
+  }
+
+  /** How many progress tracks there are, and how many distinct left edges and widths they have. */
+  static async trackLayout(
+    panel: Locator,
+  ): Promise<{ count: number; lefts: number; widths: number }> {
+    const boxes = await panel
       .locator('[aria-label^="Epics in"] > li .track')
       .evaluateAll((nodes) =>
         nodes.map((node) => {
@@ -45,6 +58,11 @@ export class EpicGeometries {
           return { x: box.x, width: box.width };
         }),
       );
+    return {
+      count: boxes.length,
+      lefts: new Set(boxes.map((box) => box.x)).size,
+      widths: new Set(boxes.map((box) => box.width)).size,
+    };
   }
 
   /** An initiative's count text, and whether it stays inside its progress box. */
@@ -63,5 +81,24 @@ export class EpicGeometries {
           fits: labelBox !== undefined && labelBox.right <= box.right + 0.5,
         };
       });
+  }
+
+  /** The left edge of an epic's actions button. */
+  static async menuX(
+    panel: Locator,
+    title: string,
+  ): Promise<number | undefined> {
+    const box = await panel
+      .getByRole('button', { name: `Change ${title}` })
+      .boundingBox();
+    return box?.x;
+  }
+
+  /** The height of the one row matching the text. */
+  static async rowHeight(
+    rows: Locator,
+    title: string,
+  ): Promise<number | undefined> {
+    return (await rows.filter({ hasText: title }).boundingBox())?.height;
   }
 }

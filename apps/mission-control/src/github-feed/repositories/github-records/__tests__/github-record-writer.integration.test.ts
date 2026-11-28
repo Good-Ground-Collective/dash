@@ -143,3 +143,122 @@ describe.skipIf(databaseUrl === null)(
     });
   },
 );
+
+class Checks {
+  static async write(props: {
+    checks: typeof merged.checks;
+    at: Date;
+  }): Promise<typeof merged.checks> {
+    await GithubRecordsDatabase.required(store).writer.replace({
+      connectionId: ownedId,
+      viewerLogin: 'ada',
+      truncated: false,
+      releaseReads: [],
+      records: { ...merged, checks: props.checks },
+      syncedAt: props.at,
+    });
+    return (await Stored.owned())?.records.checks ?? [];
+  }
+
+  static withLint(state: 'failure' | 'success') {
+    return merged.checks.map((check) =>
+      check.name === 'lint' ? { ...check, state } : check,
+    );
+  }
+
+  static lintOf(checks: typeof merged.checks) {
+    return checks.find(({ name }) => name === 'lint');
+  }
+}
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter failing_since',
+  () => {
+    const third = new Date(later.getTime() + 15 * 60_000);
+    const fourth = new Date(third.getTime() + 15 * 60_000);
+
+    it('keeps when a check first failed while it keeps failing, clears it on a pass, and starts fresh on a new failure', async () => {
+      const first = await Checks.write({
+        checks: Checks.withLint('failure'),
+        at: fixedNow,
+      });
+      const again = await Checks.write({
+        checks: Checks.withLint('failure'),
+        at: later,
+      });
+      const passing = await Checks.write({
+        checks: Checks.withLint('success'),
+        at: third,
+      });
+      const failedAgain = await Checks.write({
+        checks: Checks.withLint('failure'),
+        at: fourth,
+      });
+
+      expect(Checks.lintOf(first)?.failingSince).toBe(fixedNow.toISOString());
+      expect(Checks.lintOf(again)?.failingSince).toBe(fixedNow.toISOString());
+      expect(Checks.lintOf(passing)?.failingSince).toBeNull();
+      expect(Checks.lintOf(failedAgain)?.failingSince).toBe(
+        fourth.toISOString(),
+      );
+    });
+
+    it('never sets it on a check that is not failing', async () => {
+      const stored = await Checks.write({
+        checks: merged.checks,
+        at: fixedNow,
+      });
+
+      expect(
+        stored.find(({ name }) => name === 'codecov/patch')?.failingSince,
+      ).toBeNull();
+    });
+
+    it('replaces a check that moved to a newer head and prunes one the read no longer reports', async () => {
+      await Checks.write({ checks: merged.checks, at: fixedNow });
+
+      const stored = await Checks.write({
+        checks: merged.checks
+          .filter(({ name }) => name !== 'codecov/patch')
+          .map((check) => ({ ...check, headSha: 'newer-head' })),
+        at: later,
+      });
+
+      expect(stored.map(({ name }) => name).toSorted()).toEqual([
+        'build',
+        'lint',
+      ]);
+      expect(stored.every(({ headSha }) => headSha === 'newer-head')).toBe(
+        true,
+      );
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter failing_since across a pending read',
+  () => {
+    const third = new Date(later.getTime() + 15 * 60_000);
+
+    it('starts afresh when a check fails again after a pending read', async () => {
+      const withLintState = (state: 'failure' | 'pending') =>
+        merged.checks.map((check) =>
+          check.name === 'lint' ? { ...check, state } : check,
+        );
+      await Checks.write({ checks: withLintState('failure'), at: fixedNow });
+      const pending = await Checks.write({
+        checks: withLintState('pending'),
+        at: later,
+      });
+      const failedAgain = await Checks.write({
+        checks: withLintState('failure'),
+        at: third,
+      });
+
+      expect(Checks.lintOf(pending)?.failingSince).toBeNull();
+      expect(Checks.lintOf(failedAgain)?.failingSince).toBe(
+        third.toISOString(),
+      );
+    });
+  },
+);

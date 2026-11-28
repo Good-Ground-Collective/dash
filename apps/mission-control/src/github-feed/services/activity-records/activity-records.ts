@@ -1,11 +1,13 @@
 import type {
   Activity,
+  ActivityCheck,
   ActivityPullRequest,
   ActivityRelease,
 } from '@dash/integrations-core';
 
 import type {
   GithubAssignmentRecord,
+  GithubCheckRecord,
   GithubCheckRollupRecord,
   GithubIssueRecord,
   GithubPullRequestRecord,
@@ -15,6 +17,14 @@ import type {
   GithubReviewRequestRecord,
   GithubWorkflowRunRecord,
 } from '#src/github-feed/contracts/github-records.ts';
+
+const checkSeverity = {
+  success: 0,
+  skipped: 1,
+  neutral: 2,
+  pending: 3,
+  failure: 4,
+} as const satisfies Record<GithubCheckRecord['state'], number>;
 
 /**
  * A provider's activity read as the rows the GitHub tables keep. Duplicates collapse on
@@ -36,6 +46,10 @@ export class ActivityRecords {
       (pullRequest) => pullRequest.externalId,
     );
 
+    const branches = new Map(
+      activity.defaultBranches.map((branch) => [branch.repositoryId, branch]),
+    );
+
     return {
       repositories: ActivityRecords.unique(
         activity.repositories.map((repository) => ({
@@ -43,6 +57,12 @@ export class ActivityRecords {
           fullName: repository.fullName,
           url: repository.url,
           defaultBranch: repository.defaultBranch,
+          defaultBranchHeadSha:
+            branches.get(repository.externalId)?.headSha ?? null,
+          defaultBranchState:
+            branches.get(repository.externalId)?.state ?? null,
+          defaultBranchChecksTruncated:
+            branches.get(repository.externalId)?.checksTruncated ?? false,
           archived: repository.archived,
         })),
         (repository) => repository.nodeId,
@@ -64,6 +84,7 @@ export class ActivityRecords {
       checkRollups: pullRequests.flatMap((pullRequest) =>
         ActivityRecords.checkRollup(pullRequest),
       ),
+      checks: ActivityRecords.checks(activity),
       workflowRuns: ActivityRecords.workflowRuns(activity),
       issues: ActivityRecords.issues(activity),
       assignments: ActivityRecords.assignments({ activity, viewerLogin }),
@@ -110,6 +131,34 @@ export class ActivityRecords {
       (assignment) =>
         `${assignment.subjectNodeId}:${assignment.login}:${assignment.role}`,
     );
+  }
+
+  /** A check name read twice on one subject keeps its worst state, whatever the order, with that check's own kind, app and url. */
+  private static checks(activity: Activity): GithubCheckRecord[] {
+    const worst = new Map<string, GithubCheckRecord>();
+    for (const record of activity.checks.map(
+      (check: ActivityCheck): GithubCheckRecord => ({
+        subjectNodeId: check.subjectId,
+        subjectKind: check.subjectKind,
+        name: check.name,
+        headSha: check.headSha,
+        kind: check.kind,
+        app: check.app,
+        state: check.state,
+        url: check.url,
+        failingSince: null,
+      }),
+    )) {
+      const key = `${record.subjectNodeId}:${record.name}`;
+      const kept = worst.get(key);
+      if (
+        kept === undefined ||
+        checkSeverity[record.state] > checkSeverity[kept.state]
+      ) {
+        worst.set(key, record);
+      }
+    }
+    return [...worst.values()];
   }
 
   private static workflowRuns(activity: Activity): GithubWorkflowRunRecord[] {

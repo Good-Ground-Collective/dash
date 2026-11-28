@@ -113,6 +113,59 @@ export class GithubFeedFixtures {
     };
   }
 
+  /** The default branch of `acme/app` with its head's checks, and a failing check on the head of pull request 2. */
+  static checkReads(): Pick<Activity, 'defaultBranches' | 'checks'> {
+    return {
+      defaultBranches: [
+        {
+          repositoryId: 'R_app',
+          branch: 'main',
+          headSha: 'main-head',
+          state: 'failure',
+          checksTruncated: false,
+        },
+      ],
+      checks: [
+        {
+          subjectKind: 'default_branch',
+          subjectId: 'R_app',
+          headSha: 'main-head',
+          name: 'build',
+          kind: 'check_run',
+          app: 'github-actions',
+          state: 'failure',
+          url: 'https://github.com/acme/app/runs/1',
+          workflowRunId: 9,
+          jobId: 11,
+        },
+        {
+          subjectKind: 'default_branch',
+          subjectId: 'R_app',
+          headSha: 'main-head',
+          name: 'codecov/patch',
+          kind: 'status',
+          app: null,
+          state: 'success',
+          url: null,
+          workflowRunId: null,
+          jobId: null,
+        },
+        {
+          subjectKind: 'pull_request',
+          subjectId: 'PR_2',
+          headSha: 'sha2',
+          name: 'lint',
+          kind: 'check_run',
+          app: 'github-actions',
+          state: 'failure',
+          url: 'https://github.com/acme/app/runs/2',
+          workflowRunId: 10,
+          jobId: 12,
+        },
+      ],
+    };
+  }
+
   static activity(): Activity {
     return {
       repositories: [
@@ -154,6 +207,7 @@ export class GithubFeedFixtures {
           updatedAt: '2026-11-26T09:00:00Z',
         },
       ],
+      ...GithubFeedFixtures.checkReads(),
       assignedIssues: [
         {
           provider: 'github',
@@ -183,6 +237,7 @@ export class GithubFeedFixtures {
       recentMerges: feed?.recentMerges.map(item),
       releases: feed?.releases.map(item),
       failedRuns: feed?.failedRuns.map(item),
+      defaultBranches: feed?.defaultBranches,
       assignedIssues: feed?.assignedIssues.map(item),
     };
   }

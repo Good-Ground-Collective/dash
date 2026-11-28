@@ -45,6 +45,7 @@ export class ActivityNodes {
     fullName?: string;
     suites?: GithubJson[];
     mergedAt?: string;
+    contexts?: GithubJson[];
     mergeStateStatus?: string | null;
   }): GithubBody {
     const fullName = props.fullName ?? 'acme/app';
@@ -87,6 +88,7 @@ export class ActivityNodes {
                     { state: 'IN_PROGRESS', count: 2 },
                   ],
                   statusContextCountsByState: [{ state: 'ERROR', count: 1 }],
+                  nodes: props.contexts ?? null,
                 },
               },
               checkSuites: { nodes: props.suites ?? [] },
@@ -139,9 +141,60 @@ export class ActivityNodes {
     };
   }
 
+  static checkRunNode(props: {
+    name: string;
+    status?: string;
+    conclusion?: string | null;
+    app?: string | null;
+    workflowRunId?: number | null;
+    jobId?: number | null;
+    detailsUrl?: string;
+  }): GithubBody {
+    return {
+      __typename: 'CheckRun',
+      name: props.name,
+      status: props.status ?? 'COMPLETED',
+      conclusion: props.conclusion === undefined ? 'SUCCESS' : props.conclusion,
+      detailsUrl:
+        props.detailsUrl ?? `https://github.com/acme/app/runs/${props.name}`,
+      completedAt: updatedAt,
+      databaseId: props.jobId ?? null,
+      checkSuite: {
+        app:
+          props.app === null ? null : { slug: props.app ?? 'github-actions' },
+        workflowRun:
+          props.workflowRunId === undefined || props.workflowRunId === null
+            ? null
+            : { databaseId: props.workflowRunId },
+      },
+    };
+  }
+
+  static statusContextNode(props: {
+    context: string;
+    state?: string;
+    targetUrl?: string | null;
+  }): GithubBody {
+    return {
+      __typename: 'StatusContext',
+      context: props.context,
+      state: props.state ?? 'SUCCESS',
+      targetUrl:
+        props.targetUrl === undefined
+          ? `https://ci.example.com/${props.context}`
+          : props.targetUrl,
+      description: null,
+    };
+  }
+
   static defaultBranchNode(props: {
     fullName: string;
     suites?: GithubJson[];
+    rollup?: {
+      state: string;
+      contexts: GithubJson[];
+      totalCount?: number;
+    } | null;
   }): GithubBody {
     return {
       ...ActivityNodes.repositoryNode(props),
@@ -149,6 +202,17 @@ export class ActivityNodes {
         name: 'main',
         target: {
           oid: `head-${props.fullName}`,
+          statusCheckRollup:
+            props.rollup === undefined || props.rollup === null
+              ? null
+              : {
+                  state: props.rollup.state,
+                  contexts: {
+                    totalCount:
+                      props.rollup.totalCount ?? props.rollup.contexts.length,
+                    nodes: props.rollup.contexts,
+                  },
+                },
           checkSuites: { nodes: props.suites ?? [] },
         },
       },
