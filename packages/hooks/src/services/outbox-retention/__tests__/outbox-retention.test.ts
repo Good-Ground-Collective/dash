@@ -83,7 +83,11 @@ describe('OutboxRetention', () => {
 
     await new FileLock({ lockPath: files.lock }).hold(async () => {
       pruning = OutboxRetention.prune(state.config, now);
-      await sleep(50);
+      await sleep(150);
+
+      expect(await RetentionFixture.exists(files.outbox)).toBe(true);
+      expect(await RetentionFixture.exists(files.cursor)).toBe(true);
+
       await utimes(files.outbox, now, now);
     });
 
