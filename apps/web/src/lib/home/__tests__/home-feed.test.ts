@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { FeedRow } from '#lib/github-feed/feed-rows.ts';
 import { SampleFeed } from '#lib/github-feed/__tests__/support/sample-feed.ts';
 import { HomeFeed } from '#lib/home/home-feed.ts';
 
@@ -138,25 +139,33 @@ describe('HomeFeed needsYou', () => {
   });
 });
 
+class Rows {
+  static of(home: HomeFeed): FeedRow[] {
+    return home.sinceYesterday.flatMap(({ sections }) =>
+      sections.flatMap(({ rows }) => rows),
+    );
+  }
+}
+
 describe('HomeFeed sinceYesterday', () => {
-  it('lists merges and releases from the last 24 hours by when they happened, newest first', () => {
-    expect(loaded.sinceYesterday.map((row) => row.id)).toEqual([
-      'merged-3h-ago',
-      'release-5h-ago',
+  it('groups merges and releases from the last 24 hours, releases before unlinked merges', () => {
+    expect(
+      loaded.sinceYesterday.map(({ id, summary }) => ({ id, summary })),
+    ).toEqual([
+      { id: 'releases', summary: '1 release' },
+      { id: 'other-merges', summary: '1 merged' },
     ]);
   });
 
   it('times a merge by its merge, not by later activity on the pull request', () => {
-    const [merge] = loaded.sinceYesterday;
+    const merge = Rows.of(loaded).find((row) => row.id === 'merged-3h-ago');
 
     expect(merge?.updatedAt).toEqual(Clock.hoursAgo(3));
     expect(merge?.badges).toEqual([{ label: 'Merged', tone: 'ok' }]);
   });
 
   it('links a release to the release itself', () => {
-    const release = loaded.sinceYesterday.find(
-      (row) => row.id === 'release-5h-ago',
-    );
+    const release = Rows.of(loaded).find((row) => row.id === 'release-5h-ago');
 
     expect(release).toMatchObject({
       href: 'https://github.com/acme-labs/api/releases/tag/v1.2.0',
@@ -191,7 +200,7 @@ describe('HomeFeed sinceYesterday edges', () => {
       now,
     });
 
-    expect(home.sinceYesterday.map((row) => row.id)).toEqual(['inside']);
+    expect(Rows.of(home).map((row) => row.id)).toEqual(['inside']);
   });
 
   it('marks a pre-release as one', () => {
@@ -212,12 +221,26 @@ describe('HomeFeed sinceYesterday edges', () => {
       now,
     });
 
-    expect(home.sinceYesterday[0]).toMatchObject({
+    expect(Rows.of(home)[0]).toMatchObject({
       title: 'v1.2.0',
       badges: [
         { label: 'Shipped', tone: 'ok' },
         { label: 'Pre-release', tone: 'neutral' },
       ],
     });
+  });
+});
+
+describe('HomeFeed sinceYesterday when quiet', () => {
+  it('is empty when nothing landed in the window', () => {
+    const home = new HomeFeed({
+      state: {
+        status: 'loaded',
+        feed: SampleFeed.feed({ connections: [SampleFeed.connection()] }),
+      },
+      now,
+    });
+
+    expect(home.sinceYesterday).toEqual([]);
   });
 });

@@ -224,7 +224,11 @@ const withRecent = ActivityRecords.from({
   activity: {
     ...GithubFeedFixtures.activity(),
     mergedPullRequests: [
-      GithubFeedFixtures.mergedPullRequest({ number: 3, mergedAt }),
+      GithubFeedFixtures.mergedPullRequest({
+        number: 3,
+        mergedAt,
+        closingIssues: [{ repository: 'acme/app', number: 7 }],
+      }),
     ],
     releases: [GithubFeedFixtures.release({ id: 'v1', publishedAt: mergedAt })],
   },
@@ -258,6 +262,7 @@ describe.skipIf(databaseUrl === null)(
       ).toMatchObject({
         state: 'merged',
         mergedAt: '2026-11-26T09:00:00.000Z',
+        closingIssues: [{ repository: 'acme/app', number: 7 }],
       });
       expect(owned?.records.releases).toEqual([
         expect.objectContaining({

@@ -98,6 +98,12 @@ export class GithubActivityRecords {
           requestedReviewer === null ? [] : [requestedReviewer],
       ),
       checks: commit?.statusCheckRollup?.summary ?? null,
+      closingIssues: (node.closingIssuesReferences?.nodes ?? []).map(
+        (issue) => ({
+          repository: issue.repository.nameWithOwner,
+          number: issue.number,
+        }),
+      ),
       mergedAt: node.mergedAt,
       createdAt: node.createdAt,
       updatedAt: node.updatedAt,

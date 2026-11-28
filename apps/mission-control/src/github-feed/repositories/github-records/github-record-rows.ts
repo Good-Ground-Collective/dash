@@ -55,6 +55,7 @@ export class GithubRecordRows {
       author: row.author,
       headRef: row.headRef,
       headSha: row.headSha,
+      closingIssues: row.closingIssues,
       mergedAt: row.mergedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

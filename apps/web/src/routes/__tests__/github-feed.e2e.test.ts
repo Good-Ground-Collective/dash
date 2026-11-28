@@ -119,11 +119,20 @@ test('home lists what needs you and what merged since yesterday, each opening Gi
   await expect(needsYou).not.toContainText('Cache the objectives read');
 
   const since = page.getByRole('region', { name: 'Since yesterday' });
-  await expect(since.getByRole('listitem')).toHaveCount(2);
+  await page.evaluate(() => {
+    localStorage.clear();
+  });
+  await page.reload();
+  await expect(since.getByRole('button')).toHaveCount(2);
+  await expect(since).toContainText('Other merges');
+  await expect(since).toContainText('1 merged');
+  await expect(since).toContainText('1 release');
+  await since.getByRole('button', { name: /^Other merges/u }).click();
   await expect(
     since.getByRole('link', { name: /Cache the objectives read/u }),
   ).toHaveAttribute('href', 'https://github.com/acme-labs/api/pull/409');
   await expect(since).toContainText('Merged');
+  await since.getByRole('button', { name: /^Releases/u }).click();
   await expect(
     since.getByRole('link', { name: /API 2\.4\.0/u }),
   ).toHaveAttribute(
@@ -133,6 +142,9 @@ test('home lists what needs you and what merged since yesterday, each opening Gi
   await expect(since).toContainText('Shipped');
   await expect(since).not.toContainText('Retire the old settings tabs');
   await expect(since).not.toContainText('Web 1.9.0');
+  await page.evaluate(() => {
+    localStorage.clear();
+  });
 });
 
 test('Needs you says so when nothing waits on you', async () => {

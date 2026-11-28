@@ -6,12 +6,16 @@ export const epicDisclosurePropsSchema = z.object({
 
 export type EpicDisclosureProps = z.input<typeof epicDisclosurePropsSchema>;
 
-/** Which epics in Today's focus are expanded. Every epic starts collapsed, so a long plan still reads at a glance. */
+/** Which collapsible Home items are expanded, by id. Everything starts collapsed, so a long plan or a busy day still reads at a glance. */
 export class EpicDisclosure {
   private readonly open: ReadonlySet<string>;
 
   constructor(props: EpicDisclosureProps = {}) {
     this.open = new Set(epicDisclosurePropsSchema.parse(props).open);
+  }
+
+  get openIds(): string[] {
+    return [...this.open];
   }
 
   isOpen(id: string): boolean {

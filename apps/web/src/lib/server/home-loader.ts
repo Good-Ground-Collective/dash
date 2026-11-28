@@ -11,6 +11,7 @@ import {
 } from '#lib/server/auth-page-loader.ts';
 import type { GithubFeedState } from '#lib/github-feed/feed-view.ts';
 import type { BriefingState } from '#lib/briefing/briefing-view.ts';
+import { showParam } from '#lib/objectives/objective-filter.ts';
 import type { ObjectivesState } from '#lib/objectives/objectives-view.ts';
 import {
   type BriefingLoader,
@@ -42,6 +43,8 @@ export interface HomePageData {
   github: GithubFeedState | null;
   /** `null` when signed out. */
   objectives: ObjectivesState | null;
+  /** Every initiative and epic in any status, whatever the page's filter shows, so Since yesterday can place a merge under an epic that has closed. `null` when signed out. */
+  everyObjective: ObjectivesState | null;
   /** `null` when signed out. */
   briefing: BriefingState | null;
 }
@@ -77,16 +80,19 @@ export class MissionControlHomeLoader implements HomeLoader {
         checklist: null,
         github: null,
         objectives: null,
+        everyObjective: null,
         briefing: null,
       };
     }
 
-    const [checklist, github, objectives, briefing] = await Promise.all([
-      this.checklist(event),
-      this.github.read(event),
-      this.objectives.read(event),
-      this.briefing.read(event),
-    ]);
+    const [checklist, github, objectives, everyObjective, briefing] =
+      await Promise.all([
+        this.checklist(event),
+        this.github.read(event),
+        this.objectives.read(event),
+        this.readEveryObjective(event),
+        this.briefing.read(event),
+      ]);
     return {
       checklist,
       github,
@@ -95,9 +101,22 @@ export class MissionControlHomeLoader implements HomeLoader {
         checklist,
         github,
       }),
+      everyObjective: MissionControlHomeLoader.withConnection({
+        objectives: everyObjective,
+        checklist,
+        github,
+      }),
       briefing,
     };
   };
+
+  /** The same read as Today's focus, but asking for parked and done objectives too. */
+  private readEveryObjective(event: HomeLoadEvent): Promise<ObjectivesRead> {
+    return this.objectives.read({
+      fetch: event.fetch,
+      url: new URL(`?${showParam}=parked,done`, event.url),
+    });
+  }
 
   private async checklist(
     event: AuthPageLoadEvent,

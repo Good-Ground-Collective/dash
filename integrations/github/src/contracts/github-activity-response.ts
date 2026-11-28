@@ -182,6 +182,16 @@ export const githubPullRequestNodeSchema = z.object({
     .transform((value) => value.toLowerCase())
     .pipe(z.enum(['approved', 'changes_requested', 'review_required']))
     .nullable(),
+  closingIssuesReferences: z
+    .object({
+      nodes: z.array(
+        z.object({
+          number: z.int().positive(),
+          repository: z.object({ nameWithOwner: z.string().min(1) }),
+        }),
+      ),
+    })
+    .optional(),
   mergedAt: z.iso.datetime({ offset: true }).nullable(),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),

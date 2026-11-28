@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GithubFeedBusyDay } from './github-feed-busy-day.ts';
 import { acme, ada, GithubFeedItems, night } from './github-feed-items.ts';
 
 const feedScenarioSchema = z.enum([
@@ -8,6 +9,7 @@ const feedScenarioSchema = z.enum([
   'populated',
   'failing',
   'truncated',
+  'busy-day',
 ]);
 
 type FeedScenario = z.infer<typeof feedScenarioSchema>;
@@ -78,7 +80,19 @@ export class GithubFeedStub {
     if (this.scenario === 'empty') {
       return { status: 200, body: { connections, ...empty } };
     }
-    return { status: 200, body: { connections, ...GithubFeedItems.all() } };
+    const items = GithubFeedItems.all();
+    if (this.scenario === 'busy-day') {
+      return {
+        status: 200,
+        body: {
+          connections,
+          ...items,
+          recentMerges: GithubFeedBusyDay.merges(),
+          releases: GithubFeedBusyDay.releases(),
+        },
+      };
+    }
+    return { status: 200, body: { connections, ...items } };
   }
 
   private static connection(

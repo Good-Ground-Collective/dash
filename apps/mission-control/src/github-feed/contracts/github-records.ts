@@ -1,5 +1,6 @@
 import {
   activityCheckStateSchema,
+  activityIssueReferenceSchema,
   activityMergeStateSchema,
   checkStateSchema,
   webUrlSchema,
@@ -75,6 +76,11 @@ export const githubPullRequestRecordSchema = z.object({
   author: z.string().min(1).nullable(),
   headRef: z.string().min(1),
   headSha: z.string().min(1),
+  closingIssues: z
+    .array(activityIssueReferenceSchema)
+    .describe(
+      'The issues the pull request closes. Empty for a pull request read without them.',
+    ),
   mergedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,

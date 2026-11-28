@@ -47,6 +47,53 @@ class Screens {
   }
 }
 
+/** Home on a busy day: the six collapsed items, two of them expanded, and the same on a phone. */
+class BusyDay {
+  static async capture(props: {
+    page: Page;
+    missionControl: string;
+    name: string;
+    testInfo: TestInfo;
+  }): Promise<void> {
+    const { page, testInfo } = props;
+    const shoot = async (view: string) =>
+      Screens.capture({
+        page,
+        name: `home-busy-day-${view}-${props.name}.png`,
+        testInfo,
+      });
+
+    await page.request.post(
+      `${props.missionControl}/integrations/github/__stub/feed?name=busy-day`,
+    );
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+    });
+    await page.reload();
+    await shoot('collapsed');
+
+    const since = page.getByRole('region', {
+      name: 'Since yesterday',
+      exact: true,
+    });
+    await since
+      .getByRole('button', { name: /^Sign-in with passkeys/u })
+      .click();
+    await since.getByRole('button', { name: /^4 more epics/u }).click();
+    await shoot('expanded');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await shoot('expanded-mobile');
+    await page.evaluate(() => {
+      localStorage.clear();
+    });
+    await page.reload();
+    await shoot('collapsed-mobile');
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
+}
+
 test.beforeAll(async ({ request }, testInfo) => {
   missionControl = projectSettingsSchema.parse(
     testInfo.project.metadata,
@@ -95,6 +142,13 @@ for (const theme of themes) {
           testInfo,
         });
       }
+
+      await BusyDay.capture({
+        page,
+        missionControl,
+        name: `${theme}-${mode}`,
+        testInfo,
+      });
     });
 
     test(`${theme} ${mode}: sign-in`, async ({

@@ -1,5 +1,6 @@
 import {
   activityCheckStateSchema,
+  activityIssueReferenceSchema,
   checkStateSchema,
   webUrlSchema,
 } from '@dash/integrations-core';
@@ -67,6 +68,11 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
     .nullable()
     .describe('Null when the repository requires no review.'),
   headSha: z.string().min(1),
+  closingIssues: z
+    .array(activityIssueReferenceSchema)
+    .describe(
+      'The issues the pull request closes, which Home uses to place a merge under its epic. Only recent merges name them; every other pull request lists none.',
+    ),
   requestedReviewers: z.array(
     z.object({ kind: z.enum(['user', 'team']), name: z.string().min(1) }),
   ),

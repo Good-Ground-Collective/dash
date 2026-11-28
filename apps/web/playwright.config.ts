@@ -43,6 +43,8 @@ const needsYouPort = 4333;
 const needsYouStubPort = 59985;
 const agentsPort = 4334;
 const agentsStubPort = 59984;
+const sinceYesterdayPort = 4335;
+const sinceYesterdayStubPort = 59983;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -72,6 +74,7 @@ export default defineConfig({
         '**/time-zone.e2e.test.ts',
         '**/needs-you.e2e.test.ts',
         '**/agents.e2e.test.ts',
+        '**/since-yesterday.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -173,33 +176,24 @@ export default defineConfig({
         baseURL: `http://localhost:${objectivesPort}`,
       },
     },
-    {
-      name: 'time-zone',
-      testMatch: '**/time-zone.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${timeZoneStubPort}` },
+    ...[
+      { name: 'time-zone', port: timeZonePort, stubPort: timeZoneStubPort },
+      { name: 'needs-you', port: needsYouPort, stubPort: needsYouStubPort },
+      { name: 'agents', port: agentsPort, stubPort: agentsStubPort },
+      {
+        name: 'since-yesterday',
+        port: sinceYesterdayPort,
+        stubPort: sinceYesterdayStubPort,
+      },
+    ].map(({ name, port, stubPort }) => ({
+      name,
+      testMatch: `**/${name}.e2e.test.ts`,
+      metadata: { missionControlUrl: `http://localhost:${stubPort}` },
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${timeZonePort}`,
+        baseURL: `http://localhost:${port}`,
       },
-    },
-    {
-      name: 'needs-you',
-      testMatch: '**/needs-you.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${needsYouStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${needsYouPort}`,
-      },
-    },
-    {
-      name: 'agents',
-      testMatch: '**/agents.e2e.test.ts',
-      metadata: { missionControlUrl: `http://localhost:${agentsStubPort}` },
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${agentsPort}`,
-      },
-    },
+    })),
   ],
   webServer: [
     {
@@ -267,6 +261,7 @@ export default defineConfig({
       { port: timeZonePort, stubPort: timeZoneStubPort },
       { port: needsYouPort, stubPort: needsYouStubPort },
       { port: agentsPort, stubPort: agentsStubPort },
+      { port: sinceYesterdayPort, stubPort: sinceYesterdayStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',

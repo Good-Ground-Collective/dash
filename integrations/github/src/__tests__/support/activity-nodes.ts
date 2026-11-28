@@ -47,6 +47,7 @@ export class ActivityNodes {
     mergedAt?: string;
     contexts?: GithubJson[];
     mergeStateStatus?: string | null;
+    closes?: { fullName: string; number: number }[];
   }): GithubBody {
     const fullName = props.fullName ?? 'acme/app';
     return {
@@ -61,6 +62,12 @@ export class ActivityNodes {
         props.mergeStateStatus === undefined ? 'CLEAN' : props.mergeStateStatus,
       reviewDecision: 'REVIEW_REQUIRED',
       mergedAt: props.mergedAt ?? null,
+      closingIssuesReferences: {
+        nodes: (props.closes ?? []).map((issue) => ({
+          number: issue.number,
+          repository: { nameWithOwner: issue.fullName },
+        })),
+      },
       createdAt,
       updatedAt,
       headRefName: `feature-${props.number}`,
@@ -74,28 +81,35 @@ export class ActivityNodes {
           { requestedReviewer: null },
         ],
       },
-      commits: {
-        nodes: [
-          {
-            commit: {
-              statusCheckRollup: {
-                state: 'FAILURE',
-                contexts: {
-                  checkRunCountsByState: [
-                    { state: 'SUCCESS', count: 3 },
-                    { state: 'SKIPPED', count: 1 },
-                    { state: 'FAILURE', count: 1 },
-                    { state: 'IN_PROGRESS', count: 2 },
-                  ],
-                  statusContextCountsByState: [{ state: 'ERROR', count: 1 }],
-                  nodes: props.contexts ?? null,
-                },
+      commits: ActivityNodes.commitsNode(props),
+    };
+  }
+
+  static commitsNode(props: {
+    suites?: GithubJson[];
+    contexts?: GithubJson[];
+  }): GithubBody {
+    return {
+      nodes: [
+        {
+          commit: {
+            statusCheckRollup: {
+              state: 'FAILURE',
+              contexts: {
+                checkRunCountsByState: [
+                  { state: 'SUCCESS', count: 3 },
+                  { state: 'SKIPPED', count: 1 },
+                  { state: 'FAILURE', count: 1 },
+                  { state: 'IN_PROGRESS', count: 2 },
+                ],
+                statusContextCountsByState: [{ state: 'ERROR', count: 1 }],
+                nodes: props.contexts ?? null,
               },
-              checkSuites: { nodes: props.suites ?? [] },
             },
+            checkSuites: { nodes: props.suites ?? [] },
           },
-        ],
-      },
+        },
+      ],
     };
   }
 

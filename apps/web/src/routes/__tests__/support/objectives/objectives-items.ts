@@ -32,6 +32,8 @@ export interface StubObjective {
   } | null;
   next: string | null;
   tasks?: StubTask[];
+  /** The issue number of the epic's first task; the next ones follow it. */
+  firstTaskIssue?: number;
   hints: string[];
   dueAfterInitiative?: boolean;
   epics?: StubObjective[];
@@ -58,22 +60,7 @@ export class ObjectivesItems {
         url: 'https://github.com/orgs/acme-labs/projects/2',
         progress: { done: 100, total: 120 },
         hints: ['no_recent_activity'],
-        epics: [
-          {
-            ...ObjectivesItems.base('E_guides', 'Rewrite the guides', 20),
-            progress: null,
-            hints: ['no_recent_activity'],
-          },
-          {
-            ...ObjectivesItems.base('E_reference', 'Refresh API reference', 21),
-            dueDate: ObjectivesItems.nextYearDay(),
-            progress: { done: 12, total: 12 },
-          },
-          {
-            ...ObjectivesItems.base('E_changelog', 'Publish the changelog', 22),
-            progress: { done: 3, total: 5 },
-          },
-        ],
+        epics: ObjectivesItems.docsEpics(),
       },
       {
         ...ObjectivesItems.base('PVT_beta', 'Private beta', null),
@@ -82,14 +69,7 @@ export class ObjectivesItems {
         priority: 'P2',
         progress: { done: 1, total: 1 },
         hints: ['all_epics_closed'],
-        epics: [
-          {
-            ...ObjectivesItems.base('E_invites', 'Invite flow', 30),
-            closed: true,
-            progress: { done: 4, total: 4 },
-            hints: ['all_tickets_closed'],
-          },
-        ],
+        epics: ObjectivesItems.betaEpics(),
       },
     ];
   }
@@ -142,7 +122,7 @@ export class ObjectivesItems {
     const tasks = (item.tasks ?? []).map((task, index) => ({
       id: `I_${item.id}_${String(index)}`,
       title: task.title,
-      url: `${repo}/issues/${String(100 + index)}`,
+      url: `${repo}/issues/${String((item.firstTaskIssue ?? 100) + index)}`,
       state: task.closed === true ? 'closed' : 'open',
       assignees: task.assignees ?? [],
     }));
@@ -155,6 +135,11 @@ export class ObjectivesItems {
     };
   }
 
+  /** Tasks with only a title, all open unless `closed`. */
+  static tasksNamed(titles: string[], closed = false): StubTask[] {
+    return titles.map((title) => ({ title, closed }));
+  }
+
   /** A date in May of next year, so its label always carries the year, the widest form. */
   static nextYearDay(): string {
     return `${String(new Date().getFullYear() + 1)}-05-28`;
@@ -162,6 +147,63 @@ export class ObjectivesItems {
 
   static ago(minutes: number): string {
     return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+  }
+
+  private static docsEpics(): StubObjective[] {
+    return [
+      {
+        ...ObjectivesItems.base('E_guides', 'Rewrite the guides', 20),
+        progress: null,
+        hints: ['no_recent_activity'],
+        firstTaskIssue: 130,
+        tasks: ObjectivesItems.tasksNamed([
+          'Audit the quickstart',
+          'Rewrite the install guide',
+          'Add a troubleshooting page',
+        ]),
+      },
+      {
+        ...ObjectivesItems.base('E_reference', 'Refresh API reference', 21),
+        dueDate: ObjectivesItems.nextYearDay(),
+        progress: { done: 12, total: 12 },
+        firstTaskIssue: 140,
+        tasks: ObjectivesItems.tasksNamed([
+          'Document the objectives endpoint',
+          'Document the feed endpoint',
+        ]),
+      },
+      {
+        ...ObjectivesItems.base('E_changelog', 'Publish the changelog', 22),
+        progress: { done: 3, total: 5 },
+        firstTaskIssue: 150,
+        tasks: ObjectivesItems.tasksNamed([
+          'Draft the November notes',
+          'Link each note to its pull request',
+          'Publish to the docs site',
+        ]),
+      },
+    ];
+  }
+
+  private static betaEpics(): StubObjective[] {
+    return [
+      {
+        ...ObjectivesItems.base('E_invites', 'Invite flow', 30),
+        closed: true,
+        progress: { done: 4, total: 4 },
+        hints: ['all_tickets_closed'],
+        firstTaskIssue: 160,
+        tasks: ObjectivesItems.tasksNamed(
+          [
+            'Send the invite email',
+            'Accept an invite',
+            'Expire old invites',
+            'Resend an invite',
+          ],
+          true,
+        ),
+      },
+    ];
   }
 
   private static launchEpics(): StubObjective[] {
@@ -184,6 +226,13 @@ export class ObjectivesItems {
         dueDate: '2027-01-08',
         dueAfterInitiative: true,
         progress: { done: 0, total: 3 },
+        firstTaskIssue: 110,
+        tasks: ObjectivesItems.tasksNamed([
+          'Pick a payment provider',
+          'Model plans and prices',
+          'Build the invoice list',
+          'Add a receipt email',
+        ]),
         update: ObjectivesItems.update(
           'linus',
           'Pick a payment provider',
@@ -194,6 +243,12 @@ export class ObjectivesItems {
       {
         ...ObjectivesItems.base('E_status', 'Status page', 12),
         progress: null,
+        firstTaskIssue: 120,
+        tasks: ObjectivesItems.tasksNamed([
+          'Publish uptime history',
+          'Show incident notes',
+          'Add an RSS feed',
+        ]),
       },
     ];
   }

@@ -267,4 +267,32 @@ describe('GithubActivityRecords pull request age and merge state', () => {
     expect(githubActivityQueries.search).toContain('createdAt');
     expect(githubActivityQueries.search).toContain('mergeStateStatus');
   });
+
+  it('names the issues a pull request closes, with the repository each is in', () => {
+    const record = GithubActivityRecords.pullRequest(
+      githubPullRequestNodeSchema.parse(
+        pullRequestNode({
+          number: 1,
+          mergedAt: '2026-11-26T09:00:00Z',
+          closes: [
+            { fullName: 'acme/app', number: 7 },
+            { fullName: 'acme/docs', number: 12 },
+          ],
+        }),
+      ),
+    );
+
+    expect(record.closingIssues).toEqual([
+      { repository: 'acme/app', number: 7 },
+      { repository: 'acme/docs', number: 12 },
+    ]);
+  });
+
+  it('lists no closing issues for a pull request read without them', () => {
+    const record = GithubActivityRecords.pullRequest(
+      githubPullRequestNodeSchema.parse(pullRequestNode({ number: 1 })),
+    );
+
+    expect(record.closingIssues).toEqual([]);
+  });
 });

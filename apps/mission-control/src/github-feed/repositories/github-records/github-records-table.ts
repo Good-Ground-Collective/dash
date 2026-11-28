@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -8,7 +9,10 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { activityMergeStates } from '@dash/integrations-core';
+import {
+  activityMergeStates,
+  type ActivityIssueReference,
+} from '@dash/integrations-core';
 import { connectionTable } from '#src/connections/repositories/connections/connections-table.ts';
 
 /** How the latest reads of a GitHub connection went, and whose work they read. */
@@ -73,6 +77,10 @@ export const githubPullRequestTable = pgTable(
     author: text('author'),
     headRef: text('head_ref').notNull(),
     headSha: text('head_sha').notNull(),
+    closingIssues: jsonb('closing_issues')
+      .$type<ActivityIssueReference[]>()
+      .notNull()
+      .default([]),
     mergedAt: timestamp('merged_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
