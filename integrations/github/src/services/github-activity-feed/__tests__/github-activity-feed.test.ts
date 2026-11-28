@@ -279,3 +279,40 @@ describe('GithubActivityFeed props', () => {
     expect(() => new FakeGithubGraphql().feed(credentials)).toThrow(ZodError);
   });
 });
+
+describe('GithubActivityFeed refused checks', () => {
+  it('leaves a repository’s state null when GitHub refuses the rollup, and still reads its runs', async () => {
+    const github = new FakeGithubGraphql().withEmptyActivity().on({
+      operation: 'DashDefaultBranches',
+      reply: () => ({
+        data: {
+          repository0: defaultBranchNode({
+            fullName: 'acme/app',
+            rollup: null,
+            suites: [failedSuite({ id: 'WFR_1', name: 'ci' })],
+          }),
+        },
+        errors: [
+          {
+            type: 'FORBIDDEN',
+            path: [
+              'repository0',
+              'defaultBranchRef',
+              'target',
+              'statusCheckRollup',
+            ],
+            message: 'Resource not accessible by integration',
+          },
+        ],
+      }),
+    });
+
+    const activity = await github.feed().read(query);
+
+    expect(activity.defaultBranches).toEqual([
+      expect.objectContaining({ repositoryId: 'R_acme/app', state: null }),
+    ]);
+    expect(activity.checks).toEqual([]);
+    expect(activity.failedRuns).toHaveLength(1);
+  });
+});

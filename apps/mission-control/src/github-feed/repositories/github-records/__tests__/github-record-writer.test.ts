@@ -76,7 +76,14 @@ describe.skipIf(databaseUrl === null)(
       });
 
       const owned = await Stored.owned();
-      expect(owned?.records).toEqual(records);
+      expect(owned?.records).toEqual({
+        ...records,
+        checks: records.checks.map((check) => ({
+          ...check,
+          failingSince:
+            check.state === 'failure' ? fixedNow.toISOString() : null,
+        })),
+      });
       expect(owned?.lastSyncedAt).toBe(later.toISOString());
     });
 

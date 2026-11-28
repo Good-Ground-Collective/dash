@@ -1,4 +1,6 @@
 import type {
+  ActivityCheck,
+  ActivityDefaultBranch,
   ActivityIssue,
   ActivityPullRequest,
   ActivityRelease,
@@ -8,6 +10,7 @@ import type {
 } from '@dash/integrations-core';
 
 import { githubReleaseCount } from '#src/contracts/github-activity-queries.ts';
+import type { GithubCheckContext } from '#src/contracts/github-check-response.ts';
 import type {
   GithubDefaultBranchNode,
   GithubFailedSuite,
@@ -19,10 +22,12 @@ import type {
 
 type FailedSuite = NonNullable<GithubFailedSuite>;
 
-/** A repository and the runs that failed on its default branch head. */
+/** A repository, the runs that failed on its default branch head, and how the head's checks stand. */
 export interface DefaultBranchActivity {
   repository: ActivityRepository;
   runs: ActivityRun[];
+  branch: ActivityDefaultBranch | null;
+  checks: ActivityCheck[];
 }
 
 /** The releases a repository published, and how much of its history the read covered. */
@@ -57,6 +62,20 @@ export class GithubActivityRecords {
     };
   }
 
+  static check(props: {
+    context: GithubCheckContext;
+    subjectKind: ActivityCheck['subjectKind'];
+    subjectId: string;
+    headSha: string;
+  }): ActivityCheck {
+    return {
+      subjectKind: props.subjectKind,
+      subjectId: props.subjectId,
+      headSha: props.headSha,
+      ...props.context,
+    };
+  }
+
   static pullRequest(node: GithubPullRequestNode): ActivityPullRequest {
     const commit = node.commits.nodes.at(-1)?.commit;
     return {
@@ -78,11 +97,29 @@ export class GithubActivityRecords {
         ({ requestedReviewer }) =>
           requestedReviewer === null ? [] : [requestedReviewer],
       ),
-      checks: commit?.statusCheckRollup ?? null,
+      checks: commit?.statusCheckRollup?.summary ?? null,
       mergedAt: node.mergedAt,
       createdAt: node.createdAt,
       updatedAt: node.updatedAt,
     };
+  }
+
+  /** Only the checks that are failing: what a pull request's author has to act on. */
+  static pullRequestFailingChecks(
+    node: GithubPullRequestNode,
+  ): ActivityCheck[] {
+    const contexts =
+      node.commits.nodes.at(-1)?.commit.statusCheckRollup?.contexts ?? [];
+    return contexts
+      .filter(({ state }) => state === 'failure')
+      .map((context) =>
+        GithubActivityRecords.check({
+          context,
+          subjectKind: 'pull_request',
+          subjectId: node.id,
+          headSha: node.headRefOid,
+        }),
+      );
   }
 
   static pullRequestRuns(node: GithubPullRequestNode): ActivityRun[] {
@@ -175,12 +212,29 @@ export class GithubActivityRecords {
     };
     const headSha = branch?.target?.oid;
     if (branch === null || headSha === undefined) {
-      return { repository, runs: [] };
+      return { repository, runs: [], branch: null, checks: [] };
     }
+
+    const rollup = branch.target?.statusCheckRollup ?? null;
 
     const suites = branch.target?.checkSuites?.nodes ?? [];
     return {
       repository,
+      branch: {
+        repositoryId: node.id,
+        branch: branch.name,
+        headSha,
+        state: rollup?.state ?? null,
+        checksTruncated: rollup?.truncated ?? false,
+      },
+      checks: (rollup?.contexts ?? []).map((context) =>
+        GithubActivityRecords.check({
+          context,
+          subjectKind: 'default_branch',
+          subjectId: node.id,
+          headSha,
+        }),
+      ),
       runs: suites.flatMap((suite) =>
         suite === null
           ? []

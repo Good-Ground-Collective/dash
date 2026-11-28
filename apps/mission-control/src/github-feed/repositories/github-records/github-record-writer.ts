@@ -8,6 +8,7 @@ import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-ret
 import {
   githubAssignmentTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubIssueTable,
   githubPullRequestTable,
   githubReleaseTable,
@@ -26,10 +27,18 @@ const prunedTables = [
   githubRepoTable,
   githubReviewRequestTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubWorkflowRunTable,
   githubIssueTable,
   githubAssignmentTable,
 ] as const;
+
+/**
+ * failing_since is kept only across consecutive failing reads: a check that failed before and
+ * fails again keeps the time it first failed, a new failure starts at the read time, and a
+ * pending, success, neutral or skipped read clears it. A failure after a pending read starts afresh.
+ */
+const failingSinceKept = sql`case when excluded.${sql.identifier(githubCheckTable.failingSince.name)} is null then null when ${githubCheckTable.state} = 'failure' and ${githubCheckTable.failingSince} is not null then ${githubCheckTable.failingSince} else excluded.${sql.identifier(githubCheckTable.failingSince.name)} end`;
 
 export interface GithubRecordWriter {
   /**
@@ -242,6 +251,25 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
       });
   }
 
+  private static async upsertChecks(props: {
+    transaction: Transaction;
+    connectionId: string;
+    records: GithubRecords;
+    syncedAt: Date;
+  }): Promise<void> {
+    await ReplacedRows.upsert({
+      transaction: props.transaction,
+      table: githubCheckTable,
+      rows: props.records.checks.map((check) => ({
+        ...check,
+        connectionId: props.connectionId,
+        syncedAt: props.syncedAt,
+        failingSince: check.state === 'failure' ? props.syncedAt : null,
+      })),
+      overrides: { failingSince: failingSinceKept },
+    });
+  }
+
   private static async upsertAll(props: {
     transaction: Transaction;
     connectionId: string;
@@ -293,5 +321,6 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     for (const { table, rows } of writes) {
       await ReplacedRows.upsert({ transaction, table, rows });
     }
+    await DrizzleGithubRecordWriter.upsertChecks(props);
   }
 }

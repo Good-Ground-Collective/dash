@@ -1,5 +1,6 @@
 import type {
   GithubAssignmentRecord,
+  GithubCheckRecord,
   GithubCheckRollupRecord,
   GithubIssueRecord,
   GithubPullRequestRecord,
@@ -11,6 +12,7 @@ import type {
 import type {
   githubAssignmentTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubIssueTable,
   githubPullRequestTable,
   githubReleaseTable,
@@ -29,6 +31,9 @@ export class GithubRecordRows {
       fullName: row.fullName,
       url: row.url,
       defaultBranch: row.defaultBranch,
+      defaultBranchHeadSha: row.defaultBranchHeadSha,
+      defaultBranchState: row.defaultBranchState,
+      defaultBranchChecksTruncated: row.defaultBranchChecksTruncated,
       archived: row.archived,
     };
   }
@@ -91,6 +96,20 @@ export class GithubRecordRows {
       successCount: row.successCount,
       failureCount: row.failureCount,
       pendingCount: row.pendingCount,
+    };
+  }
+
+  static check(row: typeof githubCheckTable.$inferSelect): GithubCheckRecord {
+    return {
+      subjectNodeId: row.subjectNodeId,
+      subjectKind: row.subjectKind,
+      name: row.name,
+      headSha: row.headSha,
+      kind: row.kind,
+      app: row.app,
+      state: row.state,
+      url: row.url,
+      failingSince: row.failingSince?.toISOString() ?? null,
     };
   }
 
