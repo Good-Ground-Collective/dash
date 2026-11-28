@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import type { HooksConfig } from '#src/config/hooks-config.js';
 import type { RelayConfig } from '#src/config/relay-config.js';
-import { RelayHalt } from '#src/services/relay-halt/relay-halt.js';
+import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
 
 /** What a hook did about the relay after writing its heartbeat. */
@@ -28,7 +28,9 @@ export class RelayLauncher {
     if (relayConfig === undefined) {
       return 'unconfigured';
     }
-    if (RelayHalt.isHalted(config.relayHaltPath, relayConfig.fingerprint)) {
+    if (
+      RelayHaltRecord.isHalted(config.relayHaltPath, relayConfig.fingerprint)
+    ) {
       return 'halted';
     }
     if (new RelayLock({ pidPath: config.relayPidPath }).isHeld()) {

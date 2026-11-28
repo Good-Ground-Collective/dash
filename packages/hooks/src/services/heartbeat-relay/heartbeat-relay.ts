@@ -1,5 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { z } from 'zod';
 
 import { HooksConfig } from '#src/config/hooks-config.js';
@@ -8,7 +6,7 @@ import { MissionControlRefusedKeyError } from '#src/errors.js';
 import { FileHookLog, type HookLog } from '#src/services/hook-log/hook-log.js';
 import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
 import { OutboxDelivery } from '#src/services/outbox-delivery/outbox-delivery.js';
-import { RelayHalt } from '#src/services/relay-halt/relay-halt.js';
+import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
 
 const outboxHeartbeatRelayPropsSchema = z.object({
@@ -117,7 +115,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
           return 'drained';
         }
         failures = 0;
-        await sleep(this.pollMs);
+        await OutboxHeartbeatRelay.sleep(this.pollMs);
       } catch (cause) {
         if (cause instanceof MissionControlRefusedKeyError) {
           await this.halt(cause);
@@ -127,7 +125,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
           this.log.failure({ event: 'relay', cause, now: new Date() });
         }
         failures += 1;
-        await sleep(this.backoffMs(failures));
+        await OutboxHeartbeatRelay.sleep(this.backoffMs(failures));
       }
     }
   }
@@ -135,7 +133,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   private async halt(cause: MissionControlRefusedKeyError): Promise<void> {
     const now = new Date();
     this.log.failure({ event: 'relay', cause, now });
-    await RelayHalt.record({
+    await RelayHaltRecord.record({
       haltPath: this.config.relayHaltPath,
       fingerprint: this.relayConfig.fingerprint,
       status: cause.status,
@@ -144,7 +142,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   }
 
   private isHalted(): boolean {
-    return RelayHalt.isHalted(
+    return RelayHaltRecord.isHalted(
       this.config.relayHaltPath,
       this.relayConfig.fingerprint,
     );
@@ -157,5 +155,12 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
       this.minBackoffMs * 2 ** Math.min(failures - 1, 30),
     );
     return Math.round(ceiling * (0.5 + Math.random() / 2));
+  }
+
+  /** The global `setTimeout`, so tests can drive polls and backoff with fake timers. */
+  private static sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 }
