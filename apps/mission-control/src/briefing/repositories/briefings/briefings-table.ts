@@ -23,14 +23,15 @@ import type {
  * because the month's budget was spent. Cost is integer micro-USD and the prices the run was
  * charged at are kept beside it. Rows are deleted after 30 days, or at the start of the
  * budget month if that is earlier, so pruning never lowers the month's spend.
+ * Deleting a person keeps their runs with no owner, so their spend still counts toward the month.
  */
 export const briefingTable = pgTable(
   'briefing',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => userTable.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => userTable.id, {
+      onDelete: 'set null',
+    }),
     trigger: text('trigger', { enum: ['scheduled', 'manual'] }).notNull(),
     status: text('status', {
       enum: ['succeeded', 'failed', 'skipped_over_budget'],

@@ -1,3 +1,5 @@
+import { IanaTimeZones } from '#src/auth/definitions/time-zones/time-zones.ts';
+
 /** A calendar month as the owner lives it. */
 export interface BudgetMonthWindow {
   /** `YYYY-MM`. */
@@ -8,13 +10,33 @@ export interface BudgetMonthWindow {
 
 /** The monthly budget resets at local midnight on the 1st, in the owner's time zone. */
 export class BudgetMonth {
-  /** The month containing `now` in `timeZone`. */
+  /**
+   * The month containing `now` in `timeZone`. A zone the runtime doesn't recognise is read as
+   * `IanaTimeZones.FALLBACK`, so a stale stored zone never stops the budget from being checked.
+   * Where daylight saving skips local midnight on the 1st, the month starts at the first instant of the 1st.
+   */
   static of(props: { now: Date; timeZone: string }): BudgetMonthWindow {
-    const local = BudgetMonth.localParts(props.now, props.timeZone);
+    try {
+      return BudgetMonth.windowIn(props.now, props.timeZone);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      return BudgetMonth.windowIn(props.now, IanaTimeZones.FALLBACK);
+    }
+  }
+
+  private static windowIn(now: Date, timeZone: string): BudgetMonthWindow {
+    const local = BudgetMonth.localParts(now, timeZone);
     const firstOfMonthUtc = Date.UTC(local.year, local.month - 1, 1);
 
-    let startsAt = firstOfMonthUtc - BudgetMonth.offset(firstOfMonthUtc, props);
-    startsAt = firstOfMonthUtc - BudgetMonth.offset(startsAt, props);
+    const offsetBefore = BudgetMonth.offset(firstOfMonthUtc, { timeZone });
+    const offsetAfter = BudgetMonth.offset(firstOfMonthUtc - offsetBefore, {
+      timeZone,
+    });
+    let startsAt = firstOfMonthUtc - offsetAfter;
+
+    if (BudgetMonth.localParts(new Date(startsAt), timeZone).day !== 1) {
+      startsAt += offsetAfter - offsetBefore;
+    }
 
     return {
       label: `${local.year}-${String(local.month).padStart(2, '0')}`,

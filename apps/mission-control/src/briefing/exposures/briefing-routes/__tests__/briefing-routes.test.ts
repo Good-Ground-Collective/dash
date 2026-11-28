@@ -121,6 +121,17 @@ describe('GET /briefings', () => {
   });
 });
 
+describe('GET /briefings with an unrecognised owner time zone', () => {
+  it('answers with the month in the fallback zone', async () => {
+    const harness = Served.harness({ ownerTimeZone: 'Not/AZone' });
+
+    await expect(Served.briefings(harness)).resolves.toMatchObject({
+      configured: true,
+      budget: { month: '2026-11' },
+    });
+  });
+});
+
 describe('GET /briefings running', () => {
   it('shows the signed-in person’s run in progress and nobody else’s', async () => {
     const harness = Served.harness();

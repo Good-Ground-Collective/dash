@@ -8,8 +8,12 @@ import {
   it,
 } from 'vitest';
 
+import { eq } from 'drizzle-orm';
+
+import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
 import { BriefingRuns } from '#src/briefing/__tests__/support/briefing-runs.ts';
 import { BriefingsDatabase } from '#src/briefing/__tests__/support/briefings-database.ts';
+import { briefingTable } from '#src/briefing/repositories/briefings/briefings-table.ts';
 import {
   adaId,
   graceId,
@@ -182,6 +186,61 @@ describe.skipIf(databaseUrl === null)(
         '2026-11-26T10:00:00.000Z',
         '2026-11-26T08:00:00.000Z',
       ]);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleBriefingRepository when a person is deleted',
+  () => {
+    it('keeps their runs without an owner and the month’s spend unchanged', async () => {
+      const { briefings, database } = BriefingsDatabase.required(store);
+      await briefings.record(
+        BriefingRuns.succeeded({
+          userId: graceId,
+          startedAt: Hours.at(8),
+          costMicroUsd: 400_000,
+        }),
+      );
+      await briefings.record(
+        BriefingRuns.succeeded({
+          startedAt: Hours.at(9),
+          costMicroUsd: 100_000,
+        }),
+      );
+      const before = await briefings.spentSince({ since: Hours.at(0) });
+
+      await database.orm.delete(userTable).where(eq(userTable.id, graceId));
+
+      await expect(briefings.spentSince({ since: Hours.at(0) })).resolves.toBe(
+        before,
+      );
+      const rows = await database.orm
+        .select({ userId: briefingTable.userId })
+        .from(briefingTable)
+        .orderBy(briefingTable.startedAt);
+      expect(rows.map(({ userId }) => userId)).toEqual([null, adaId]);
+    });
+
+    it('never shows an ownerless run to anyone, and retention still deletes it', async () => {
+      const { briefings, database } = BriefingsDatabase.required(store);
+      await briefings.record(
+        BriefingRuns.succeeded({ userId: graceId, startedAt: Hours.at(8) }),
+      );
+      await database.orm.delete(userTable).where(eq(userTable.id, graceId));
+
+      await expect(
+        briefings.history({ userId: adaId, limit: 10 }),
+      ).resolves.toEqual([]);
+      await expect(
+        briefings.latestRun({ userId: adaId }),
+      ).resolves.toBeNull();
+      await expect(
+        briefings.latestSucceeded({ userId: adaId }),
+      ).resolves.toBeNull();
+      await expect(
+        briefings.deleteStartedBefore({ cutoff: Hours.at(9) }),
+      ).resolves.toBe(1);
     });
   },
 );

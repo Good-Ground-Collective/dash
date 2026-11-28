@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { adaId } from '#src/objectives/__tests__/support/objectives-fixtures.ts';
 import { BriefingRuns } from '#src/briefing/__tests__/support/briefing-runs.ts';
 import {
   FixedOwnerTimeZone,
@@ -77,6 +78,37 @@ describe('DbosBriefingRetention', () => {
     await expect(
       Stored.retention({ briefings, timeZone: 'America/New_York' }).prune({
         now,
+      }),
+    ).resolves.toBe(1);
+    expect(Stored.starts(briefings)).toEqual(['2026-12-01T05:00:00.000Z']);
+  });
+});
+
+describe('DbosBriefingRetention edge cases', () => {
+  it('deletes runs whose person was removed once they pass the cutoff', async () => {
+    const briefings = await Stored.briefings({
+      old: new Date('2026-10-06T03:59:59Z'),
+      recent: new Date('2026-11-04T04:00:00Z'),
+    });
+    briefings.removePerson({ userId: adaId });
+
+    await expect(
+      Stored.retention({ briefings, timeZone: 'UTC' }).prune({
+        now: new Date('2026-11-05T04:00:00Z'),
+      }),
+    ).resolves.toBe(1);
+    expect(Stored.starts(briefings)).toEqual(['2026-11-04T04:00:00.000Z']);
+  });
+
+  it('prunes as if the owner were in the fallback zone when the stored zone is not recognised', async () => {
+    const briefings = await Stored.briefings({
+      beforeLocalMonth: new Date('2026-12-01T04:59:59Z'),
+      atLocalMonth: new Date('2026-12-01T05:00:00Z'),
+    });
+
+    await expect(
+      Stored.retention({ briefings, timeZone: 'Not/AZone' }).prune({
+        now: new Date('2026-12-31T12:00:00Z'),
       }),
     ).resolves.toBe(1);
     expect(Stored.starts(briefings)).toEqual(['2026-12-01T05:00:00.000Z']);

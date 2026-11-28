@@ -9,7 +9,7 @@ const microUsdPerUsd = 1_000_000;
 
 /** A run kept with the person it belongs to and its cost in micro-USD. */
 export interface StoredBriefing {
-  userId: string;
+  userId: string | null;
   startedAt: Date;
   costMicroUsd: number;
   run: BriefingRun;
@@ -44,6 +44,13 @@ export class InMemoryBriefingRepository implements BriefingRepository {
       run: stored,
     });
     return stored;
+  }
+
+  /** Leaves the person's runs in place with no owner, as deleting the person does. */
+  removePerson(props: { userId: string }): void {
+    for (const stored of this.briefings) {
+      if (stored.userId === props.userId) stored.userId = null;
+    }
   }
 
   async latestSucceeded(props: {
