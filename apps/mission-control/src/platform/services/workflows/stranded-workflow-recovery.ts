@@ -169,18 +169,15 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   }
 
   /**
-   * Whether this process registered a workflow function under the listed name. It reads
-   * `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`, a path semver
-   * does not cover: the catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0. The test 'the DBOS
-   * registration lookup that recovery depends on' in
-   * `__tests__/stranded-workflow-recovery.integration.test.ts` fails if the import stops resolving or
-   * stops finding a registered free-function workflow, and the test 'treats a class-based workflow
-   * whose class no longer exists as unregistered instead of throwing' in
-   * `__tests__/stranded-workflow-recovery.test.ts` pins the throw-on-unknown-class behaviour. Re-check
-   * both whenever that pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
-   * unknown class name, as when a class-based workflow has since been removed; that counts as not
-   * registered. A throw for a free-function workflow (no class name) is not that case and
-   * propagates, so a change in DBOS cannot silently leave every stranded workflow alone.
+   * Whether this process registered a workflow function under the listed name. The DBOS lookup
+   * returns `undefined` for an unknown workflow name but throws for an unknown class name, as when
+   * a class-based workflow has since been removed; recovery treats that throw as not registered.
+   * A throw for a free-function row (`workflowClassName === ''`) is not that case and propagates,
+   * so a change in DBOS cannot silently leave every stranded workflow alone.
+   *
+   * The lookup is `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`,
+   * an import path semver does not cover. The catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0;
+   * re-check this behaviour whenever that pin moves.
    */
   private isRegisteredHere(workflow: WorkflowStatus): boolean {
     try {
