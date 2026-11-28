@@ -187,6 +187,29 @@ describe.skipIf(databaseUrl === null)(
 );
 
 describe.skipIf(databaseUrl === null)(
+  'DrizzleBriefingRepository run counts',
+  () => {
+    it('counts runs since the instant, failed runs included and skipped runs not', async () => {
+      const { briefings } = BriefingsDatabase.required(store);
+      await briefings.record(
+        BriefingRuns.succeeded({ startedAt: Hours.at(8) }),
+      );
+      await briefings.record(
+        BriefingRuns.failed({ userId: graceId, startedAt: Hours.at(9) }),
+      );
+      await briefings.record(BriefingRuns.skipped({ startedAt: Hours.at(10) }));
+      await briefings.record(
+        BriefingRuns.succeeded({ startedAt: Hours.at(2) }),
+      );
+
+      await expect(briefings.runsSince({ since: Hours.at(8) })).resolves.toBe(
+        2,
+      );
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
   'DrizzleBriefingRepository constraints',
   () => {
     it('refuses a failed run without an error note', async () => {

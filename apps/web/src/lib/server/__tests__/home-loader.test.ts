@@ -31,7 +31,13 @@ const briefings = {
   latest: null,
   lastRun: null,
   history: [],
-  budget: { month: '2026-11', spentUsd: 1.5, capUsd: 100, reached: false },
+  budget: {
+    month: '2026-11',
+    spentUsd: 1.5,
+    capUsd: 100,
+    runs: 3,
+    reached: false,
+  },
   running: null,
 };
 

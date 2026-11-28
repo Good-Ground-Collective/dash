@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AgentSessionLink } from '#lib/agents/agent-session-link.ts';
   import { RelativeTime } from '#lib/github-feed/relative-time.ts';
   import type { NeedsYouItem } from '#lib/needs-you/needs-you-contracts.ts';
   import { NeedsYouWording } from '#lib/needs-you/needs-you-wording.ts';
@@ -14,6 +15,7 @@
     return RelativeTime.since(item.openedAt);
   });
   let options = $derived(item.question?.options ?? []);
+  let sessionHref = $derived(AgentSessionLink.href(item));
 </script>
 
 <li class="item">
@@ -34,6 +36,7 @@
       <span aria-hidden="true">·</span>
       <time datetime={item.openedAt.toISOString()}>{waiting}</time>
     </p>
+    <a class="session-link" href={sessionHref}>Go to session</a>
   </div>
 </li>
 
@@ -97,6 +100,14 @@
     margin-top: var(--space-1);
     font-size: var(--font-size-xs);
     color: var(--ink-muted);
+  }
+
+  .session-link {
+    display: inline-block;
+    margin-top: var(--space-1);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--ink);
   }
 
   .agent {

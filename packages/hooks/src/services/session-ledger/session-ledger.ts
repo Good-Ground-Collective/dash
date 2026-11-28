@@ -69,16 +69,28 @@ export class FileSessionLedger implements SessionLedger {
     await mkdir(this.config.outboxDirectory, { recursive: true });
 
     return new FileLock({ lockPath: `${statePath}.lock` }).hold(async () => {
-      const state = await this.load(statePath, outboxPath);
-      if (!this.shouldWrite(plan, state, now)) {
+      const loaded = await this.load(statePath, outboxPath);
+      const state = FileSessionLedger.withoutMainChildrenOnEmptyTaskList(
+        plan,
+        FileSessionLedger.withLaunchedChild(plan, loaded),
+      );
+      const effective = FileSessionLedger.withChildrenStatus(plan, state);
+      if (!this.shouldWrite(effective, state, now)) {
+        if (state !== loaded) {
+          await FileSessionLedger.save(statePath, state);
+        }
         return undefined;
       }
 
-      const heartbeat = FileSessionLedger.numberedHeartbeat(plan, state, now);
+      const heartbeat = FileSessionLedger.numberedHeartbeat(
+        effective,
+        state,
+        now,
+      );
       await appendFile(outboxPath, `${LineFitter.fit(heartbeat)}\n`);
       await FileSessionLedger.save(
         statePath,
-        FileSessionLedger.advance(plan, state, now),
+        FileSessionLedger.advance(effective, state, now),
       );
       return heartbeat;
     });
@@ -89,10 +101,13 @@ export class FileSessionLedger implements SessionLedger {
     state: SessionState,
     now: Date,
   ): boolean {
-    const key = plan.draft.agentId ?? mainAgentKey;
+    const key = FileSessionLedger.agentKey(plan);
 
     if (plan.condition === 'known-subagent') {
-      return key in state.agents;
+      return (
+        key in state.agents ||
+        Object.values(state.children).some((ids) => ids.includes(key))
+      );
     }
     if (plan.condition === 'liveness') {
       return this.livenessDue(key, state, now);
@@ -108,11 +123,14 @@ export class FileSessionLedger implements SessionLedger {
    * A liveness heartbeat goes out when the agent has been quiet for the interval, or when it last
    * reported something other than `working` that a finished tool call disproves, such as an
    * approved permission prompt. It never follows a finished turn, since a late tool hook is out of
-   * order there, nor an AskUserQuestion still waiting on its answer.
+   * order there, nor an AskUserQuestion still waiting on its answer. A late non-launch tool hook
+   * after `waiting` moves the agent back to `working`: Claude Code documents no resume event for
+   * the main agent, so a tool call is the only sign that waiting work woke it, and that trade-off
+   * is kept. A launch is the exception, see `withChildrenStatus`.
    */
   private livenessDue(key: string, state: SessionState, now: Date): boolean {
     const last = state.agents[key];
-    if (last === 'complete' || last === 'failed' || last === 'error') {
+    if (FileSessionLedger.isFinished(last)) {
       return false;
     }
     if (last === 'question') {
@@ -149,6 +167,114 @@ export class FileSessionLedger implements SessionLedger {
     return sessionId.replaceAll(/[^\w-]/g, '_');
   }
 
+  private static agentKey(plan: HeartbeatPlan): string {
+    return plan.draft.agentId ?? mainAgentKey;
+  }
+
+  /** The state with the plan's background child recorded under the agent that launched it. */
+  private static withLaunchedChild(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): SessionState {
+    if (plan.launchedChild === undefined) {
+      return state;
+    }
+
+    const key = FileSessionLedger.agentKey(plan);
+    const known = state.children[key] ?? [];
+    if (known.includes(plan.launchedChild)) {
+      return state;
+    }
+
+    return {
+      ...state,
+      children: { ...state.children, [key]: [...known, plan.launchedChild] },
+    };
+  }
+
+  /**
+   * The state without the main agent's recorded children when its `Stop` reports an empty
+   * `background_tasks` list: Claude Code's own empty list outranks a child whose finish was never seen.
+   */
+  private static withoutMainChildrenOnEmptyTaskList(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): SessionState {
+    if (plan.reportedBackgroundTasks !== 0) {
+      return state;
+    }
+
+    const { [mainAgentKey]: _dropped, ...others } = state.children;
+    return { ...state, children: others };
+  }
+
+  /**
+   * The plan as it should be written given the agent's background children. A turn end becomes
+   * `waiting` while a child is still running. A child recorded after its launcher already
+   * reported `complete`, because `PostToolUse` runs in the background and lost the race with the
+   * stop, moves the launcher to `waiting`, unless the session has ended. A launch that arrives
+   * while its launcher is already `waiting` on a running child keeps it `waiting` rather than
+   * writing a liveness `working`.
+   */
+  private static withChildrenStatus(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): HeartbeatPlan {
+    const key = FileSessionLedger.agentKey(plan);
+    const hasRunningChild =
+      FileSessionLedger.runningChildren(key, state).length > 0;
+
+    if (
+      plan.waitsOnRecordedChildren &&
+      plan.draft.status === 'complete' &&
+      hasRunningChild
+    ) {
+      return { ...plan, draft: { ...plan.draft, status: 'waiting' } };
+    }
+    if (
+      plan.launchedChild !== undefined &&
+      hasRunningChild &&
+      (state.agents[key] === 'complete' || state.agents[key] === 'waiting') &&
+      !state.ended
+    ) {
+      return {
+        ...plan,
+        draft: { ...plan.draft, status: 'waiting' },
+        condition: 'always',
+      };
+    }
+
+    return plan;
+  }
+
+  private static runningChildren(key: string, state: SessionState): string[] {
+    return (state.children[key] ?? []).filter(
+      (child) => !FileSessionLedger.isFinished(state.agents[child]),
+    );
+  }
+
+  private static isFinished(
+    status: SessionState['agents'][string] | undefined,
+  ): boolean {
+    return status === 'complete' || status === 'failed' || status === 'error';
+  }
+
+  /** The children of every agent that are still running, with finished ones forgotten. */
+  private static withoutFinishedChildren(
+    children: SessionState['children'],
+    agents: SessionState['agents'],
+  ): SessionState['children'] {
+    const running = Object.entries(children).map(
+      ([key, ids]) =>
+        [
+          key,
+          ids.filter((child) => !FileSessionLedger.isFinished(agents[child])),
+        ] as const,
+    );
+
+    return Object.fromEntries(running.filter(([, ids]) => ids.length > 0));
+  }
+
   /** The heartbeat with its `seq`, envelope and the session's model, checked against the standards schema. */
   private static numberedHeartbeat(
     plan: HeartbeatPlan,
@@ -176,15 +302,21 @@ export class FileSessionLedger implements SessionLedger {
     state: SessionState,
     now: Date,
   ): SessionState {
-    const key = plan.draft.agentId ?? mainAgentKey;
+    const key = FileSessionLedger.agentKey(plan);
     const awaitingAnswer = Object.fromEntries(
       Object.entries(state.awaitingAnswer).filter(([agent]) => agent !== key),
     );
 
+    const agents = { ...state.agents, [key]: plan.draft.status };
+
     return {
       nextSeq: state.nextSeq + 1,
       lastWrittenAt: now.getTime(),
-      agents: { ...state.agents, [key]: plan.draft.status },
+      agents,
+      children: FileSessionLedger.withoutFinishedChildren(
+        state.children,
+        agents,
+      ),
       awaitingAnswer: plan.awaitsAnswer
         ? { ...awaitingAnswer, [key]: plan.toolUseId ?? '' }
         : awaitingAnswer,
