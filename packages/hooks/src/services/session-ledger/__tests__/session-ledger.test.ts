@@ -1,3 +1,6 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
@@ -175,5 +178,56 @@ describe('FileSessionLedger sequence', () => {
       ({ payload }) => payload.seq,
     );
     expect(seqs).toEqual(Array.from({ length: 25 }, (_, index) => index));
+  });
+});
+
+describe('FileSessionLedger state files', () => {
+  it('loads a state file written before background children were tracked', async () => {
+    const ledger = new FileSessionLedger({ config: state.config });
+    await mkdir(state.config.sessionsDirectory, { recursive: true });
+    await writeFile(
+      path.join(state.config.sessionsDirectory, 'session-1.json'),
+      JSON.stringify({
+        nextSeq: 7,
+        lastWrittenAt: start,
+        agents: { 'agent-a': 'working' },
+        awaitingAnswer: {},
+        ended: false,
+      }),
+    );
+
+    expect(
+      await Plans.record(
+        ledger,
+        Plans.make('complete', 'known-subagent', 'agent-a'),
+        1,
+      ),
+    ).toBe(7);
+  });
+
+  it('forgets a child once it has finished', async () => {
+    const ledger = new FileSessionLedger({ config: state.config });
+    const stopping = {
+      ...Plans.make('complete', 'known-subagent', 'agent-a'),
+      waitsOnRecordedChildren: true,
+    };
+
+    await Plans.record(ledger, Plans.make('working', 'always', 'agent-a'), 0);
+    await Plans.record(
+      ledger,
+      {
+        ...Plans.make('working', 'liveness', 'agent-a'),
+        launchedChild: 'agent-b',
+      },
+      1,
+    );
+    await Plans.record(ledger, Plans.make('complete', 'always', 'agent-b'), 2);
+    await Plans.record(ledger, stopping, 3);
+
+    const text = await readFile(
+      path.join(state.config.sessionsDirectory, 'session-1.json'),
+      'utf8',
+    );
+    expect(JSON.parse(text).children).toEqual({});
   });
 });

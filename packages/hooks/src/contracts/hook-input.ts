@@ -42,6 +42,11 @@ export const hookInputSchema = z
     agent_transcript_path: textSchema,
     error: textSchema,
     error_details: textSchema,
+    tool_response: z
+      .looseObject({ status: textSchema, agentId: textSchema })
+      .optional()
+      .catch(undefined),
+    background_tasks: z.array(z.unknown()).optional().catch(undefined),
   })
   .transform((input) => ({
     sessionId: input.session_id,
@@ -60,6 +65,9 @@ export const hookInputSchema = z
     agentTranscriptPath: input.agent_transcript_path,
     error: input.error,
     errorDetails: input.error_details,
+    toolResponseStatus: input.tool_response?.status,
+    launchedAgentId: input.tool_response?.agentId,
+    backgroundTaskCount: input.background_tasks?.length,
   }));
 
 export type HookInput = z.output<typeof hookInputSchema>;

@@ -22,6 +22,12 @@ export const sessionStateSchema = z.object({
     .describe(
       'The last status sent for the main agent and each running subagent.',
     ),
+  children: z
+    .record(z.string(), z.array(z.string()))
+    .default({})
+    .describe(
+      'The subagents each agent launched in the background that have not been seen finishing, keyed by the launching agent. A child counts as running until its own status is `complete`, `failed` or `error`, including before its start is seen.',
+    ),
   awaitingAnswer: z
     .record(z.string(), z.string())
     .default({})
