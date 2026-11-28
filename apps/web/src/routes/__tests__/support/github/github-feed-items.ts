@@ -27,6 +27,7 @@ export class GithubFeedItems {
         title: 'Rate-limit the public search endpoint',
         author: 'grace',
         minutes: 12,
+        checks: { state: 'success', success: 6, failure: 0, pending: 0 },
       }),
       pull({
         repo: 'acme-labs/web',
@@ -50,6 +51,7 @@ export class GithubFeedItems {
         title: 'Drop the legacy export job',
         author: 'grace',
         minutes: 1500,
+        checks: { state: 'failure', success: 3, failure: 1, pending: 0 },
       }),
     ];
   }

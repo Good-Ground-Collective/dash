@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { GithubFeedPullRequest } from '#lib/api/github-feed-contracts.ts';
 import { GithubFeedView } from '#lib/github-feed/feed-view.ts';
 import { SampleFeed } from './support/sample-feed.ts';
 
@@ -77,31 +78,77 @@ describe('GithubFeedView status', () => {
   });
 });
 
-describe('GithubFeedView groups', () => {
-  it('lists the four groups in order, newest first', () => {
-    const view = new GithubFeedView({ feed });
+describe('GithubFeedView tab bodies', () => {
+  it('lists review requests oldest first by created time, with each checks state', () => {
+    const failing = {
+      state: 'failure',
+      success: 1,
+      failure: 1,
+      pending: 0,
+    } as const;
+    const view = new GithubFeedView({
+      feed: SampleFeed.feed({
+        reviewRequests: [
+          SampleFeed.pull({ id: 'recent', createdAt: new Date('2026-11-26') }),
+          SampleFeed.pull({
+            id: 'oldest',
+            createdAt: new Date('2026-11-01'),
+            updatedAt: new Date('2026-11-27T11:00:00Z'),
+            checks: failing,
+          }),
+        ],
+      }),
+    });
 
-    expect(view.groups.map((group) => group.title)).toEqual([
-      'Review requests',
-      'My pull requests',
-      'Failed runs',
-      'Assigned issues',
-    ]);
     expect(view.groups[0]?.rows.map((row) => row.id)).toEqual([
-      'night',
-      'new',
-      'old',
+      'oldest',
+      'recent',
     ]);
-    expect(view.groups[1]?.rows).toEqual([]);
-    expect(view.groups[1]?.empty).toBe('You have no open pull requests.');
+    expect(view.groups[0]?.rows[0]?.badges).toEqual([
+      { label: '1 check failing', tone: 'bad' },
+    ]);
   });
 
-  it('narrows every group to one account, ignoring case', () => {
+  it('titles My PRs groups in order, hiding empty ones, or shows one empty card', () => {
+    const mine = (pulls: GithubFeedPullRequest[]): string[] =>
+      new GithubFeedView({
+        feed: SampleFeed.feed({ myPullRequests: pulls }),
+        tab: 'mine',
+      }).groups.map((group) => group.title);
+
+    expect(
+      mine([
+        SampleFeed.pull({ id: 'a', mergeState: 'blocked' }),
+        SampleFeed.pull({ id: 'b' }),
+        SampleFeed.pull({ id: 'c', reviewDecision: 'changes_requested' }),
+      ]),
+    ).toEqual(['Changes requested', 'Ready to merge', 'Waiting on review']);
+    expect(mine([])).toEqual(['My pull requests']);
+  });
+
+  it('lists assigned issues, newest first', () => {
+    const view = new GithubFeedView({
+      feed: SampleFeed.feed({
+        assignedIssues: [
+          SampleFeed.issue({ id: 'a', updatedAt: new Date('2026-11-01') }),
+          SampleFeed.issue({ id: 'b', updatedAt: new Date('2026-11-02') }),
+        ],
+      }),
+      tab: 'assigned',
+    });
+
+    expect(view.groups[0]?.title).toBe('Assigned issues');
+    expect(view.groups[0]?.rows.map((row) => row.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('GithubFeedView account filter', () => {
+  it('narrows every tab to one account, ignoring case', () => {
     const view = new GithubFeedView({ feed, account: 'Night-Shift' });
 
     expect(view.account).toBe('night-shift');
     expect(view.unknownAccount).toBeNull();
-    expect(view.groups.map((group) => group.rows.length)).toEqual([1, 0, 1, 0]);
+    expect(view.tabs.map((tab) => tab.count)).toEqual([1, 0, 0]);
     expect(view.connectionStatuses.map((status) => status.login)).toEqual([
       'night-shift',
     ]);
@@ -112,7 +159,7 @@ describe('GithubFeedView groups', () => {
 
     expect(view.account).toBeNull();
     expect(view.unknownAccount).toBe('nobody');
-    expect(view.groups.map((group) => group.rows.length)).toEqual([3, 0, 1, 1]);
+    expect(view.tabs.map((tab) => tab.count)).toEqual([3, 0, 1]);
   });
 
   it('treats an empty account as no filter', () => {
@@ -123,19 +170,96 @@ describe('GithubFeedView groups', () => {
   });
 });
 
+describe('GithubFeedView tabs', () => {
+  it('offers each tab with its count, and the account filter kept in every link', () => {
+    const view = new GithubFeedView({
+      feed,
+      account: 'acme-labs',
+      tab: 'assigned',
+    });
+
+    expect(view.tabs).toEqual([
+      {
+        key: 'review',
+        label: 'Review requests',
+        count: 2,
+        href: '/github?account=acme-labs&tab=review',
+        current: false,
+      },
+      {
+        key: 'mine',
+        label: 'My PRs',
+        count: 0,
+        href: '/github?account=acme-labs&tab=mine',
+        current: false,
+      },
+      {
+        key: 'assigned',
+        label: 'Assigned',
+        count: 1,
+        href: '/github?account=acme-labs&tab=assigned',
+        current: true,
+      },
+    ]);
+  });
+
+  it('defaults to review for a missing or unknown tab', () => {
+    expect(new GithubFeedView({ feed }).tab).toBe('review');
+    expect(new GithubFeedView({ feed, tab: 'ci' }).tab).toBe('review');
+    expect(new GithubFeedView({ feed, tab: null }).tab).toBe('review');
+  });
+
+  it('builds the tab links without an account when none is chosen', () => {
+    const view = new GithubFeedView({ feed });
+
+    expect(view.tabs.map((tab) => tab.href)).toEqual([
+      '/github?tab=review',
+      '/github?tab=mine',
+      '/github?tab=assigned',
+    ]);
+  });
+});
+
+describe('GithubFeedView freshness', () => {
+  it('counts accounts and reads the most recent successful sync', () => {
+    expect(new GithubFeedView({ feed }).freshness).toBe(
+      '2 accounts · reconciled 5 minutes ago',
+    );
+  });
+
+  it('says so before any connection has been read', () => {
+    const view = new GithubFeedView({
+      feed: SampleFeed.feed({
+        connections: [SampleFeed.connection({ lastSyncedAt: null })],
+      }),
+    });
+
+    expect(view.freshness).toBe('1 account · not reconciled yet');
+  });
+});
+
 describe('GithubFeedView accountOptions', () => {
-  it('offers all accounts, then each login as a link that keeps the choice', () => {
-    const view = new GithubFeedView({ feed, account: 'acme-labs' });
+  it('offers all accounts, then each login as a link that keeps the choice and the tab', () => {
+    const view = new GithubFeedView({
+      feed,
+      account: 'acme-labs',
+      tab: 'mine',
+    });
 
     expect(view.accountOptions).toEqual([
-      { label: 'All accounts', href: '/github', current: false },
-      { label: 'acme-labs', href: '/github?account=acme-labs', current: true },
+      { label: 'All accounts', href: '/github?tab=mine', current: false },
+      {
+        label: 'acme-labs',
+        href: '/github?account=acme-labs&tab=mine',
+        current: true,
+      },
       {
         label: 'night-shift',
-        href: '/github?account=night-shift',
+        href: '/github?account=night-shift&tab=mine',
         current: false,
       },
     ]);
+    expect(view.clearAccountHref).toBe('/github?tab=mine');
   });
 });
 

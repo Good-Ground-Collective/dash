@@ -9,6 +9,8 @@ const screens = [
   { name: 'home', path: '/' },
   { name: 'home-all-objectives', path: '/?show=parked,done' },
   { name: 'github', path: '/github' },
+  { name: 'github-mine', path: '/github?tab=mine' },
+  { name: 'github-assigned', path: '/github?tab=assigned' },
   { name: 'settings', path: '/settings' },
   { name: 'service-accounts', path: '/settings/service-accounts' },
 ] as const;

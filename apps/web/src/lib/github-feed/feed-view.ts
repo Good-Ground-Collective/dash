@@ -4,6 +4,11 @@ import type {
   GithubFeedConnection,
 } from '#lib/api/github-feed-contracts.ts';
 import { type FeedRow, FeedRows } from '#lib/github-feed/feed-rows.ts';
+import {
+  type MyPullGroupKey,
+  myPullGroupKeys,
+  MyPullGroups,
+} from '#lib/github-feed/my-pull-groups.ts';
 import { RelativeTime } from '#lib/github-feed/relative-time.ts';
 
 export const githubPagePath = '/github';
@@ -12,8 +17,15 @@ export const accountParam = 'account';
 /** Mission Control reads every 15 minutes, so an hour without a read means something is wrong. */
 const staleAfterMinutes = 60;
 
+export const tabParam = 'tab';
+
+/** The tabs the page offers, in order. A tab is one entry here and one entry in `tabCopy`. */
+export const githubTabKeys = ['review', 'mine', 'assigned'] as const;
+export type GithubTabKey = (typeof githubTabKeys)[number];
+export const defaultTab: GithubTabKey = 'review';
+
 export type FeedGroupKey =
-  'reviewRequests' | 'myPullRequests' | 'failedRuns' | 'assignedIssues';
+  'reviewRequests' | MyPullGroupKey | 'myPullRequests' | 'assignedIssues';
 
 export interface FeedGroup {
   key: FeedGroupKey;
@@ -47,28 +59,50 @@ export interface AccountFilterOption {
   current: boolean;
 }
 
-const groupCopy: readonly Omit<FeedGroup, 'rows'>[] = [
-  {
-    key: 'reviewRequests',
+export interface GithubTab {
+  key: GithubTabKey;
+  label: string;
+  count: number;
+  href: string;
+  current: boolean;
+}
+
+const tabCopy = {
+  review: 'Review requests',
+  mine: 'My PRs',
+  assigned: 'Assigned',
+} satisfies Record<GithubTabKey, string>;
+
+const groupCopy = {
+  reviewRequests: {
     title: 'Review requests',
     empty: 'Nothing is waiting on your review.',
   },
-  {
-    key: 'myPullRequests',
+  changesRequested: {
+    title: 'Changes requested',
+    empty: 'No pull requests have changes requested.',
+  },
+  checksFailing: {
+    title: 'Checks failing',
+    empty: 'No pull requests have failing checks.',
+  },
+  readyToMerge: {
+    title: 'Ready to merge',
+    empty: 'No pull requests are ready to merge.',
+  },
+  waitingOnReview: {
+    title: 'Waiting on review',
+    empty: 'No pull requests are waiting on review.',
+  },
+  myPullRequests: {
     title: 'My pull requests',
     empty: 'You have no open pull requests.',
   },
-  {
-    key: 'failedRuns',
-    title: 'Failed runs',
-    empty: 'No failed runs on your branches or default branches.',
-  },
-  {
-    key: 'assignedIssues',
+  assignedIssues: {
     title: 'Assigned issues',
     empty: 'No open issues are assigned to you.',
   },
-];
+} satisfies Record<FeedGroupKey, Omit<FeedGroup, 'rows' | 'key'>>;
 
 export const githubFeedViewPropsSchema = z.object({
   feed: z.custom<GithubFeed>(),
@@ -79,6 +113,13 @@ export const githubFeedViewPropsSchema = z.object({
     .transform((value) => (value === '' ? null : value))
     .nullish()
     .transform((value) => value ?? null),
+  tab: z
+    .string()
+    .nullish()
+    .transform((value): GithubTabKey => {
+      const match = githubTabKeys.find((key) => key === value);
+      return match ?? defaultTab;
+    }),
 });
 
 export type GithubFeedViewProps = z.input<typeof githubFeedViewPropsSchema>;
@@ -87,6 +128,7 @@ export type GithubFeedViewProps = z.input<typeof githubFeedViewPropsSchema>;
 export class GithubFeedView {
   readonly connections: readonly GithubFeedConnection[];
   readonly account: string | null;
+  readonly tab: GithubTabKey;
   /** The `account` asked for when no connection has that login, so the view shows everything. */
   readonly unknownAccount: string | null;
   private readonly feed: GithubFeed;
@@ -94,6 +136,7 @@ export class GithubFeedView {
   constructor(props: GithubFeedViewProps) {
     const valid = githubFeedViewPropsSchema.parse(props);
     this.feed = valid.feed;
+    this.tab = valid.tab;
     const wanted = valid.account;
     const matching = valid.feed.connections.filter(
       (connection) => connection.accountLogin.toLowerCase() === wanted,
@@ -114,31 +157,45 @@ export class GithubFeedView {
     return synced ? 'ready' : 'first-sync';
   }
 
+  /** “2 accounts · reconciled 4 minutes ago”, from the most recent successful read of any connection. */
+  get freshness(): string {
+    const accounts = new Set(
+      this.feed.connections.map((connection) => connection.accountLogin),
+    ).size;
+    const noun = accounts === 1 ? 'account' : 'accounts';
+    const reconciled = this.reconciledAt;
+    return `${accounts} ${noun} · ${
+      reconciled === null
+        ? 'not reconciled yet'
+        : `reconciled ${RelativeTime.since(reconciled)}`
+    }`;
+  }
+
+  /** One link per tab with its count, each keeping the account filter in the URL. */
+  get tabs(): GithubTab[] {
+    return githubTabKeys.map((key) => ({
+      key,
+      label: tabCopy[key],
+      count: this.rowCount(key),
+      href: this.href({ tab: key }),
+      current: this.tab === key,
+    }));
+  }
+
+  /** The groups the active tab shows. Empty My PRs groups are left out, unless all are, which leaves one empty card. */
   get groups(): FeedGroup[] {
-    const ids = new Set(this.connections.map((connection) => connection.id));
-    const mine = <T extends { connectionId: string; updatedAt: Date }>(
-      items: readonly T[],
-    ): T[] =>
-      items
-        .filter((item) => ids.has(item.connectionId))
-        .toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const groups = this.groupsOf(this.tab);
+    if (this.tab !== 'mine') return groups;
 
-    const rows = {
-      reviewRequests: mine(this.feed.reviewRequests).map((pull) =>
-        FeedRows.reviewRequest(pull),
-      ),
-      myPullRequests: mine(this.feed.myPullRequests).map((pull) =>
-        FeedRows.myPullRequest(pull),
-      ),
-      failedRuns: mine(this.feed.failedRuns).map((run) =>
-        FeedRows.failedRun(run),
-      ),
-      assignedIssues: mine(this.feed.assignedIssues).map((issue) =>
-        FeedRows.assignedIssue(issue),
-      ),
-    } satisfies Record<FeedGroupKey, FeedRow[]>;
+    const filled = groups.filter((group) => group.rows.length > 0);
+    return filled.length > 0
+      ? filled
+      : [{ key: 'myPullRequests', ...groupCopy.myPullRequests, rows: [] }];
+  }
 
-    return groupCopy.map((copy) => ({ ...copy, rows: rows[copy.key] }));
+  /** Where the page goes with no account filter, on the same tab. */
+  get clearAccountHref(): string {
+    return this.href({ account: null });
   }
 
   get connectionStatuses(): ConnectionStatus[] {
@@ -155,14 +212,88 @@ export class GithubFeedView {
     return [
       {
         label: 'All accounts',
-        href: githubPagePath,
+        href: this.href({ account: null }),
         current: this.account === null,
       },
       ...logins.map((login) => ({
         label: login,
-        href: `${githubPagePath}?${new URLSearchParams({ [accountParam]: login }).toString()}`,
+        href: this.href({ account: login }),
         current: this.account === login,
       })),
+    ];
+  }
+
+  private get reconciledAt(): Date | null {
+    const times = this.feed.connections.flatMap((connection) =>
+      connection.lastSyncedAt === null ? [] : [connection.lastSyncedAt],
+    );
+    return times.length === 0
+      ? null
+      : new Date(Math.max(...times.map((time) => time.getTime())));
+  }
+
+  private href(change: {
+    tab?: GithubTabKey;
+    account?: string | null;
+  }): string {
+    const account =
+      change.account === undefined ? this.account : change.account;
+    const params = new URLSearchParams();
+    if (account !== null) params.set(accountParam, account);
+    params.set(tabParam, change.tab ?? this.tab);
+    return `${githubPagePath}?${params.toString()}`;
+  }
+
+  private rowCount(tab: GithubTabKey): number {
+    return this.groupsOf(tab).reduce(
+      (total, group) => total + group.rows.length,
+      0,
+    );
+  }
+
+  private groupsOf(tab: GithubTabKey): FeedGroup[] {
+    const ids = new Set(this.connections.map((connection) => connection.id));
+    const mine = <T extends { connectionId: string; updatedAt: Date }>(
+      items: readonly T[],
+    ): T[] =>
+      items
+        .filter((item) => ids.has(item.connectionId))
+        .toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const group = (key: FeedGroupKey, rows: FeedRow[]): FeedGroup => ({
+      key,
+      ...groupCopy[key],
+      rows,
+    });
+
+    if (tab === 'review') {
+      const oldestFirst = this.feed.reviewRequests
+        .filter((pull) => ids.has(pull.connectionId))
+        .toSorted((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      return [
+        group(
+          'reviewRequests',
+          oldestFirst.map((pull) => FeedRows.reviewRequestWithChecks(pull)),
+        ),
+      ];
+    }
+
+    if (tab === 'mine') {
+      const pulls = MyPullGroups.split(mine(this.feed.myPullRequests));
+      return myPullGroupKeys.map((key) =>
+        group(
+          key,
+          pulls[key].map((pull) => FeedRows.myPullRequest(pull)),
+        ),
+      );
+    }
+
+    return [
+      group(
+        'assignedIssues',
+        mine(this.feed.assignedIssues).map((issue) =>
+          FeedRows.assignedIssue(issue),
+        ),
+      ),
     ];
   }
 
