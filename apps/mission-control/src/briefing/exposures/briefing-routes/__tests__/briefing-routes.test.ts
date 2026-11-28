@@ -73,7 +73,13 @@ describe('GET /briefings', () => {
       latest: null,
       lastRun: null,
       history: [],
-      budget: { month: '2026-11', spentUsd: 0, capUsd: 0, reached: false },
+      budget: {
+        month: '2026-11',
+        spentUsd: 0,
+        capUsd: 0,
+        runs: 0,
+        reached: false,
+      },
       running: null,
     });
   });
@@ -86,7 +92,13 @@ describe('GET /briefings', () => {
       latest: null,
       lastRun: null,
       history: [],
-      budget: { month: '2026-11', spentUsd: 0, capUsd: 1, reached: false },
+      budget: {
+        month: '2026-11',
+        spentUsd: 0,
+        capUsd: 1,
+        runs: 0,
+        reached: false,
+      },
       running: null,
     });
   });
@@ -226,6 +238,7 @@ describe('GET /briefings budget', () => {
       month: '2026-11',
       spentUsd: 0.4,
       capUsd: 1,
+      runs: 1,
       reached: false,
     });
   });

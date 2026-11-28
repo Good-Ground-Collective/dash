@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { BriefingCounts } from '#src/briefing/contracts/briefing-snapshot.ts';
@@ -46,6 +46,8 @@ export interface BriefingRepository {
   history(props: { userId: string; limit: number }): Promise<BriefingRun[]>;
   /** Micro-USD spent by every person's runs started at or after `since`, failed runs included. */
   spentSince(props: { since: Date }): Promise<number>;
+  /** How many runs started at or after `since` called the model, failed runs included; runs skipped over budget are not counted. */
+  runsSince(props: { since: Date }): Promise<number>;
   /** Deletes runs started strictly before `cutoff` and says how many went. */
   deleteStartedBefore(props: { cutoff: Date }): Promise<number>;
 }
@@ -131,6 +133,19 @@ export class DrizzleBriefingRepository implements BriefingRepository {
       .from(briefingTable)
       .where(gte(briefingTable.startedAt, props.since));
     return Number(row?.spent ?? 0);
+  }
+
+  async runsSince(props: { since: Date }): Promise<number> {
+    const [row] = await this.database.orm
+      .select({ runs: sql<string>`count(*)` })
+      .from(briefingTable)
+      .where(
+        and(
+          gte(briefingTable.startedAt, props.since),
+          ne(briefingTable.status, 'skipped_over_budget'),
+        ),
+      );
+    return Number(row?.runs ?? 0);
   }
 
   async deleteStartedBefore(props: { cutoff: Date }): Promise<number> {
