@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ZodError } from 'zod';
 
+import { ConfigError } from '#src/platform/errors.ts';
 import { WorkflowRuntimeConfig } from '#src/platform/services/workflows/workflow-runtime.config.ts';
 
 describe('WorkflowRuntimeConfig', () => {
@@ -15,9 +15,14 @@ describe('WorkflowRuntimeConfig', () => {
     ).toBe(true);
   });
 
-  it('rejects any other value rather than silently not forcing', () => {
-    expect(
-      () => new WorkflowRuntimeConfig({ DASH_CLAIM_LATEST_VERSION: 'true' }),
-    ).toThrow(ZodError);
-  });
+  it.each(['true', 'Force'])(
+    'rejects %s rather than silently not forcing, naming the variable',
+    (value) => {
+      const build = () =>
+        new WorkflowRuntimeConfig({ DASH_CLAIM_LATEST_VERSION: value });
+
+      expect(build).toThrow(ConfigError);
+      expect(build).toThrow(/DASH_CLAIM_LATEST_VERSION/);
+    },
+  );
 });

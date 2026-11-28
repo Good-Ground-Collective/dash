@@ -112,7 +112,11 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
    * it the latest. A container never takes "latest" from a version created after its own, so an
    * old container that restarts during the overlap of a deploy leaves the new one in charge.
    * Rolling back on purpose therefore needs `DASH_CLAIM_LATEST_VERSION=force`, which claims
-   * regardless; the README's rollback steps set it.
+   * regardless; the README's rollback steps set it. So does a failed deploy: the new container
+   * claims "latest" at launch, before it listens, so if it then fails its health check the surviving
+   * old container no longer holds the marker and a plain restart will not reclaim it. Restart that
+   * container once with `DASH_CLAIM_LATEST_VERSION: force`, then remove the switch. The
+   * `holdsLatestVersion` gauge on `/healthz` reads 0 while the running container lacks the marker.
    */
   private async becomeLatestVersion(): Promise<void> {
     const version = DBOS.applicationVersion;

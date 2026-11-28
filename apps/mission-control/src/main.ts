@@ -38,6 +38,7 @@ import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
 import { PostgresDatabase } from '#src/platform/services/database/database.ts';
 import { DbosStrandedWorkflowRecovery } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
+import { LatestVersionGauge } from '#src/platform/services/workflows/latest-version-gauge.ts';
 import { StrandedWorkflowGauge } from '#src/platform/services/workflows/stranded-workflow-gauge.ts';
 import { UnregisteredStrandedWorkflowGauge } from '#src/platform/services/workflows/unregistered-stranded-workflow-gauge.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
@@ -159,6 +160,7 @@ const platform = new PlatformModule({
       gauges: [
         new StrandedWorkflowGauge({ recovery: strandedWorkflows }),
         new UnregisteredStrandedWorkflowGauge({ recovery: strandedWorkflows }),
+        new LatestVersionGauge(),
       ],
       build: config.build,
     }),

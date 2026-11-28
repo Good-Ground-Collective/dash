@@ -162,9 +162,13 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   /**
    * Whether this process registered a workflow function under the listed name. It reads
    * `getFunctionRegistrationByName` from `@dbos-inc/dbos-sdk/internal/decorators`, a path semver
-   * does not cover: the catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0, and a unit test fails if
-   * the import stops resolving or stops finding a registered workflow. Re-check both whenever that
-   * pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
+   * does not cover: the catalog pins `@dbos-inc/dbos-sdk` to exactly 5.7.0. The test 'the DBOS
+   * registration lookup that recovery depends on' in
+   * `__tests__/stranded-workflow-recovery.integration.test.ts` fails if the import stops resolving or
+   * stops finding a registered free-function workflow, and the test 'treats a class-based workflow
+   * whose class no longer exists as unregistered instead of throwing' in
+   * `__tests__/stranded-workflow-recovery.test.ts` pins the throw-on-unknown-class behaviour. Re-check
+   * both whenever that pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
    * unknown class name, as when a class-based workflow has since been removed; that counts as not
    * registered.
    */
@@ -202,13 +206,13 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
         : [],
     );
 
-    return {
-      registered: otherVersions.filter((workflow) =>
-        this.isRegisteredHere(workflow),
-      ),
-      unregistered: otherVersions.filter(
-        (workflow) => !this.isRegisteredHere(workflow),
-      ),
-    };
+    const registered: (WorkflowStatus & { queueName: string })[] = [];
+    const unregistered: (WorkflowStatus & { queueName: string })[] = [];
+    for (const workflow of otherVersions) {
+      (this.isRegisteredHere(workflow) ? registered : unregistered).push(
+        workflow,
+      );
+    }
+    return { registered, unregistered };
   }
 }

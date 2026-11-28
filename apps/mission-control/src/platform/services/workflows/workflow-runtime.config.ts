@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ConfigError } from '#src/platform/errors.ts';
+
 const workflowRuntimeEnvironmentSchema = z
   .object({
     DASH_CLAIM_LATEST_VERSION: z
@@ -17,10 +19,13 @@ const workflowRuntimeEnvironmentSchema = z
 export class WorkflowRuntimeConfig {
   readonly forceLatestVersion: boolean;
 
-  /** Parses `env`, throwing a `ZodError` for a value other than `force`, so a mistyped rollback switch fails the deploy's health check instead of being ignored. */
+  /** Parses `env`, throwing a `ConfigError` for a value other than `force`, so a mistyped rollback switch fails the deploy's health check instead of being ignored. */
   constructor(env: NodeJS.ProcessEnv) {
-    this.forceLatestVersion =
-      workflowRuntimeEnvironmentSchema.parse(env).forceLatestVersion;
+    const parsed = workflowRuntimeEnvironmentSchema.safeParse(env);
+    if (!parsed.success) {
+      throw new ConfigError({ details: z.prettifyError(parsed.error) });
+    }
+    this.forceLatestVersion = parsed.data.forceLatestVersion;
   }
 
   static fromEnvironment(): WorkflowRuntimeConfig {
