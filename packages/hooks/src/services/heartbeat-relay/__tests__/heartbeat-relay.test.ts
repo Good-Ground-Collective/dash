@@ -39,33 +39,28 @@ afterEach(async () => {
 });
 
 /**
- * Moves fake time forward one timer at a time, with a real turn of the event loop before each step
- * so the relay's file and network I/O finishes before its next poll or backoff fires. Both drivers
- * give up after `MAX_STEPS` turns and reject, so a hung or early-settling relay fails with a
- * message instead of waiting out the test timeout.
+ * Moves fake time forward one timer at a time, with real turns of the event loop before each step
+ * so the relay's I/O finishes before its next poll or backoff fires. A hung relay fails with a
+ * message, not a test timeout, by bounds on the relay and not the machine: `MAX_STEPS` fired
+ * timers for a relay that never exits, and `MAX_IDLE_MS` of real time since the last timer fired
+ * for one waiting on I/O that never finishes (under vitest's default 5 s test timeout).
  */
 class FakeTimers {
-  private static readonly MAX_STEPS = 10_000;
+  private static readonly MAX_STEPS = 1_000;
+  private static readonly MAX_IDLE_MS = 3_000;
 
   static async runUntil<T>(work: Promise<T>): Promise<T> {
-    let settled = false;
-    const watched = work.finally(() => {
-      settled = true;
-    });
-    watched.catch(() => undefined);
-
-    for (let step = 0; !settled; step += 1) {
-      if (step >= FakeTimers.MAX_STEPS) {
+    for (let fired = 0; ; fired += 1) {
+      if (!(await FakeTimers.untilTimerPending(work))) {
+        return work;
+      }
+      if (fired >= FakeTimers.MAX_STEPS) {
         throw new Error(
-          `Relay still running after ${FakeTimers.MAX_STEPS} fake-timer steps; it looks hung.`,
+          `Relay still running after ${FakeTimers.MAX_STEPS} fired timers; it looks hung.`,
         );
       }
-      await nextTurn();
-      if (vi.getTimerCount() > 0) {
-        await vi.advanceTimersToNextTimerAsync();
-      }
+      await vi.advanceTimersToNextTimerAsync();
     }
-    return watched;
   }
 
   /** Fires `count` timers, then returns once the next one is pending, leaving it unfired. */
@@ -73,32 +68,44 @@ class FakeTimers {
     running: Promise<RelayOutcome>,
     count: number,
   ): Promise<void> {
-    let settled = false;
-    const markSettled = (): void => {
-      settled = true;
-    };
-    running.then(markSettled, markSettled);
-
-    let fired = 0;
-    for (let step = 0; step < FakeTimers.MAX_STEPS; step += 1) {
-      await nextTurn();
-      if (settled) {
+    for (let fired = 0; ; fired += 1) {
+      if (!(await FakeTimers.untilTimerPending(running))) {
         throw new Error(
           `Relay settled after ${fired} of ${count} timers fired, with the next still to come.`,
         );
-      }
-      if (vi.getTimerCount() === 0) {
-        continue;
       }
       if (fired === count) {
         return;
       }
       await vi.advanceTimersToNextTimerAsync();
-      fired += 1;
     }
-    throw new Error(
-      `Gave up after ${FakeTimers.MAX_STEPS} steps with ${fired} of ${count} timers fired.`,
-    );
+  }
+
+  /** Whether a fake timer is pending, or false once `work` has settled; rejects when neither happens within `MAX_IDLE_MS`. */
+  private static async untilTimerPending(
+    work: Promise<unknown>,
+  ): Promise<boolean> {
+    let settled = false;
+    const markSettled = (): void => {
+      settled = true;
+    };
+    work.then(markSettled, markSettled);
+
+    const idleSince = performance.now();
+    for (;;) {
+      await nextTurn();
+      if (settled) {
+        return false;
+      }
+      if (vi.getTimerCount() > 0) {
+        return true;
+      }
+      if (performance.now() - idleSince >= FakeTimers.MAX_IDLE_MS) {
+        throw new Error(
+          `Relay had no timer pending for ${FakeTimers.MAX_IDLE_MS} ms; it looks hung waiting on I/O.`,
+        );
+      }
+    }
   }
 }
 
@@ -167,7 +174,7 @@ describe('OutboxHeartbeatRelay', () => {
     const timeouts = vi.spyOn(globalThis, 'setTimeout');
 
     const running = TestRelay.start();
-    await FakeTimers.fire(running, 2);
+    await FakeTimers.fire(running, 3);
     const backoffs = timeouts.mock.calls
       .map(([, ms]) => ms)
       .filter((ms) => TestRelay.isBackoff(ms));
@@ -177,7 +184,7 @@ describe('OutboxHeartbeatRelay', () => {
 
     expect(await FakeTimers.runUntil(running)).toBe('drained');
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(8));
-    expect(backoffs).toEqual([10, 20, 40]);
+    expect(backoffs).toEqual([10, 20, 40, 40]);
 
     const log = await state.relayLog();
     expect(log.match(/MissionControlUnavailableError/g)).toHaveLength(1);
