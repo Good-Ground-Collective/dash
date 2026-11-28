@@ -1,0 +1,53 @@
+import { z } from 'zod';
+
+export const briefingTokensSchema = z.object({
+  input: z.int().nonnegative(),
+  cachedInput: z.int().nonnegative(),
+  output: z.int().nonnegative(),
+  reasoning: z
+    .int()
+    .nonnegative()
+    .describe('Already part of `output`; never add it again.'),
+});
+
+export const briefingPricesSchema = z.object({
+  inputUsdPerMTok: z.number().nonnegative(),
+  cachedInputUsdPerMTok: z.number().nonnegative(),
+  outputUsdPerMTok: z.number().nonnegative(),
+});
+
+export const briefingSegmentSchema = z.object({
+  text: z.string().min(1),
+  url: z
+    .url()
+    .nullable()
+    .describe(
+      'The URL of the snapshot item the text cites. Taken from the snapshot, never from the model.',
+    ),
+});
+
+export const briefingParagraphSchema = z.object({
+  segments: z.array(briefingSegmentSchema).min(1),
+});
+
+/** One run of the briefing writer: the text with its links, and what the run used and cost. */
+export const briefingWrittenSchema = z.object({
+  paragraphs: z.array(briefingParagraphSchema),
+  unknownRefs: z
+    .int()
+    .nonnegative()
+    .describe('How many cited refs were not in the snapshot.'),
+  model: z.string(),
+  tokens: briefingTokensSchema,
+  costMicroUsd: z.int().nonnegative(),
+  prices: briefingPricesSchema,
+});
+
+export type BriefingTokens = z.infer<typeof briefingTokensSchema>;
+export type BriefingPrices = z.infer<typeof briefingPricesSchema>;
+export type BriefingParagraph = z.infer<typeof briefingParagraphSchema>;
+export type BriefingWritten = z.infer<typeof briefingWrittenSchema>;
+export type BriefingLinkedText = Pick<
+  BriefingWritten,
+  'paragraphs' | 'unknownRefs'
+>;
