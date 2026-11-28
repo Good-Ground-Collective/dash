@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { IanaTimeZones } from '#src/auth/definitions/time-zones/time-zones.ts';
 import { BudgetMonth } from '#src/briefing/services/budget-month/budget-month.ts';
 
 describe('BudgetMonth', () => {
@@ -60,5 +61,25 @@ describe('BudgetMonth', () => {
 
     expect(month.label).toBe('2026-09');
     expect(month.startsAt.toISOString()).toBe('2026-09-01T03:00:00.000Z');
+  });
+});
+
+describe('BudgetMonth edge cases', () => {
+  it('starts the month at the first instant of the 1st when daylight saving skips local midnight', () => {
+    const month = BudgetMonth.of({
+      now: new Date('2023-10-15T12:00:00Z'),
+      timeZone: 'America/Asuncion',
+    });
+
+    expect(month.label).toBe('2023-10');
+    expect(month.startsAt.toISOString()).toBe('2023-10-01T04:00:00.000Z');
+  });
+
+  it('reads a zone the runtime rejects as the fallback zone', () => {
+    const now = new Date('2026-11-27T15:30:00Z');
+
+    expect(BudgetMonth.of({ now, timeZone: 'Not/AZone' })).toEqual(
+      BudgetMonth.of({ now, timeZone: IanaTimeZones.FALLBACK }),
+    );
   });
 });

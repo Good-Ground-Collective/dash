@@ -32,10 +32,18 @@ export class BriefingsHarness {
   readonly module: BriefingModule;
   private app: ZodFastifyInstance | undefined;
 
-  constructor(props: { configured?: boolean; monthlyBudgetUsd?: number } = {}) {
+  constructor(
+    props: {
+      configured?: boolean;
+      monthlyBudgetUsd?: number;
+      ownerTimeZone?: string;
+    } = {},
+  ) {
     this.module = new BriefingModule({
       briefings: this.briefings,
-      ownerTimeZone: new FixedOwnerTimeZone({ timeZone: 'America/New_York' }),
+      ownerTimeZone: new FixedOwnerTimeZone({
+        timeZone: props.ownerTimeZone ?? 'America/New_York',
+      }),
       workflows: this.workflows,
       identity: {
         session: async ({ headers }): Promise<PrincipalSession | null> => {

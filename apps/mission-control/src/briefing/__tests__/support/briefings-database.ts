@@ -4,6 +4,7 @@ import pg from 'pg';
 
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
 import { DrizzleBriefingRepository } from '#src/briefing/repositories/briefings/briefing-repository.ts';
+import { briefingTable } from '#src/briefing/repositories/briefings/briefings-table.ts';
 import { DrizzlePersonTimeZoneReader } from '#src/briefing/repositories/people-time-zones/person-time-zone-reader.ts';
 import { DrizzleOwnerTimeZoneReader } from '#src/briefing/repositories/owner-time-zones/owner-time-zone-reader.ts';
 import {
@@ -38,6 +39,7 @@ export class BriefingsDatabase {
 
   async reset(): Promise<void> {
     const orm = this.database.orm;
+    await orm.delete(briefingTable);
     await orm.delete(userTable);
     await orm.insert(userTable).values([
       {
