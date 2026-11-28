@@ -39,7 +39,7 @@ const stageSentences = {
   saving: 'Saving the briefing…',
 } satisfies Record<BriefingStage, string>;
 
-/** The sentences the Briefing card and the Settings spend readout show for its times, sources, stages and refusals. */
+/** The sentences the Briefing card and the Settings spend readout show for times, sources, stages, refusals and spend. */
 export class BriefingWording {
   static generated(when: Date): string {
     return `Generated ${RelativeTime.since(when)}`;
