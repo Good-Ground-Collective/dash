@@ -269,6 +269,7 @@ describe('GithubReconcile staleConnections eligibility', () => {
         connectionId,
         viewerLogin: 'ada',
         records: InMemoryGithubRecords.empty(),
+        releaseReads: [],
         truncated: false,
         syncedAt: fixedNow,
       });
@@ -295,6 +296,7 @@ describe('GithubReconcile staleConnections eligibility', () => {
         connectionId,
         viewerLogin: 'ada',
         records: InMemoryGithubRecords.empty(),
+        releaseReads: [],
         truncated: false,
         syncedAt: fixedNow,
       });

@@ -170,7 +170,8 @@ describe.skipIf(databaseUrl === null)(
 
       await vi.waitFor(async () => {
         expect(
-          (await StaleDeployHarness.required(deploys).readOf(id))?.status,
+          (await StaleDeployHarness.required(deploys).readWorkflowOf(id))
+            ?.status,
         ).toBe('CANCELLED');
       }, settle);
     }, 60_000);

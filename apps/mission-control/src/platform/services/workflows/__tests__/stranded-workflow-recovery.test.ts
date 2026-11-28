@@ -1,6 +1,7 @@
 import {
   DBOS,
   type WorkflowHandle,
+  type VersionInfo,
   type WorkflowStatus,
 } from '@dbos-inc/dbos-sdk';
 import {
@@ -32,6 +33,15 @@ class Queued {
       priority: 0,
       createdAt: startedAt.getTime(),
       ...overrides,
+    };
+  }
+
+  static version(versionName: string): VersionInfo {
+    return {
+      versionId: 'v-1',
+      versionName,
+      versionTimestamp: startedAt.getTime(),
+      createdAt: startedAt.getTime(),
     };
   }
 
@@ -72,6 +82,8 @@ class Spies {
   readonly list: MockInstance<typeof DBOS.listQueuedWorkflows>;
   readonly cancel: MockInstance<typeof DBOS.cancelWorkflow>;
   readonly rewind: MockInstance<typeof DBOS.rewindWorkflow>;
+  readonly latest: MockInstance<typeof DBOS.getLatestApplicationVersion>;
+  readonly status: MockInstance<typeof DBOS.getWorkflowStatus>;
   readonly warn = vi.fn();
 
   constructor() {
@@ -81,6 +93,14 @@ class Spies {
     this.rewind = vi
       .spyOn(DBOS, 'rewindWorkflow')
       .mockResolvedValue(new MovedHandle());
+    this.latest = vi
+      .spyOn(DBOS, 'getLatestApplicationVersion')
+      .mockResolvedValue(Queued.version('current'));
+    this.status = vi
+      .spyOn(DBOS, 'getWorkflowStatus')
+      .mockImplementation(async (workflowID) =>
+        Queued.workflow({ workflowID }),
+      );
     vi.spyOn(DBOS, 'applicationVersion', 'get').mockReturnValue('current');
     const logger = DBOS.logger;
     vi.spyOn(logger, 'warn').mockImplementation(this.warn);
@@ -193,5 +213,136 @@ describe('DbosStrandedWorkflowRecovery work it must not move or cannot move', ()
     expect(spies.warn).toHaveBeenCalledWith(
       'Could not re-run stranded workflow broken on queue github-reconcile: TypeError',
     );
+  });
+});
+
+describe('DbosStrandedWorkflowRecovery on a container that is not the latest version', () => {
+  let spies: Spies;
+
+  beforeEach(() => {
+    spies = new Spies();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('counts and moves nothing while a newer version is registered', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    spies.latest.mockResolvedValue(Queued.version('newer'));
+    Sweep.openGate();
+
+    expect(await recovery.count()).toBe(0);
+    expect(await recovery.recover()).toBe(0);
+
+    expect(spies.cancel).not.toHaveBeenCalled();
+    expect(spies.rewind).not.toHaveBeenCalled();
+  });
+
+  it('moves work once this version is the latest', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    Sweep.openGate();
+
+    expect(await recovery.recover()).toBe(1);
+  });
+
+  it('treats a failed latest-version lookup as not latest, without throwing', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    spies.latest.mockRejectedValue(new TypeError('connection refused'));
+    Sweep.openGate();
+
+    expect(await recovery.count()).toBe(0);
+    expect(await recovery.recover()).toBe(0);
+
+    expect(spies.cancel).not.toHaveBeenCalled();
+    expect(spies.warn).toHaveBeenCalledWith(
+      expect.stringContaining('TypeError'),
+    );
+  });
+});
+
+describe('DbosStrandedWorkflowRecovery re-reading a workflow before moving it', () => {
+  let spies: Spies;
+
+  beforeEach(() => {
+    spies = new Spies();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['now on the running version', { applicationVersion: 'current' }],
+    ['already finished', { status: 'SUCCESS' as const }],
+    ['already cancelled', { status: 'CANCELLED' as const }],
+  ])('skips a workflow that is %s', async (_label, changed) => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    spies.status.mockResolvedValue(Queued.workflow(changed));
+    Sweep.openGate();
+
+    expect(await recovery.recover()).toBe(0);
+
+    expect(spies.cancel).not.toHaveBeenCalled();
+    expect(spies.rewind).not.toHaveBeenCalled();
+  });
+
+  it('skips a workflow that no longer exists', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    spies.status.mockResolvedValue(null);
+    Sweep.openGate();
+
+    expect(await recovery.recover()).toBe(0);
+    expect(spies.cancel).not.toHaveBeenCalled();
+  });
+
+  it('moves a workflow the re-read still finds stranded', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    Sweep.openGate();
+
+    expect(await recovery.recover()).toBe(1);
+    expect(spies.status).toHaveBeenCalledWith('wf-1');
+  });
+});
+
+describe('DbosStrandedWorkflowRecovery when the rewind fails after the cancel', () => {
+  let spies: Spies;
+
+  beforeEach(() => {
+    spies = new Spies();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('does not count it, warns that it was left cancelled, and carries on', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([
+      Queued.workflow({ workflowID: 'half' }),
+      Queued.workflow({ workflowID: 'fine' }),
+    ]);
+    spies.rewind.mockRejectedValueOnce(new RangeError('rewind refused'));
+    Sweep.openGate();
+
+    const moved = await recovery.recover();
+
+    expect(moved).toBe(1);
+    expect(spies.rewind).toHaveBeenCalledTimes(2);
+    const warning = spies.warn.mock.calls
+      .map(([message]) => String(message))
+      .find((message) => message.includes('left cancelled'));
+    expect(warning).toContain('half');
+    expect(warning).toContain('RangeError');
+    expect(warning).toContain('manual re-run');
   });
 });

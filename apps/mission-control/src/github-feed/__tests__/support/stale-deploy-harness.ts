@@ -120,7 +120,7 @@ export class StaleDeployHarness {
   }
 
   /** The read workflow of a connection, whatever its status. */
-  async readOf(connectionId: string) {
+  async readWorkflowOf(connectionId: string) {
     const reads = await DBOS.listWorkflows({
       workflowName: 'githubReconcileConnection',
       loadInput: true,

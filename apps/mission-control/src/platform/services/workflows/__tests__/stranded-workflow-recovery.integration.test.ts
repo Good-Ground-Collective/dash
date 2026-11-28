@@ -19,6 +19,7 @@ import { DbosStrandedWorkflowRecovery } from '#src/platform/services/workflows/s
 
 const databaseUrl = inject('databaseUrl');
 const opened = { gateMs: 0 };
+const newerDeploy = 'newer-deploy';
 let deploys: StaleDeployHarness | undefined;
 
 beforeAll(async () => {
@@ -121,6 +122,38 @@ describe.skipIf(databaseUrl === null)(
       const rewound = await DBOS.getWorkflowStatus(runningId);
       expect(rewound?.applicationVersion).toBe(DBOS.applicationVersion);
       expect(rewound?.queueName).toBe('github-reconcile');
+    }, 60_000);
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DbosStrandedWorkflowRecovery when a newer version is registered',
+  () => {
+    it('leaves stranded work to the newer version, and moves it again once this one is latest', async () => {
+      const id = 'newer-1';
+      const strandedId = await StaleDeployHarness.required(deploys).seedHolder({
+        connectionId: id,
+        deduplicationID: `github-reconcile-${id}`,
+        appVersion: previousDeploy,
+      });
+      await StaleDeployHarness.required(deploys).sql(
+        'insert into dbos.application_versions (version_id, version_name) values (gen_random_uuid()::text, $1)',
+        [newerDeploy],
+      );
+      const recovery = new DbosStrandedWorkflowRecovery(opened);
+
+      expect(await recovery.count()).toBe(0);
+      expect(await recovery.recover()).toBe(0);
+      expect(
+        (await DBOS.getWorkflowStatus(strandedId))?.applicationVersion,
+      ).toBe(previousDeploy);
+
+      await StaleDeployHarness.required(deploys).sql(
+        'delete from dbos.application_versions where version_name = $1',
+        [newerDeploy],
+      );
+
+      expect(await recovery.recover()).toBe(1);
     }, 60_000);
   },
 );

@@ -10,6 +10,12 @@ import { z } from 'zod';
  */
 export const previousContainerGoneAfterMs = 5 * 60_000;
 
+const strandableStatuses: readonly string[] = [
+  'ENQUEUED',
+  'DELAYED',
+  'PENDING',
+];
+
 const strandedWorkflowRecoveryPropsSchema = z.object({
   gateMs: z
     .number()
@@ -37,6 +43,9 @@ export interface StrandedWorkflowRecovery {
  * the version it was enqueued under. The replaced container is gone, so work it left waiting
  * would never run and would keep any deduplication ID it holds. This moves such work to the
  * running version under its own ID, on its own queue.
+ *
+ * Only the container running the latest registered version moves work: during a deploy the
+ * draining old container is no longer the latest and leaves it to the new one.
  *
  * Nothing is counted or moved until the previous container is gone, because work another
  * version has queued or is running may belong to a container that is still draining: moving a
@@ -70,11 +79,21 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
     let moved = 0;
 
     for (const workflow of await this.stranded()) {
+      if (!(await this.isStillStranded(workflow.workflowID))) {
+        continue;
+      }
       DBOS.logger.warn(
         `Re-running stranded workflow ${workflow.workflowID} (${workflow.workflowName}) on queue ${workflow.queueName}, queued under version ${workflow.applicationVersion}`,
       );
       try {
         await DBOS.cancelWorkflow(workflow.workflowID);
+      } catch (error) {
+        DBOS.logger.warn(
+          `Could not re-run stranded workflow ${workflow.workflowID} on queue ${workflow.queueName}: ${error instanceof Error ? error.name : 'non-error thrown'}`,
+        );
+        continue;
+      }
+      try {
         await DBOS.rewindWorkflow(workflow.workflowID, {
           applicationVersion: version,
           queueName: workflow.queueName,
@@ -82,17 +101,42 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
         moved += 1;
       } catch (error) {
         DBOS.logger.warn(
-          `Could not re-run stranded workflow ${workflow.workflowID} on queue ${workflow.queueName}: ${error instanceof Error ? error.name : 'non-error thrown'}`,
+          `Stranded workflow ${workflow.workflowID} was cancelled but could not be rewound (${error instanceof Error ? error.name : 'non-error thrown'}); it was left cancelled and needs a manual re-run`,
         );
       }
     }
     return moved;
   }
 
+  /** Re-reads the workflow just before it is moved, because it may have been moved, started or finished since it was listed. */
+  private async isStillStranded(workflowID: string): Promise<boolean> {
+    const current = await DBOS.getWorkflowStatus(workflowID);
+    return (
+      current !== null &&
+      strandableStatuses.includes(current.status) &&
+      current.applicationVersion !== DBOS.applicationVersion
+    );
+  }
+
+  /** Only the latest registered version may move work; an older, draining container leaves it to the newer one. A failed lookup counts as not latest, so it can never break the schedule or `/healthz`. */
+  private async runsLatestVersion(): Promise<boolean> {
+    try {
+      return (
+        (await DBOS.getLatestApplicationVersion()).versionName ===
+        DBOS.applicationVersion
+      );
+    } catch (error) {
+      DBOS.logger.warn(
+        `Could not read the latest application version, so stranded work is left alone: ${error instanceof Error ? error.name : 'non-error thrown'}`,
+      );
+      return false;
+    }
+  }
+
   private async stranded(): Promise<
     (WorkflowStatus & { queueName: string })[]
   > {
-    if (this.untilGateOpensMs() > 0) {
+    if (this.untilGateOpensMs() > 0 || !(await this.runsLatestVersion())) {
       return [];
     }
     const queued = await DBOS.listQueuedWorkflows({

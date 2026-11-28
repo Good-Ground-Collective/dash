@@ -143,6 +143,7 @@ describe.skipIf(databaseUrl === null)(
         connectionId,
         viewerLogin: 'ada',
         records,
+        releaseReads: [],
         truncated: false,
         syncedAt,
       });
