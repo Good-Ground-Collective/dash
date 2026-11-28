@@ -7,17 +7,20 @@ import {
   type probeHealthCheckPropsSchema,
   ProbeHealthCheck,
 } from '#src/health/services/health-check/health-check.ts';
+import type { HealthGauge } from '#src/platform/contracts/health-gauge.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 
-/** `GET /healthz`: 200 when every probe passes, 503 otherwise. With `build`, it also reports the version and commit. */
+/** `GET /healthz`: 200 when every probe passes, 503 otherwise. Gauges are reported but never fail it. With `build`, it also reports the version and commit. */
 export class HealthModule implements HttpModule {
   readonly plugin: FastifyPluginAsyncZod;
 
   constructor(
-    props: { probes: readonly HealthProbe[]; build?: BuildInfo } & z.input<
-      typeof probeHealthCheckPropsSchema
-    >,
+    props: {
+      probes: readonly HealthProbe[];
+      gauges?: readonly HealthGauge[];
+      build?: BuildInfo;
+    } & z.input<typeof probeHealthCheckPropsSchema>,
   ) {
     const routes = new HealthzRoutes({
       healthCheck: new ProbeHealthCheck(props),

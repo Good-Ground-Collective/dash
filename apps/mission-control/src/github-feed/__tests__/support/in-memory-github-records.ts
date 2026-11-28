@@ -51,6 +51,24 @@ export class InMemoryGithubRecords
       .slice(0, props.limit);
   }
 
+  async staleSyncs(props: {
+    before: Date;
+    kinds: readonly ConnectionKind[];
+  }): Promise<{ connectionId: string; lastSyncedAt: Date }[]> {
+    return this.targets
+      .filter((target) => props.kinds.includes(target.kind))
+      .flatMap((target) => {
+        const lastSyncedAt = this.syncs.get(target.connectionId)?.lastSyncedAt;
+        return lastSyncedAt != null && lastSyncedAt < props.before
+          ? [{ connectionId: target.connectionId, lastSyncedAt }]
+          : [];
+      })
+      .toSorted(
+        (left, right) =>
+          left.lastSyncedAt.getTime() - right.lastSyncedAt.getTime(),
+      );
+  }
+
   async recordsFor(props: {
     connectedBy: string;
   }): Promise<ConnectionRecords[]> {

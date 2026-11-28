@@ -7,6 +7,12 @@ import {
   postgresUrlSchema,
 } from '#src/platform/definitions/config/app-config.ts';
 import { WorkflowRuntimeError } from '#src/platform/errors.ts';
+import {
+  DbosStrandedWorkflowRecovery,
+  type StrandedWorkflowRecovery,
+} from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
+
+const recoveryScheduleName = 'recover-stranded-workflows-every-15-minutes';
 
 const dbosLogLevels = {
   fatal: 'error',
@@ -36,6 +42,9 @@ export interface WorkflowRuntime extends HealthProbe {
 export class DbosWorkflowRuntime implements WorkflowRuntime {
   readonly name = 'workflows';
   private readonly props: z.output<typeof workflowRuntimePropsSchema>;
+  private readonly recovery: StrandedWorkflowRecovery =
+    new DbosStrandedWorkflowRecovery();
+  private recoverStranded: (() => Promise<void>) | null = null;
 
   constructor(props: z.input<typeof workflowRuntimePropsSchema>) {
     this.props = workflowRuntimePropsSchema.parse(props);
@@ -55,10 +64,38 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
       systemDatabaseSchemaName: 'dbos',
       logLevel: dbosLogLevels[this.props.logLevel],
     });
+    this.recoverStranded ??= DBOS.registerWorkflow(
+      async () => {
+        await DBOS.runStep(() => this.recovery.recover(), {
+          name: 'recoverStrandedWorkflows',
+        });
+      },
+      { name: 'recoverStrandedWorkflows' },
+    );
     await DBOS.launch();
+
+    await this.recoverAfterLaunch();
+    await DBOS.applySchedules([
+      {
+        scheduleName: recoveryScheduleName,
+        workflowFn: this.recoverStranded,
+        schedule: '0 */15 * * * *',
+      },
+    ]);
   }
 
   async shutdown(): Promise<void> {
     await DBOS.shutdown();
+  }
+
+  /** A failed sweep must not stop the app starting; the schedule tries again. */
+  private async recoverAfterLaunch(): Promise<void> {
+    try {
+      await this.recovery.recover();
+    } catch (error) {
+      DBOS.logger.warn(
+        `Recovering stranded workflows failed: ${error instanceof Error ? error.name : 'non-error thrown'}`,
+      );
+    }
   }
 }

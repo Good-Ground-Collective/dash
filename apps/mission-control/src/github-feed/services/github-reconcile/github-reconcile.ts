@@ -10,10 +10,17 @@ import {
 } from '#src/github-feed/errors.ts';
 import type { GithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import type { GithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
+import {
+  type ErrorDescriber,
+  RedactingErrorDescriber,
+} from '#src/github-feed/services/github-reconcile/redacting-error-describer.ts';
 
 /** The most connections one scheduled run reads. The least recently tried go first, so all of them take turns. */
 const maxConnectionsPerRun = 50;
 const maxConnectionsPerPerson = 20;
+
+/** Three schedule intervals: a connection not read successfully for this long has missed several scheduled reads, which only happens when something keeps them from running or succeeding. */
+const staleAfterMs = 3 * 15 * 60_000;
 
 const statusSchema = z.object({ status: z.int() });
 
@@ -21,7 +28,14 @@ export type SyncOutcome =
   | { status: 'synced' | 'skipped' | 'stale' }
   | { status: 'failed'; error: string };
 
+export interface StaleConnection {
+  connectionId: string;
+  lastSyncedAt: Date;
+}
+
 export interface GithubReconcile {
+  /** Connections last read successfully more than three schedule intervals ago. */
+  staleConnections(): Promise<StaleConnection[]>;
   dueConnectionIds(): Promise<string[]>;
   connectionIdsOf(props: { userId: string }): Promise<string[]>;
   syncConnection(props: { connectionId: string }): Promise<SyncOutcome>;
@@ -36,6 +50,8 @@ export class SourcedGithubReconcile implements GithubReconcile {
   private readonly sources: readonly GithubSource[];
   private readonly reader: GithubRecordReader;
   private readonly writer: GithubRecordWriter;
+  private readonly errorDescriber: ErrorDescriber =
+    new RedactingErrorDescriber();
 
   constructor(props: {
     sources: readonly GithubSource[];
@@ -45,6 +61,13 @@ export class SourcedGithubReconcile implements GithubReconcile {
     this.sources = props.sources;
     this.reader = props.reader;
     this.writer = props.writer;
+  }
+
+  async staleConnections(): Promise<StaleConnection[]> {
+    return this.reader.staleSyncs({
+      before: new Date(Date.now() - staleAfterMs),
+      kinds: this.kinds(),
+    });
   }
 
   async dueConnectionIds(): Promise<string[]> {
@@ -97,7 +120,7 @@ export class SourcedGithubReconcile implements GithubReconcile {
         error: SourcedGithubReconcile.describe(error),
         attemptedAt,
       });
-      return { status: 'failed', error: `${error.name}: ${error.message}` };
+      return { status: 'failed', error: this.errorDescriber.describe(error) };
     }
   }
 

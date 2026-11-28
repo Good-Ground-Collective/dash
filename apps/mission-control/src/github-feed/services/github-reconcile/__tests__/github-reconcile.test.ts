@@ -82,7 +82,10 @@ describe('GithubReconcile failed reads', () => {
     });
 
     const sync = harness.records.syncs.get(ownedId);
-    expect(outcome).toMatchObject({ status: 'failed' });
+    expect(outcome).toEqual({
+      status: 'failed',
+      error: 'Error [status 401]: Bad credentials [redacted]',
+    });
     expect(sync?.lastError).toBe(
       'GitHub answered 401. Dash tries again at the next sync.',
     );
@@ -216,5 +219,36 @@ describe('GithubReconcile choosing connections', () => {
 
     expect(due).toHaveLength(50);
     expect(due).not.toContain(ownedId);
+  });
+});
+
+describe('GithubReconcile staleConnections', () => {
+  it('lists a connection last read more than three schedule intervals ago and no other', async () => {
+    const harness = await Reconciling.linked();
+    harness.records.add(
+      GithubFeedFixtures.target({
+        connectionId: unclaimedId,
+        connectedBy: adaId,
+      }),
+    );
+    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
+    vi.setSystemTime(new Date(fixedNow.getTime() + 44 * 60_000));
+    await harness.module.reconcile.syncConnection({
+      connectionId: unclaimedId,
+    });
+    expect(await harness.module.reconcile.staleConnections()).toEqual([]);
+
+    vi.setSystemTime(new Date(fixedNow.getTime() + 46 * 60_000));
+
+    expect(await harness.module.reconcile.staleConnections()).toEqual([
+      { connectionId: ownedId, lastSyncedAt: fixedNow },
+    ]);
+  });
+
+  it('does not list a connection that has never been read', async () => {
+    const harness = await Reconciling.linked();
+    vi.setSystemTime(new Date(fixedNow.getTime() + 24 * 60 * 60_000));
+
+    expect(await harness.module.reconcile.staleConnections()).toEqual([]);
   });
 });

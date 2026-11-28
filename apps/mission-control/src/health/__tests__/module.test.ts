@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { HealthModule } from '#src/health/module.ts';
+import type { HealthGauge } from '#src/platform/contracts/health-gauge.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
@@ -148,6 +149,64 @@ describe('HealthModule build fields', () => {
       status: 'ok',
       checks: { database: 'ok' },
       version: 'dev',
+    });
+  });
+});
+
+class StubGauge implements HealthGauge {
+  readonly name = 'strandedWorkflows';
+  readonly count: number | null;
+
+  constructor(props: { count: number | null }) {
+    this.count = props.count;
+  }
+
+  async read(): Promise<number> {
+    if (this.count === null) {
+      throw new Error('workflows are unreachable');
+    }
+    return this.count;
+  }
+}
+
+describe('HealthModule gauges', () => {
+  let app: ZodFastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  const healthz = async (count: number | null) => {
+    app = await new HttpServer({
+      config: { corsOrigins: [], environment: 'test', logLevel: 'silent' },
+      modules: [
+        new HealthModule({
+          probes: [new StubProbe({ name: 'database', healthy: true })],
+          gauges: [new StubGauge({ count })],
+        }),
+      ],
+    }).build();
+    return app.inject({ url: '/healthz' });
+  };
+
+  it('reports stranded work without failing health', async () => {
+    const response = await healthz(3);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: 'ok',
+      checks: { database: 'ok' },
+      gauges: { strandedWorkflows: 3 },
+    });
+  });
+
+  it('leaves out a gauge it could not read, without failing health', async () => {
+    const response = await healthz(null);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: 'ok',
+      checks: { database: 'ok' },
     });
   });
 });

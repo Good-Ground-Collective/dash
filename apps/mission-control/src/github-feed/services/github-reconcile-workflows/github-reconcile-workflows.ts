@@ -1,4 +1,4 @@
-import { DBOS } from '@dbos-inc/dbos-sdk';
+import { DBOS, type WorkflowStatus } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
 import {
@@ -7,6 +7,7 @@ import {
 } from '#src/github-feed/errors.ts';
 import type {
   GithubReconcile,
+  StaleConnection,
   SyncOutcome,
 } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
 import type { GithubSyncRequests } from '#src/github-feed/services/github-sync-requests/github-sync-requests.ts';
@@ -16,6 +17,12 @@ const queueName = 'github-reconcile';
 const scheduleName = 'github-reconcile-every-15-minutes';
 /** Least time from one read of a connection starting to a follow-up read of it starting, so steady webhook traffic neither spends the installation's GitHub rate limit nor keeps the queue's two slots busy. */
 const minReadGapMs = 60_000;
+
+/** Longest a connection read may run once started; past it the read is cancelled, so a hung read cannot keep later reads of that connection from being enqueued. */
+const readTimeoutMs = 10 * 60_000;
+
+/** Twice the schedule interval: a read still unfinished this long after it was enqueued has stopped making progress, so it no longer stands in for a new one. */
+const maxHolderAgeMs = 2 * 15 * 60_000;
 
 const githubReconcileWorkflowsPropsSchema = z.object({
   reconcile: z.custom<GithubReconcile>(),
@@ -57,10 +64,12 @@ type ScheduledWorkflow = (firedAt: Date) => Promise<void>;
  * for a connection GitHub reports a change in. Each enqueues one workflow per connection on a
  * queue that reads two connections at a time, so a burst never fans out unbounded against
  * GitHub. A connection whose read is still queued or running is not enqueued again; the later
- * request attaches to the earlier read. A change reported while a read runs may be missed by
- * it, so once each read has finished a follow-up checks for a change reported after the read
- * started, and enqueues one more read if there was one. That read waits until a minute after the
- * earlier one started, and requests made while it waits attach to it.
+ * request attaches to the earlier read, but only one of the running deploy: a read an earlier
+ * deploy left queued is never started by this one, so it must not hold the connection. A change
+ * reported while a read runs may be missed by it, so once each read has finished a follow-up
+ * checks for a change reported after the read started, and enqueues one more read if there was
+ * one. That read waits until a minute after the earlier one started, and requests made while it
+ * waits attach to it.
  */
 export class GithubReconcileWorkflows
   implements ConnectionReads, WorkflowModule
@@ -149,6 +158,13 @@ export class GithubReconcileWorkflows
       ),
       scheduled: DBOS.registerWorkflow(
         async () => {
+          const stale = await DBOS.runStep(
+            () => this.reconcile.staleConnections(),
+            { name: 'githubStaleConnections' },
+          );
+          for (const connection of stale) {
+            GithubReconcileWorkflows.logStale(connection);
+          }
           await enqueue(
             await DBOS.runStep(() => this.reconcile.dueConnectionIds(), {
               name: 'githubDueConnections',
@@ -197,17 +213,47 @@ export class GithubReconcileWorkflows
     if (this.registered === null) {
       throw new ReconcileNotRegisteredError();
     }
+    const { connection } = this.registered;
     const enqueueOptions: EnqueueOptions = {
-      deduplicationID: `github-reconcile-${props.connectionId}`,
+      deduplicationID: `github-reconcile-${DBOS.applicationVersion}-${props.connectionId}`,
     };
     if (props.delayMs > 0) {
       enqueueOptions.delaySeconds = props.delayMs / 1000;
     }
-    await DBOS.startWorkflow(this.registered.connection, {
-      queueName,
-      enqueueOptions,
-      duplicationPolicy: 'return-existing',
-    })(props.connectionId);
+    const start = () =>
+      DBOS.startWorkflow(connection, {
+        queueName,
+        enqueueOptions,
+        duplicationPolicy: 'return-existing',
+        timeoutMS: readTimeoutMs,
+      })(props.connectionId);
+
+    const holder = await start();
+    const status = await holder.getStatus();
+    if (status !== null && GithubReconcileWorkflows.isStuck(status)) {
+      await DBOS.cancelWorkflow(holder.workflowID);
+      await start();
+    }
+  }
+
+  private static isStuck(status: WorkflowStatus): boolean {
+    const unfinished = ['ENQUEUED', 'DELAYED', 'PENDING'].includes(
+      status.status,
+    );
+    const elsewhere = status.applicationVersion !== DBOS.applicationVersion;
+    return (
+      unfinished &&
+      (elsewhere || Date.now() - status.createdAt > maxHolderAgeMs)
+    );
+  }
+
+  private static logStale(connection: StaleConnection): void {
+    const minutes = Math.round(
+      (Date.now() - new Date(connection.lastSyncedAt).getTime()) / 60_000,
+    );
+    DBOS.logger.warn(
+      `GitHub connection ${connection.connectionId} has not synced for ${minutes} minutes`,
+    );
   }
 
   private static log(props: {

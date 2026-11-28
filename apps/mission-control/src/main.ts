@@ -37,6 +37,7 @@ import { OnboardingModule } from '#src/onboarding/module.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
 import { PostgresDatabase } from '#src/platform/services/database/database.ts';
+import { StrandedWorkflowGauge } from '#src/platform/services/workflows/stranded-workflow-gauge.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
 
 const config = AppConfig.fromEnvironment();
@@ -146,7 +147,11 @@ const platform = new PlatformModule({
   database,
   workflows,
   httpModules: [
-    new HealthModule({ probes: [database, workflows], build: config.build }),
+    new HealthModule({
+      probes: [database, workflows],
+      gauges: [new StrandedWorkflowGauge()],
+      build: config.build,
+    }),
     auth,
     agents,
     connections,

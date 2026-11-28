@@ -3,6 +3,12 @@ import { z } from 'zod';
 export const healthReportSchema = z.object({
   status: z.enum(['ok', 'unavailable']),
   checks: z.record(z.string(), z.enum(['ok', 'failing'])),
+  gauges: z
+    .record(z.string(), z.number())
+    .optional()
+    .describe(
+      'Counts for operators, such as `strandedWorkflows`. They never change `status`, and one that could not be read is left out.',
+    ),
   version: z
     .string()
     .optional()

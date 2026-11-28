@@ -12,6 +12,7 @@ import { githubFeedEvents } from '#src/github-feed/definitions/feed-events/feed-
 import { GithubFeedEventHandler } from '#src/github-feed/services/github-feed-event-handler/github-feed-event-handler.ts';
 import type {
   GithubReconcile,
+  StaleConnection,
   SyncOutcome,
 } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
 import { GithubReconcileWorkflows } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
@@ -20,6 +21,10 @@ import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-r
 
 class RecordingReconcile implements GithubReconcile {
   readonly synced: string[] = [];
+
+  async staleConnections(): Promise<StaleConnection[]> {
+    return [];
+  }
 
   async dueConnectionIds(): Promise<string[]> {
     return [];

@@ -6,14 +6,11 @@ import { z } from 'zod';
 import { acmeInstallation } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import { InMemoryConnectionRepository } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
+import { HeldReconcile } from '#src/github-feed/__tests__/support/held-reconcile.ts';
 import { InMemorySyncRequestRepository } from '#src/github-feed/__tests__/support/in-memory-sync-requests.ts';
 import { ReconcileNotRegisteredError } from '#src/github-feed/errors.ts';
 import { GithubFeedEventHandler } from '#src/github-feed/services/github-feed-event-handler/github-feed-event-handler.ts';
-import {
-  type GithubReconcile,
-  SourcedGithubReconcile,
-  type SyncOutcome,
-} from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
+import { SourcedGithubReconcile } from '#src/github-feed/services/github-reconcile/github-reconcile.ts';
 import { GithubReconcileWorkflows } from '#src/github-feed/services/github-reconcile-workflows/github-reconcile-workflows.ts';
 import { RecordedGithubSyncRequests } from '#src/github-feed/services/github-sync-requests/github-sync-requests.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
@@ -26,34 +23,6 @@ const followUpInputSchema = z.tuple([
   z.object({ connectionId: z.string(), startedAt: z.number() }),
 ]);
 const readInputSchema = z.tuple([z.string()]);
-
-/** Each read waits until the test releases it, so a test can act while a read is running. */
-class HeldReconcile implements GithubReconcile {
-  readonly synced: string[] = [];
-  private readonly holds: PromiseWithResolvers<undefined>[] = [];
-
-  async dueConnectionIds(): Promise<string[]> {
-    return ['acme'];
-  }
-
-  async connectionIdsOf(): Promise<string[]> {
-    return ['acme'];
-  }
-
-  async syncConnection(props: { connectionId: string }): Promise<SyncOutcome> {
-    const hold = Promise.withResolvers<undefined>();
-    this.holds.push(hold);
-    this.synced.push(props.connectionId);
-    await hold.promise;
-    return { status: 'synced' };
-  }
-
-  release(): void {
-    for (const hold of this.holds.splice(0)) {
-      hold.resolve(undefined);
-    }
-  }
-}
 
 describe('GithubReconcileWorkflows', () => {
   const records = new InMemoryGithubRecords();

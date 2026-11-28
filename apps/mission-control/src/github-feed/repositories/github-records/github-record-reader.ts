@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
 
 import {
   connectionRepositoryTable,
@@ -42,6 +42,11 @@ export interface GithubRecordReader {
     kinds: readonly ConnectionKind[];
     limit: number;
   }): Promise<GithubSyncTarget[]>;
+  /** Connections whose last good read finished before `before`, oldest first. One never read successfully has no such time and is not listed. */
+  staleSyncs(props: {
+    before: Date;
+    kinds: readonly ConnectionKind[];
+  }): Promise<{ connectionId: string; lastSyncedAt: Date }[]>;
   /** Every GitHub connection `connectedBy` made, owned or guest, with its stored records. */
   recordsFor(props: { connectedBy: string }): Promise<ConnectionRecords[]>;
 }
@@ -95,6 +100,32 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
         .filter((repository) => repository.connectionId === connection.id)
         .map((repository) => repository.fullName),
     }));
+  }
+
+  async staleSyncs(props: {
+    before: Date;
+    kinds: readonly ConnectionKind[];
+  }): Promise<{ connectionId: string; lastSyncedAt: Date }[]> {
+    const rows = await this.database.orm
+      .select({
+        connectionId: githubSyncTable.connectionId,
+        lastSyncedAt: githubSyncTable.lastSyncedAt,
+      })
+      .from(githubSyncTable)
+      .innerJoin(
+        connectionTable,
+        eq(githubSyncTable.connectionId, connectionTable.id),
+      )
+      .where(
+        and(
+          ...DrizzleGithubRecordReader.connectionFilter(props),
+          lt(githubSyncTable.lastSyncedAt, props.before),
+        ),
+      )
+      .orderBy(asc(githubSyncTable.lastSyncedAt));
+    return rows.flatMap(({ connectionId, lastSyncedAt }) =>
+      lastSyncedAt === null ? [] : [{ connectionId, lastSyncedAt }],
+    );
   }
 
   async recordsFor(props: {
