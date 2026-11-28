@@ -8,11 +8,13 @@ import {
   agentHeartbeatWorkspaceSchema,
   reporterNameSchema,
 } from '#src/agents/contracts/agent-heartbeat.ts';
+import { agentLivenessSchema } from '#src/agents/definitions/agent-liveness/agent-liveness.ts';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
 export const agentActivitySchema = z.object({
   status: agentHeartbeatStatusSchema,
+  liveness: agentLivenessSchema,
   summary: z
     .string()
     .nullable()

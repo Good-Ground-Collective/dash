@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { inArray } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import pg from 'pg';
 import { z } from 'zod';
 
@@ -64,6 +64,13 @@ export class AgentRecordsDatabase {
         email: 'other-bench@example.com',
       },
     ]);
+  }
+
+  /** Sets when Mission Control last heard from `sessionId`, on every row it has. */
+  async heardAt(props: { sessionId: string; at: Date }): Promise<void> {
+    await this.database.orm.execute(
+      sql`update agent_session set updated_at = ${props.at} where session_id = ${props.sessionId}`,
+    );
   }
 
   async close(): Promise<void> {

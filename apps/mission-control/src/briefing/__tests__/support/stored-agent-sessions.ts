@@ -35,6 +35,7 @@ export class StoredAgentSessions implements Pick<
       benchId: 'studio-mac',
       harness: 'claude-code',
       status: 'working',
+      liveness: 'live',
       summary: 'Fixing the flaky sync test',
       question: null,
       error: null,
