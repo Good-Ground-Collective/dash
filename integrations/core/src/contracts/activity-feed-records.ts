@@ -136,6 +136,14 @@ export const activityMergeStates = [
 
 export const activityMergeStateSchema = z.enum(activityMergeStates);
 
+export const activityIssueReferenceSchema = z.object({
+  repository: z
+    .string()
+    .min(1)
+    .describe('The full name of the repository the issue is in.'),
+  number: z.int().positive(),
+});
+
 export const activityPullRequestSchema = externalRecordSchema.extend({
   repositoryId: z.string().min(1),
   number: z.int().positive(),
@@ -156,6 +164,11 @@ export const activityPullRequestSchema = externalRecordSchema.extend({
   checks: activityChecksSchema
     .nullable()
     .describe('Null when the head commit has no checks.'),
+  closingIssues: z
+    .array(activityIssueReferenceSchema)
+    .describe(
+      'The issues the pull request closes when it merges, as the provider links them. Empty when it closes none, or when the read did not ask.',
+    ),
   mergedAt: timestampSchema
     .nullable()
     .describe('When the pull request was merged. Null while it is not merged.'),
@@ -267,6 +280,9 @@ export type ActivityCheckState = z.infer<typeof activityCheckStateSchema>;
 export type ActivityCheck = z.infer<typeof activityCheckSchema>;
 export type ActivityDefaultBranch = z.infer<typeof activityDefaultBranchSchema>;
 export type ActivityReviewer = z.infer<typeof activityReviewerSchema>;
+export type ActivityIssueReference = z.infer<
+  typeof activityIssueReferenceSchema
+>;
 export type ActivityPullRequest = z.infer<typeof activityPullRequestSchema>;
 export type ActivityRelease = z.infer<typeof activityReleaseSchema>;
 export type ActivityReleaseRead = z.infer<typeof activityReleaseReadSchema>;

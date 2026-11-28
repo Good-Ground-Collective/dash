@@ -21,6 +21,64 @@ export class GithubFeedItems {
     return new Date(Date.now() - minutes * 60 * 1000).toISOString();
   }
 
+  static release(props: {
+    repo: string;
+    tag: string;
+    name: string;
+    minutes: number;
+  }) {
+    const { updatedAt, ...base } = GithubFeedItems.base({
+      ...props,
+      path: `releases/tag/${props.tag}`,
+    });
+    return {
+      ...base,
+      tagName: props.tag,
+      name: props.name,
+      author: 'grace',
+      prerelease: false,
+      publishedAt: updatedAt,
+    };
+  }
+
+  static pull(props: {
+    repo: string;
+    number: number;
+    title: string;
+    minutes: number;
+    author?: string;
+    draft?: boolean;
+    review?: 'approved' | 'changes_requested' | 'review_required';
+    mergeable?: 'mergeable' | 'conflicting';
+    mergeState?: 'clean' | 'blocked' | 'behind' | 'dirty' | null;
+    checks?: object;
+    state?: 'open' | 'merged';
+    closes?: number[];
+    connection?: string;
+  }) {
+    return {
+      ...GithubFeedItems.base({ ...props, path: `pull/${props.number}` }),
+      mergedAt:
+        props.state === 'merged' ? GithubFeedItems.ago(props.minutes) : null,
+      createdAt: GithubFeedItems.ago(props.minutes + 120),
+      number: props.number,
+      title: props.title,
+      author: props.author ?? 'ada',
+      state: props.state ?? 'open',
+      draft: props.draft ?? false,
+      mergeable: props.mergeable ?? 'mergeable',
+      mergeState: props.mergeState === undefined ? 'clean' : props.mergeState,
+      reviewDecision: props.review ?? null,
+      headSha: 'a1b2c3d',
+      closingIssues: (props.closes ?? []).map((number) => ({
+        repository: 'acme-labs/api',
+        number,
+      })),
+      requestedReviewers: [{ kind: 'user', name: 'ada' }],
+      checks: props.checks ?? null,
+    };
+  }
+
   private static reviewRequests() {
     const pull = GithubFeedItems.pull;
     return [
@@ -118,6 +176,7 @@ export class GithubFeedItems {
         number: 409,
         title: 'Cache the objectives read',
         minutes: 600,
+        closes: [101],
         review: 'approved',
         state: 'merged',
         checks: { state: 'success', success: 6, failure: 0, pending: 0 },
@@ -205,59 +264,6 @@ export class GithubFeedItems {
       },
       url: `https://github.com/${props.repo}/${props.path}`,
       updatedAt: GithubFeedItems.ago(props.minutes),
-    };
-  }
-
-  private static release(props: {
-    repo: string;
-    tag: string;
-    name: string;
-    minutes: number;
-  }) {
-    const { updatedAt, ...base } = GithubFeedItems.base({
-      ...props,
-      path: `releases/tag/${props.tag}`,
-    });
-    return {
-      ...base,
-      tagName: props.tag,
-      name: props.name,
-      author: 'grace',
-      prerelease: false,
-      publishedAt: updatedAt,
-    };
-  }
-
-  private static pull(props: {
-    repo: string;
-    number: number;
-    title: string;
-    minutes: number;
-    author?: string;
-    draft?: boolean;
-    review?: 'approved' | 'changes_requested' | 'review_required';
-    mergeable?: 'mergeable' | 'conflicting';
-    mergeState?: 'clean' | 'blocked' | 'behind' | 'dirty' | null;
-    checks?: object;
-    state?: 'open' | 'merged';
-    connection?: string;
-  }) {
-    return {
-      ...GithubFeedItems.base({ ...props, path: `pull/${props.number}` }),
-      mergedAt:
-        props.state === 'merged' ? GithubFeedItems.ago(props.minutes) : null,
-      createdAt: GithubFeedItems.ago(props.minutes + 120),
-      number: props.number,
-      title: props.title,
-      author: props.author ?? 'ada',
-      state: props.state ?? 'open',
-      draft: props.draft ?? false,
-      mergeable: props.mergeable ?? 'mergeable',
-      mergeState: props.mergeState === undefined ? 'clean' : props.mergeState,
-      reviewDecision: props.review ?? null,
-      headSha: 'a1b2c3d',
-      requestedReviewers: [{ kind: 'user', name: 'ada' }],
-      checks: props.checks ?? null,
     };
   }
 

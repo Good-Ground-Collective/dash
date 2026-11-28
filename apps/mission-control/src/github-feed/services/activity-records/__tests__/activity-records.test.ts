@@ -46,6 +46,33 @@ describe('ActivityRecords', () => {
   });
 });
 
+describe('ActivityRecords closing issues', () => {
+  it('stores the issues a merged pull request closes', () => {
+    const closingIssues = [
+      { repository: 'acme/app', number: 7 },
+      { repository: 'acme/docs', number: 12 },
+    ];
+    const records = ActivityRecords.from({
+      activity: {
+        ...GithubFeedFixtures.activity(),
+        mergedPullRequests: [
+          GithubFeedFixtures.mergedPullRequest({
+            number: 3,
+            mergedAt: '2026-11-26T09:00:00Z',
+            closingIssues,
+          }),
+        ],
+      },
+      viewerLogin: 'ada',
+    });
+
+    expect(
+      records.pullRequests.find(({ nodeId }) => nodeId === 'PR_3')
+        ?.closingIssues,
+    ).toEqual(closingIssues);
+  });
+});
+
 describe('ActivityRecords checks', () => {
   it('stores each check against its subject and the default branch head on its repository', () => {
     const records = ActivityRecords.from({

@@ -53,6 +53,7 @@ export class FeedView {
       mergeState: record.mergeState,
       reviewDecision: record.reviewDecision,
       headSha: record.headSha,
+      closingIssues: record.closingIssues,
       requestedReviewers: this.records.reviewRequests
         .filter((request) => request.pullRequestNodeId === record.nodeId)
         .map((request) => ({

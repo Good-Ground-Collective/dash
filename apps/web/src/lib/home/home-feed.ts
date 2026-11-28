@@ -1,17 +1,19 @@
 import { z } from 'zod';
 import type { GithubFeedPullRequest } from '#lib/api/github-feed-contracts.ts';
 import { type FeedRow, FeedRows } from '#lib/github-feed/feed-rows.ts';
+import type { SinceYesterdayGroup } from '#lib/home/since-yesterday-group.ts';
+import { SinceYesterdayGroups } from '#lib/home/since-yesterday-groups.ts';
+import type { ObjectivesState } from '#lib/objectives/objectives-view.ts';
 import {
   type FeedStatus,
   type GithubFeedState,
   GithubFeedView,
 } from '#lib/github-feed/feed-view.ts';
 
-const dayMs = 24 * 60 * 60 * 1000;
-
 export const homeFeedPropsSchema = z.object({
   state: z.custom<GithubFeedState>(),
   now: z.date(),
+  objectives: z.custom<ObjectivesState | null>().optional(),
 });
 
 export type HomeFeedProps = z.input<typeof homeFeedPropsSchema>;
@@ -23,11 +25,13 @@ export type HomeFeedStatus = FeedStatus | 'failed';
 export class HomeFeed {
   private readonly state: GithubFeedState;
   private readonly now: Date;
+  private readonly objectives: ObjectivesState | null;
 
   constructor(props: HomeFeedProps) {
     const valid = homeFeedPropsSchema.parse(props);
     this.state = valid.state;
     this.now = valid.now;
+    this.objectives = valid.objectives ?? null;
   }
 
   get status(): HomeFeedStatus {
@@ -52,20 +56,17 @@ export class HomeFeed {
     return HomeFeed.newestFirst([...reviews, ...failing]);
   }
 
-  /** The viewer's pull requests merged and the releases published in the past 24 hours, by when they happened, newest first. */
-  get sinceYesterday(): FeedRow[] {
+  /** The viewer's pull requests merged and the releases published in the past 24 hours, grouped by the epic they moved, with at most six items on top. */
+  get sinceYesterday(): SinceYesterdayGroup[] {
     if (this.state.status === 'failed') return [];
     const { recentMerges, releases } = this.state.feed;
-    const since = this.now.getTime() - dayMs;
 
-    const merged = recentMerges
-      .filter((pull) => (pull.mergedAt?.getTime() ?? 0) >= since)
-      .map((pull) => FeedRows.mergedPullRequest(pull));
-    const shipped = releases
-      .filter((release) => release.publishedAt.getTime() >= since)
-      .map((release) => FeedRows.release(release));
-
-    return HomeFeed.newestFirst([...merged, ...shipped]);
+    return new SinceYesterdayGroups({
+      merges: recentMerges,
+      releases,
+      objectives: this.objectives,
+      now: this.now,
+    }).groups;
   }
 
   /** Leads with “Review” and keeps the “Draft” badge, so a draft doesn't read as ready to review. */

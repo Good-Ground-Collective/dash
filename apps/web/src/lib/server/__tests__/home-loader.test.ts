@@ -46,6 +46,7 @@ const briefings = {
 
 class HomeVisit {
   readonly requested: string[] = [];
+  readonly objectiveQueries: string[] = [];
   private readonly viewer: Viewer | null;
   private readonly answers: Record<string, () => Response>;
 
@@ -62,8 +63,10 @@ class HomeVisit {
       url: new URL('http://localhost/'),
       parent: async () => ({ viewer: this.viewer, recoveryCodes: null }),
       fetch: async (input) => {
-        const path = new URL(String(input)).pathname;
+        const url = new URL(String(input));
+        const path = url.pathname;
         this.requested.push(path);
+        if (path === '/objectives') this.objectiveQueries.push(url.search);
         const answer = this.answers[path];
         return answer === undefined
           ? new Response('down', { status: 503 })
@@ -103,13 +106,42 @@ describe('MissionControlHomeLoader', () => {
         anyInitiative: false,
         githubConnected: false,
       },
+      everyObjective: {
+        status: 'loaded',
+        objectives,
+        anyInitiative: false,
+        githubConnected: false,
+      },
     });
     expect(visit.requested.toSorted()).toEqual([
       '/briefings',
       '/integrations/github/feed',
       '/objectives',
       '/objectives',
+      '/objectives',
       '/onboarding/checklist',
+    ]);
+  });
+});
+
+describe('MissionControlHomeLoader, every objective', () => {
+  it('reads parked and done objectives too, whatever the page’s filter shows', async () => {
+    const visit = new HomeVisit({
+      viewer: ada,
+      answers: {
+        '/objectives': () =>
+          Response.json({
+            connections: [],
+            initiatives: [{ id: 'PVT_1' }],
+          }),
+      },
+    });
+
+    await loader.load(visit.event);
+
+    expect(visit.objectiveQueries.toSorted()).toEqual([
+      '?status=active',
+      '?status=active%2Cparked%2Cdone',
     ]);
   });
 });
@@ -191,6 +223,7 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist,
       github: { status: 'failed' },
       objectives: { status: 'failed' },
+      everyObjective: { status: 'failed' },
       briefing: { status: 'failed' },
     });
   });
@@ -202,6 +235,7 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist: null,
       github: null,
       objectives: null,
+      everyObjective: null,
       briefing: null,
     });
     expect(visit.requested).toEqual([]);
@@ -215,8 +249,9 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist: null,
       github: { status: 'failed' },
       objectives: { status: 'failed' },
+      everyObjective: { status: 'failed' },
       briefing: { status: 'failed' },
     });
-    expect(warn).toHaveBeenCalledTimes(4);
+    expect(warn).toHaveBeenCalledTimes(5);
   });
 });

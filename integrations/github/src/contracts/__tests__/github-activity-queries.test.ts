@@ -15,6 +15,16 @@ describe('githubActivityQueries check contexts', () => {
     expect(search.match(/contexts\(first: 1\)/gu)).toHaveLength(2);
   });
 
+  it('asks for the issues a pull request closes on merged pull requests only', () => {
+    const { search } = githubActivityQueries;
+    const mergedStart = search.indexOf('merged: search');
+
+    expect(search.match(/closingIssuesReferences/gu)).toHaveLength(1);
+    expect(search.slice(mergedStart)).toContain(
+      'closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } }',
+    );
+  });
+
   it('reads the rollup state and every check of each default branch head', () => {
     const query = githubActivityQueries.defaultBranches(1);
 

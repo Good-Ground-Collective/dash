@@ -89,6 +89,7 @@ describe('ObjectiveRows tasks', () => {
   const epic = SampleObjectives.epic({
     tasks: {
       total: 4,
+      urls: [],
       items: [
         {
           id: 'I_1',

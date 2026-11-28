@@ -35,7 +35,13 @@
     new HomeGreeting({ now, name: data.viewer?.name ?? null }),
   );
   let feed = $derived(
-    data.github === null ? null : new HomeFeed({ state: data.github, now }),
+    data.github === null
+      ? null
+      : new HomeFeed({
+          state: data.github,
+          now,
+          objectives: data.everyObjective,
+        }),
   );
 </script>
 

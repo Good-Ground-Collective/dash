@@ -239,7 +239,11 @@ export class ObjectiveRollup {
         state: ticket.state,
         assignees: ticket.assignees,
       }));
-    return { items, total: tickets.length };
+    return {
+      items,
+      total: tickets.length,
+      urls: tickets.map(({ url }) => url),
+    };
   }
 
   private static nextTicket(

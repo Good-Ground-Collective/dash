@@ -78,6 +78,11 @@ export const epicTasksSchema = z
         'Open tasks first, then closed, each in the epic’s order, at most 25. The epic’s URL lists the rest.',
       ),
     total: z.int().nonnegative().describe('How many tasks the epic has.'),
+    urls: z
+      .array(z.url())
+      .describe(
+        'The URL of every task, open or closed, with no cap, so a merge that closes any task can be placed under its epic.',
+      ),
   })
   .describe('The epic’s tasks, so a person sees who has what.');
 

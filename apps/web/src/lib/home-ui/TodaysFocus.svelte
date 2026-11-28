@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { EpicDisclosure } from '#lib/home/epic-disclosure.ts';
+  import { HomeDisclosure } from '#lib/home/home-disclosure.ts';
   import { ObjectiveFilter } from '#lib/objectives/objective-filter.ts';
   import {
     type ObjectivesState,
@@ -17,7 +17,7 @@
   let filter = $derived(new ObjectiveFilter({ url: page.url }));
   let status = $derived(view.status);
   let filterable = $derived(status === 'ready' || status === 'filtered-out');
-  let disclosure = $state(new EpicDisclosure());
+  let disclosure = $state(new HomeDisclosure());
 </script>
 
 <HomeSection id="focus-title" title="Today’s focus">

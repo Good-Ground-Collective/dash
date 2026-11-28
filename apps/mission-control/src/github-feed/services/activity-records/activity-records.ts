@@ -212,6 +212,7 @@ export class ActivityRecords {
       author: pullRequest.author,
       headRef: pullRequest.headRef,
       headSha: pullRequest.headSha,
+      closingIssues: pullRequest.closingIssues,
       mergedAt:
         pullRequest.mergedAt === null
           ? null

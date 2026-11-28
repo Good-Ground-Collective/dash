@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EpicDisclosure } from '#lib/home/epic-disclosure.ts';
+  import type { HomeDisclosure } from '#lib/home/home-disclosure.ts';
   import type { InitiativeEntry } from '#lib/objectives/objectives-view.ts';
   import ObjectiveBadges from '#lib/objectives-ui/ObjectiveBadges.svelte';
   import OverlayMenu from '#lib/objectives-ui/OverlayMenu.svelte';
@@ -12,7 +12,7 @@
     ontoggle,
   }: {
     initiative: InitiativeEntry;
-    disclosure: EpicDisclosure;
+    disclosure: HomeDisclosure;
     ontoggle: (id: string) => void;
   } = $props();
 

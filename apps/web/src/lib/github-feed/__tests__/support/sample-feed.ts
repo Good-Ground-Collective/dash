@@ -48,6 +48,7 @@ export class SampleFeed {
       mergeState: 'clean',
       reviewDecision: null,
       headSha: 'abc123',
+      closingIssues: [],
       requestedReviewers: [],
       checks: null,
       ...overrides,

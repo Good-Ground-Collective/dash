@@ -72,6 +72,7 @@ export class GithubFeedFixtures {
         { kind: 'team', name: 'platform' },
       ],
       checks: { state: 'failure', success: 3, failure: 1, pending: 0 },
+      closingIssues: [],
       mergedAt: null,
       createdAt: '2026-11-20T08:00:00Z',
       updatedAt: '2026-11-26T10:00:00Z',
@@ -83,9 +84,11 @@ export class GithubFeedFixtures {
   static mergedPullRequest(props: {
     number: number;
     mergedAt: string;
+    closingIssues?: ActivityPullRequest['closingIssues'];
   }): ActivityPullRequest {
     return GithubFeedFixtures.pullRequest({
       number: props.number,
+      closingIssues: props.closingIssues ?? [],
       author: 'ada',
       state: 'merged',
       requestedReviewers: [],

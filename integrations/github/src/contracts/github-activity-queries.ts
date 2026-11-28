@@ -13,6 +13,9 @@ const checkContextNodeFields = `
   }
   ... on StatusContext { context state targetUrl description }`;
 
+/** How many issues of one merged pull request a read asks for. */
+export const githubClosingIssueCount = 10;
+
 /** How many checks of one head commit a read asks for; GitHub allows at most 100 per page. */
 export const githubCheckContextCount = 100;
 
@@ -21,12 +24,20 @@ const contextCounts =
 
 class PullRequestFields {
   /** Authored pull requests also name their checks; the others only count them, which keeps their cost flat. */
-  static selection(props: { withCheckContexts: boolean }): string {
+  static selection(props: {
+    withCheckContexts: boolean;
+    withClosingIssues: boolean;
+  }): string {
     return `
   ... on PullRequest {
     id number title url state isDraft mergeable mergeStateStatus reviewDecision mergedAt createdAt updatedAt headRefName headRefOid
     author { login }
-    repository { ${repositoryFields} defaultBranchRef { name } }
+    repository { ${repositoryFields} defaultBranchRef { name } }${
+      props.withClosingIssues
+        ? `
+    closingIssuesReferences(first: ${githubClosingIssueCount}) { nodes { number repository { nameWithOwner } } }`
+        : ''
+    }
     reviewRequests(first: 10) {
       nodes {
         requestedReviewer {
@@ -59,9 +70,15 @@ class PullRequestFields {
 
 const countedPullRequestFields = PullRequestFields.selection({
   withCheckContexts: false,
+  withClosingIssues: false,
 });
 const namedPullRequestFields = PullRequestFields.selection({
   withCheckContexts: true,
+  withClosingIssues: false,
+});
+const mergedPullRequestFields = PullRequestFields.selection({
+  withCheckContexts: false,
+  withClosingIssues: true,
 });
 
 const issueFields = `
@@ -101,7 +118,7 @@ query DashActivity(
     ${pageInfo} nodes { ${issueFields} }
   }
   merged: search(type: ISSUE, query: $mergedQuery, first: $pageSize, after: $mergedAfter) @include(if: $withMerged) {
-    ${pageInfo} nodes { ${countedPullRequestFields} }
+    ${pageInfo} nodes { ${mergedPullRequestFields} }
   }
 }`;
 

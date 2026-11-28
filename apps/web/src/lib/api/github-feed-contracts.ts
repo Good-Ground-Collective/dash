@@ -41,6 +41,11 @@ const feedItemSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 
+export const githubFeedIssueReferenceSchema = z.object({
+  repository: z.string(),
+  number: z.number().int(),
+});
+
 export const githubFeedPullRequestSchema = feedItemSchema.extend({
   mergedAt: z.coerce
     .date()
@@ -72,6 +77,12 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
     .enum(['approved', 'changes_requested', 'review_required'])
     .nullable(),
   headSha: z.string(),
+  closingIssues: z
+    .array(githubFeedIssueReferenceSchema)
+    .default([])
+    .describe(
+      'The issues the pull request closes, which Home uses to place a merge under its epic. Only recent merges name them.',
+    ),
   requestedReviewers: z.array(
     z.object({ kind: z.enum(['user', 'team']), name: z.string() }),
   ),
@@ -189,6 +200,9 @@ export const githubFeedSchema = z.object({
 
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
+export type GithubFeedIssueReference = z.infer<
+  typeof githubFeedIssueReferenceSchema
+>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
 export type GithubFeedMyPullRequest = z.infer<
   typeof githubFeedMyPullRequestSchema

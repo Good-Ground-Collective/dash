@@ -57,6 +57,7 @@ describe('GET /integrations/github/feed', () => {
       mergeState: 'clean',
       reviewDecision: 'review_required',
       headSha: 'sha1',
+      closingIssues: [],
       requestedReviewers: [
         { kind: 'user', name: 'ada' },
         { kind: 'team', name: 'platform' },

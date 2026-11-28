@@ -55,6 +55,7 @@ export const epicTaskSchema = z.object({
 export const epicTasksSchema = z.object({
   items: z.array(epicTaskSchema),
   total: z.number().int(),
+  urls: z.array(linkSchema).default([]),
 });
 
 const objectiveSchema = z.object({
