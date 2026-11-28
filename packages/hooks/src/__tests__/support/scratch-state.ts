@@ -8,8 +8,13 @@ import {
   agentHeartbeat,
 } from '@good-ground-collective/agentic-communication-standards';
 
-import type { RecordedPayload } from '#src/__tests__/support/recorded-payloads.js';
+import { FakeIngest } from '#src/__tests__/support/fake-ingest.js';
+import {
+  type RecordedPayload,
+  RecordedPayloads,
+} from '#src/__tests__/support/recorded-payloads.js';
 import { HooksConfig } from '#src/config/hooks-config.js';
+import { RelayConfig } from '#src/config/relay-config.js';
 import { ClaudeCodeHeartbeatHook } from '#src/services/heartbeat-hook/heartbeat-hook.js';
 import { FileSessionLedger } from '#src/services/session-ledger/session-ledger.js';
 
@@ -40,6 +45,36 @@ export class ScratchState {
       stdin: JSON.stringify(payload),
       now,
     });
+  }
+
+  /** Writes `turns` prompt-then-stop pairs, two heartbeats each, as a session would. */
+  async writeTurns(
+    turns: number,
+    sessionId: string = RecordedPayloads.SESSION_ID,
+  ): Promise<void> {
+    const paths = { cwd: this.directory, transcriptPath: 'unused' };
+    for (let turn = 0; turn < turns; turn += 1) {
+      for (const command of ['user-prompt-submit', 'stop'] as const) {
+        await this.run(command, {
+          ...RecordedPayloads.for(command, paths),
+          session_id: sessionId,
+        });
+      }
+    }
+  }
+
+  /** A relay configuration for the fake ingest at `url`, which exits soon after draining. */
+  relayConfig(url: string): RelayConfig {
+    return new RelayConfig({
+      apiUrl: url,
+      apiKey: FakeIngest.API_KEY,
+      reporterName: FakeIngest.REPORTER,
+      idleExitMs: 50,
+    });
+  }
+
+  async relayLog(): Promise<string> {
+    return readFile(this.config.relayLogPath, 'utf8').catch(() => '');
   }
 
   outboxPath(sessionId: string): string {

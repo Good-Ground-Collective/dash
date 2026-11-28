@@ -81,13 +81,32 @@ export class HooksConfig {
     return path.join(this.stateDirectory, 'outbox');
   }
 
-  /** One small JSON file per session holding its `seq` counter, kept apart so the relay never reads it. */
+  /** One small JSON file per session holding its `seq` counter; the relay reads it only to see whether the session has ended. */
   get sessionsDirectory(): string {
     return path.join(this.stateDirectory, 'sessions');
   }
 
   get logPath(): string {
     return path.join(this.stateDirectory, 'hooks.log');
+  }
+
+  /** One JSON file per session recording how much of its outbox Mission Control has acknowledged. */
+  get relayCursorsDirectory(): string {
+    return path.join(this.stateDirectory, 'relay');
+  }
+
+  /** Holds the running relay's process ID, so hooks start one only when none is running. */
+  get relayPidPath(): string {
+    return path.join(this.stateDirectory, 'relay.pid');
+  }
+
+  /** Written when Mission Control refuses the relay's key, so hooks stop starting a relay that would be refused again. */
+  get relayHaltPath(): string {
+    return path.join(this.stateDirectory, 'relay-halted.json');
+  }
+
+  get relayLogPath(): string {
+    return path.join(this.stateDirectory, 'relay.log');
   }
 
   /** Reads the process environment; a value that doesn't parse falls back to its default rather than failing the hook. */

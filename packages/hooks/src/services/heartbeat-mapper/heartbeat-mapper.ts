@@ -50,7 +50,10 @@ export class HeartbeatMapper {
       };
     }
     if (event === 'SessionEnd') {
-      return HeartbeatMapper.unconditionalPlan(context, 'complete');
+      return {
+        ...HeartbeatMapper.unconditionalPlan(context, 'complete'),
+        endsSession: true,
+      };
     }
     if (event === 'UserPromptSubmit') {
       return HeartbeatMapper.unconditionalPlan(context, 'working');
