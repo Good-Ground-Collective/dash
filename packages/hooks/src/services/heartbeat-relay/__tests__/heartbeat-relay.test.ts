@@ -129,6 +129,7 @@ describe('OutboxHeartbeatRelay', () => {
     await ingest.stop();
     vi.spyOn(Math, 'random').mockReturnValue(1);
     const backoffSpy = TestRelay.spyOnBackoff();
+    const timeouts = vi.spyOn(globalThis, 'setTimeout');
 
     const running = TestRelay.start();
     await FakeTimers.fire(running, 3);
@@ -140,6 +141,8 @@ describe('OutboxHeartbeatRelay', () => {
     expect(await FakeTimers.runUntil(running)).toBe('drained');
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(8));
     expect(backoffs).toEqual([10, 20, 40, 40]);
+    const scheduled = timeouts.mock.calls.map(([, ms]) => ms);
+    expect(scheduled.filter((ms) => backoffs.includes(ms))).toEqual(backoffs);
 
     const log = await state.relayLog();
     expect(log.match(/MissionControlUnavailableError/g)).toHaveLength(1);
