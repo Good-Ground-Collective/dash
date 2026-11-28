@@ -12,6 +12,7 @@ import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.
 import {
   githubAssignmentTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubIssueTable,
   githubPullRequestTable,
   githubReleaseTable,
@@ -196,6 +197,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
           checkRollups: of(rows.checkRollups, id).map(
             GithubRecordRows.checkRollup,
           ),
+          checks: of(rows.checks, id).map(GithubRecordRows.check),
           workflowRuns: of(rows.workflowRuns, id).map(
             GithubRecordRows.workflowRun,
           ),
@@ -230,30 +232,36 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
           .from(githubCheckRollupTable)
           .where(inArray(githubCheckRollupTable.connectionId, within)),
       ]);
-    const [releases, workflowRuns, issues, assignments] = await Promise.all([
-      orm
-        .select()
-        .from(githubReleaseTable)
-        .where(inArray(githubReleaseTable.connectionId, within)),
-      orm
-        .select()
-        .from(githubWorkflowRunTable)
-        .where(inArray(githubWorkflowRunTable.connectionId, within)),
-      orm
-        .select()
-        .from(githubIssueTable)
-        .where(inArray(githubIssueTable.connectionId, within)),
-      orm
-        .select()
-        .from(githubAssignmentTable)
-        .where(inArray(githubAssignmentTable.connectionId, within)),
-    ]);
+    const [releases, workflowRuns, issues, assignments, checks] =
+      await Promise.all([
+        orm
+          .select()
+          .from(githubReleaseTable)
+          .where(inArray(githubReleaseTable.connectionId, within)),
+        orm
+          .select()
+          .from(githubWorkflowRunTable)
+          .where(inArray(githubWorkflowRunTable.connectionId, within)),
+        orm
+          .select()
+          .from(githubIssueTable)
+          .where(inArray(githubIssueTable.connectionId, within)),
+        orm
+          .select()
+          .from(githubAssignmentTable)
+          .where(inArray(githubAssignmentTable.connectionId, within)),
+        orm
+          .select()
+          .from(githubCheckTable)
+          .where(inArray(githubCheckTable.connectionId, within)),
+      ]);
     return {
       repositories,
       pullRequests,
       releases,
       reviewRequests,
       checkRollups,
+      checks,
       workflowRuns,
       issues,
       assignments,
@@ -284,6 +292,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
       releases: [],
       reviewRequests: [],
       checkRollups: [],
+      checks: [],
       workflowRuns: [],
       issues: [],
       assignments: [],

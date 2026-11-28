@@ -9,7 +9,12 @@ const screens = [
   { name: 'home', path: '/' },
   { name: 'home-all-objectives', path: '/?show=parked,done' },
   { name: 'github', path: '/github' },
-  { name: 'settings', path: '/settings' },
+  { name: 'settings-profile', path: '/settings/profile' },
+  { name: 'settings-appearance', path: '/settings/appearance' },
+  { name: 'settings-passkeys', path: '/settings/passkeys' },
+  { name: 'settings-recovery-codes', path: '/settings/recovery-codes' },
+  { name: 'settings-github', path: '/settings/github' },
+  { name: 'settings-briefings', path: '/settings/briefings' },
   { name: 'service-accounts', path: '/settings/service-accounts' },
 ] as const;
 

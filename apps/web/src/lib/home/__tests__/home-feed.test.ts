@@ -29,14 +29,14 @@ const feed = SampleFeed.feed({
     SampleFeed.pull({ id: 'review-new', updatedAt: Clock.hoursAgo(1) }),
   ],
   myPullRequests: [
-    SampleFeed.pull({
+    SampleFeed.myPull({
       id: 'mine-red',
       checks: failing,
       updatedAt: Clock.hoursAgo(2),
     }),
-    SampleFeed.pull({ id: 'mine-green', checks: passing }),
-    SampleFeed.pull({ id: 'mine-no-checks' }),
-    SampleFeed.pull({ id: 'mine-closed', state: 'closed' }),
+    SampleFeed.myPull({ id: 'mine-green', checks: passing }),
+    SampleFeed.myPull({ id: 'mine-no-checks' }),
+    SampleFeed.myPull({ id: 'mine-closed', state: 'closed' }),
   ],
   recentMerges: [
     SampleFeed.pull({

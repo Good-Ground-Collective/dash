@@ -48,11 +48,32 @@ const wire = {
       headSha: 'a1b2c3d',
       requestedReviewers: [],
       checks: null,
+      failingChecks: [],
+      checkCount: 0,
     },
   ],
   recentMerges: [],
   releases: [],
   failedRuns: [],
+  defaultBranches: [
+    {
+      repository: { fullName: 'acme/web', url: 'https://github.com/acme/web' },
+      branch: 'main',
+      headSha: 'c0ffee',
+      state: 'failure',
+      checksTruncated: false,
+      checks: [
+        {
+          name: 'build',
+          kind: 'check_run',
+          app: 'github-actions',
+          state: 'failure',
+          url: 'https://github.com/acme/web/actions/runs/9',
+          failingSince: '2026-11-24T08:00:00.000Z',
+        },
+      ],
+    },
+  ],
   assignedIssues: [
     {
       id: 'I_1',
@@ -88,6 +109,9 @@ describe('HttpGithubFeed', () => {
       new Date('2026-11-27T11:55:00Z'),
     );
     expect(answer.assignedIssues[0]?.updatedAt).toBeInstanceOf(Date);
+    expect(answer.defaultBranches[0]?.checks[0]?.failingSince).toEqual(
+      new Date('2026-11-24T08:00:00Z'),
+    );
     expect(answer.myPullRequests[0]?.createdAt).toEqual(
       new Date('2026-11-20T08:00:00Z'),
     );

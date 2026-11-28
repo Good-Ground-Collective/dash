@@ -137,7 +137,7 @@ test('confirming after the gate sent you back skips to Connect GitHub, and the s
 });
 
 test('settings regenerates after a passkey check, and the old codes stop working', async () => {
-  await page.goto('/settings');
+  await page.goto('/settings/recovery-codes');
   const panel = page.getByRole('region', { name: 'Recovery codes' });
   await expect(panel.getByText('10 of 10 codes left')).toBeVisible();
   await page.request.post(`${missionControl}/api/auth/__stub/age-session`);
@@ -176,7 +176,7 @@ test('settings nudges when two or fewer codes are left', async () => {
   await page.request.post(`${missionControl}/api/auth/__stub/recovery-codes`, {
     data: { codes: ['k7m2-q9xp', 'w4hr-t8nc'] },
   });
-  await page.goto('/settings');
+  await page.goto('/settings/recovery-codes');
 
   const panel = page.getByRole('region', { name: 'Recovery codes' });
   await expect(panel.getByText('2 of 10 codes left')).toBeVisible();

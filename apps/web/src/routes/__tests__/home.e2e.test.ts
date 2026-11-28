@@ -222,7 +222,7 @@ test('over budget keeps the briefing, says why, and turns Regenerate off', async
 
 test('Settings reads out the estimated spend, the cap and the run count', async () => {
   await briefing.scenario('ready');
-  await page.goto('/settings');
+  await page.goto('/settings/briefings');
 
   const spend = page.getByRole('region', { name: 'AI briefing spend' });
   await expect(spend).toContainText('$12.40 of $100 this month · 37 runs');

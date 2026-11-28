@@ -1,5 +1,5 @@
 {
-  "id": "0ad1cfa1-b3ec-4913-8b6d-0f993deed2e5",
+  "id": "4e2ccd0e-953f-4d45-bf73-63a253ca81b6",
   "prevId": "75155a1d-c2ad-4114-91ac-a69f42ba6515",
   "version": "7",
   "dialect": "postgresql",
@@ -1601,12 +1601,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "sections": {
-          "name": "sections",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "paragraphs": {
           "name": "paragraphs",
           "type": "jsonb",
@@ -2379,6 +2373,108 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.github_check": {
+      "name": "github_check",
+      "schema": "",
+      "columns": {
+        "connection_id": {
+          "name": "connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_node_id": {
+          "name": "subject_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_kind": {
+          "name": "subject_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "head_sha": {
+          "name": "head_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "app": {
+          "name": "app",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failing_since": {
+          "name": "failing_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "github_check_connection_id_connection_id_fk": {
+          "name": "github_check_connection_id_connection_id_fk",
+          "tableFrom": "github_check",
+          "tableTo": "connection",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "github_check_connection_id_subject_node_id_name_pk": {
+          "name": "github_check_connection_id_subject_node_id_name_pk",
+          "columns": [
+            "connection_id",
+            "subject_node_id",
+            "name"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.github_issue": {
       "name": "github_issue",
       "schema": "",
@@ -2739,6 +2835,25 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "default_branch_head_sha": {
+          "name": "default_branch_head_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_branch_state": {
+          "name": "default_branch_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_branch_checks_truncated": {
+          "name": "default_branch_checks_truncated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "archived": {
           "name": "archived",

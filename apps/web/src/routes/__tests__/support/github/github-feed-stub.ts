@@ -47,6 +47,7 @@ export class GithubFeedStub {
       recentMerges: [],
       releases: [],
       failedRuns: [],
+      defaultBranches: [],
       assignedIssues: [],
     };
 

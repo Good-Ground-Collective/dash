@@ -9,55 +9,22 @@ import {
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
-import {
-  type GithubFeed,
-  githubFeedSchema,
-} from '#src/github-feed/contracts/github-feed.ts';
+import { ServedGithubFeed } from '#src/github-feed/__tests__/support/served-github-feed.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
-
-const running: GithubFeedHarness[] = [];
-
-class Served {
-  /** Ada with an owned acme connection read once, as `ada`. */
-  static async synced(): Promise<GithubFeedHarness> {
-    const harness = await new GithubFeedHarness().link({
-      userId: adaId,
-      login: 'ada',
-    });
-    running.push(harness);
-    harness.records.add(GithubFeedFixtures.target());
-    await harness.module.reconcile.syncConnection({ connectionId: ownedId });
-    return harness;
-  }
-
-  static async feedOf(
-    harness: GithubFeedHarness,
-    userId: string,
-  ): Promise<GithubFeed> {
-    const response = await (
-      await harness.start()
-    ).inject({
-      url: '/integrations/github/feed',
-      headers: GithubFeedHarness.cookie(userId),
-    });
-    expect(response.statusCode).toBe(200);
-    return githubFeedSchema.parse(response.json());
-  }
-}
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: fixedNow });
 });
 
 afterEach(async () => {
-  await Promise.all(running.splice(0).map(async (harness) => harness.stop()));
+  await ServedGithubFeed.stopAll();
   vi.useRealTimers();
 });
 
 describe('GET /integrations/github/feed', () => {
   it('needs a signed-in person', async () => {
     const harness = new GithubFeedHarness();
-    running.push(harness);
+    ServedGithubFeed.track(harness);
 
     const response = await (
       await harness.start()
@@ -68,7 +35,10 @@ describe('GET /integrations/github/feed', () => {
   });
 
   it('gives every item its link, repository and connection', async () => {
-    const feed = await Served.feedOf(await Served.synced(), adaId);
+    const feed = await ServedGithubFeed.feedOf(
+      await ServedGithubFeed.synced(),
+      adaId,
+    );
 
     expect(feed.reviewRequests[0]).toEqual({
       id: 'PR_1',
@@ -96,7 +66,10 @@ describe('GET /integrations/github/feed', () => {
   });
 
   it('shows nothing of connections another person made', async () => {
-    const feed = await Served.feedOf(await Served.synced(), graceId);
+    const feed = await ServedGithubFeed.feedOf(
+      await ServedGithubFeed.synced(),
+      graceId,
+    );
 
     expect(feed).toEqual({
       connections: [],
@@ -105,8 +78,36 @@ describe('GET /integrations/github/feed', () => {
       recentMerges: [],
       releases: [],
       failedRuns: [],
+      defaultBranches: [],
       assignedIssues: [],
     });
+  });
+});
+
+describe('GET /integrations/github/feed checks', () => {
+  it('serves the default branches with their checks, and each of your pull requests with its failing checks', async () => {
+    const feed = await ServedGithubFeed.feedOf(
+      await ServedGithubFeed.synced(),
+      adaId,
+    );
+
+    expect(feed.defaultBranches).toEqual([
+      expect.objectContaining({
+        branch: 'main',
+        headSha: 'main-head',
+        state: 'failure',
+        checks: [
+          expect.objectContaining({
+            name: 'build',
+            failingSince: fixedNow.toISOString(),
+          }),
+          expect.objectContaining({ name: 'codecov/patch' }),
+        ],
+      }),
+    ]);
+    expect(feed.myPullRequests[0]?.failingChecks).toEqual([
+      { name: 'lint', url: 'https://github.com/acme/app/runs/2' },
+    ]);
   });
 });
 
@@ -118,25 +119,12 @@ class Reads {
   static release(id: string, publishedAt: string) {
     return GithubFeedFixtures.release({ id, publishedAt });
   }
-
-  static async activity(
-    harness: GithubFeedHarness,
-    activity: Partial<ReturnType<typeof GithubFeedFixtures.activity>>,
-  ): Promise<void> {
-    harness.feed.activity = {
-      ...GithubFeedFixtures.activity(),
-      ...activity,
-    };
-    await harness.module.reconcile.syncConnection({
-      connectionId: ownedId,
-    });
-  }
 }
 
 describe('GET /integrations/github/feed recent merges and releases', () => {
   it('lists merges and releases by when they happened, newest first, with their own links', async () => {
-    const harness = await Served.synced();
-    await Reads.activity(harness, {
+    const harness = await ServedGithubFeed.synced();
+    await ServedGithubFeed.reread(harness, {
       mergedPullRequests: [
         Reads.merged('2026-11-26T06:00:00Z', 3),
         Reads.merged('2026-11-26T09:00:00Z', 4),
@@ -147,7 +135,7 @@ describe('GET /integrations/github/feed recent merges and releases', () => {
       ],
     });
 
-    const feed = await Served.feedOf(harness, adaId);
+    const feed = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_4', 'PR_3']);
     expect(feed.recentMerges[0]?.mergedAt).toBe('2026-11-26T09:00:00.000Z');
@@ -166,36 +154,36 @@ describe('GET /integrations/github/feed recent merges and releases', () => {
 
 describe('GET /integrations/github/feed retention', () => {
   it('keeps them across a read that no longer reports them', async () => {
-    const harness = await Served.synced();
-    await Reads.activity(harness, {
+    const harness = await ServedGithubFeed.synced();
+    await ServedGithubFeed.reread(harness, {
       mergedPullRequests: [Reads.merged('2026-11-26T09:00:00Z')],
       releases: [Reads.release('v1.0.0', '2026-11-26T07:00:00Z')],
     });
     vi.setSystemTime(new Date(fixedNow.getTime() + 15 * 60_000));
 
-    await Reads.activity(harness, {});
-    const feed = await Served.feedOf(harness, adaId);
+    await ServedGithubFeed.reread(harness, {});
+    const feed = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_3']);
     expect(feed.releases.map(({ tagName }) => tagName)).toEqual(['v1.0.0']);
   });
 
   it('ages them out 48 hours after they happened', async () => {
-    const harness = await Served.synced();
+    const harness = await ServedGithubFeed.synced();
     const mergedAt = '2026-11-26T09:00:00Z';
-    await Reads.activity(harness, {
+    await ServedGithubFeed.reread(harness, {
       mergedPullRequests: [Reads.merged(mergedAt)],
       releases: [Reads.release('v1.0.0', mergedAt)],
     });
     const atTheBoundary = new Date(Date.parse(mergedAt) + 48 * 3_600_000);
 
     vi.setSystemTime(atTheBoundary);
-    await Reads.activity(harness, {});
-    const kept = await Served.feedOf(harness, adaId);
+    await ServedGithubFeed.reread(harness, {});
+    const kept = await ServedGithubFeed.feedOf(harness, adaId);
 
     vi.setSystemTime(new Date(atTheBoundary.getTime() + 1000));
-    await Reads.activity(harness, {});
-    const aged = await Served.feedOf(harness, adaId);
+    await ServedGithubFeed.reread(harness, {});
+    const aged = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(kept.recentMerges).toHaveLength(1);
     expect(kept.releases).toHaveLength(1);
@@ -206,7 +194,7 @@ describe('GET /integrations/github/feed retention', () => {
 
 describe('GET /integrations/github/feed releases deleted on GitHub', () => {
   it('drops the release of a repository the read saw empty, and keeps an unread repository’s and a merge', async () => {
-    const harness = await Served.synced();
+    const harness = await ServedGithubFeed.synced();
     const other = {
       ...GithubFeedFixtures.activity().repositories[0]!,
       externalId: 'R_other',
@@ -214,7 +202,7 @@ describe('GET /integrations/github/feed releases deleted on GitHub', () => {
       url: 'https://github.com/acme/other',
     };
     const repositories = [...GithubFeedFixtures.activity().repositories, other];
-    await Reads.activity(harness, {
+    await ServedGithubFeed.reread(harness, {
       repositories,
       mergedPullRequests: [Reads.merged('2026-11-26T09:00:00Z')],
       releases: [
@@ -227,7 +215,7 @@ describe('GET /integrations/github/feed releases deleted on GitHub', () => {
     });
     vi.setSystemTime(new Date(fixedNow.getTime() + 15 * 60_000));
 
-    await Reads.activity(harness, {
+    await ServedGithubFeed.reread(harness, {
       repositories,
       releases: [],
       releaseReads: [
@@ -238,7 +226,7 @@ describe('GET /integrations/github/feed releases deleted on GitHub', () => {
         },
       ],
     });
-    const feed = await Served.feedOf(harness, adaId);
+    const feed = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(feed.releases.map(({ tagName }) => tagName)).toEqual([
       'other-v1.0.0',
@@ -249,12 +237,15 @@ describe('GET /integrations/github/feed releases deleted on GitHub', () => {
 
 describe('GET /integrations/github/feed across connection kinds', () => {
   it('answers the same shape for a guest connection’s rows as for an owned one’s', async () => {
-    const owned = await Served.feedOf(await Served.synced(), adaId);
+    const owned = await ServedGithubFeed.feedOf(
+      await ServedGithubFeed.synced(),
+      adaId,
+    );
     const harness = await new GithubFeedHarness().link({
       userId: adaId,
       login: 'ada',
     });
-    running.push(harness);
+    ServedGithubFeed.track(harness);
     harness.records.add(
       GithubFeedFixtures.target({
         connectionId: guestId,
@@ -274,7 +265,7 @@ describe('GET /integrations/github/feed across connection kinds', () => {
       syncedAt: fixedNow,
     });
 
-    const guest = await Served.feedOf(harness, adaId);
+    const guest = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(guest.connections).toEqual([
       expect.objectContaining({ id: guestId, kind: 'guest' }),
@@ -288,7 +279,10 @@ describe('GET /integrations/github/feed across connection kinds', () => {
 
 describe('GET /integrations/github/feed connection freshness', () => {
   it('answers the four groups and the connection’s freshness', async () => {
-    const feed = await Served.feedOf(await Served.synced(), adaId);
+    const feed = await ServedGithubFeed.feedOf(
+      await ServedGithubFeed.synced(),
+      adaId,
+    );
 
     expect(feed.connections).toEqual([
       {
@@ -311,7 +305,7 @@ describe('GET /integrations/github/feed connection freshness', () => {
       userId: adaId,
       login: 'ada',
     });
-    running.push(harness);
+    ServedGithubFeed.track(harness);
     harness.records.add(GithubFeedFixtures.target());
     harness.feed.activity = {
       ...GithubFeedFixtures.activity(),
@@ -319,7 +313,7 @@ describe('GET /integrations/github/feed connection freshness', () => {
     };
     await harness.module.reconcile.syncConnection({ connectionId: ownedId });
 
-    const feed = await Served.feedOf(harness, adaId);
+    const feed = await ServedGithubFeed.feedOf(harness, adaId);
 
     expect(feed.connections).toEqual([
       expect.objectContaining({ id: ownedId, truncated: true }),

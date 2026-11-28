@@ -39,6 +39,8 @@ export interface StubObjective {
 
 const repo = 'https://github.com/acme-labs/api';
 
+const maxTasksPerEpic = 25;
+
 /** The populated tracker for `ObjectivesStub`: two active initiatives, a parked epic and a closed initiative. */
 export class ObjectivesItems {
   static initiatives(): StubObjective[] {
@@ -137,7 +139,7 @@ export class ObjectivesItems {
     };
   }
 
-  /** An epic's tasks as Mission Control sends them: open ones first, and the epic's own count. */
+  /** An epic's tasks as Mission Control sends them: open ones first, at most 25, and the epic's own count. */
   static tasks(item: StubObjective) {
     const tasks = (item.tasks ?? []).map((task, index) => ({
       id: `I_${item.id}_${String(index)}`,
@@ -147,10 +149,12 @@ export class ObjectivesItems {
       assignees: task.assignees ?? [],
     }));
     return {
-      items: tasks.toSorted(
-        (left, right) =>
-          Number(left.state === 'closed') - Number(right.state === 'closed'),
-      ),
+      items: tasks
+        .toSorted(
+          (left, right) =>
+            Number(left.state === 'closed') - Number(right.state === 'closed'),
+        )
+        .slice(0, maxTasksPerEpic),
       total: tasks.length,
     };
   }
@@ -194,6 +198,9 @@ export class ObjectivesItems {
       {
         ...ObjectivesItems.base('E_status', 'Status page', 12),
         progress: null,
+        tasks: Array.from({ length: 27 }, (_, index) => ({
+          title: `Status check ${String(index + 1)}`,
+        })),
       },
     ];
   }
