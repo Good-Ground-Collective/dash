@@ -26,33 +26,39 @@
       aria-controls={open ? panelId : undefined}
       onclick={ontoggle}
     >
-      <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
-      {#if row.priority !== null}
-        <Chip
-          tone={ChipTones.forPriority(row.priority.label)}
-          dash={row.priority.fromDash}
+      <span class="lead">
+        <span class="chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {#if row.priority !== null}
+          <Chip
+            tone={ChipTones.forPriority(row.priority.label)}
+            dash={row.priority.fromDash}
+          >
+            <DashFieldLabel field={row.priority} />
+          </Chip>
+        {/if}
+        {#if row.status !== 'active'}
+          <Chip tone="neutral">
+            {row.status === 'parked' ? 'Parked' : 'Done'}
+          </Chip>
+        {/if}
+        <span class="title">{row.title}</span>
+        {#if row.dueAfterInitiative}
+          <Chip tone="warn">Due after its initiative</Chip>
+        {/if}
+        {#each row.hints as hint (hint)}
+          <Chip tone="hint" plain>{hint}</Chip>
+        {/each}
+      </span>
+      <span class="tail">
+        <ProgressMeter progress={row.progress} />
+        <span
+          class="due"
+          class:dash={row.due?.fromDash}
+          class:empty={row.due === null}
         >
-          <DashFieldLabel field={row.priority} />
-        </Chip>
-      {/if}
-      {#if row.status !== 'active'}
-        <Chip tone="neutral">
-          {row.status === 'parked' ? 'Parked' : 'Done'}
-        </Chip>
-      {/if}
-      <span class="title">{row.title}</span>
-      {#if row.dueAfterInitiative}
-        <Chip tone="warn">Due after its initiative</Chip>
-      {/if}
-      {#each row.hints as hint (hint)}
-        <Chip tone="hint" plain>{hint}</Chip>
-      {/each}
-      <span class="meter"><ProgressMeter progress={row.progress} /></span>
-      {#if row.due !== null}
-        <span class="due" class:dash={row.due.fromDash}>
-          <DashFieldLabel field={row.due} />
+          {#if row.due !== null}<DashFieldLabel field={row.due} />{/if}
         </span>
-      {/if}
+      </span>
     </button>
     <OverlayMenu id={row.id} title={row.title} actions={epic.actions} />
   </div>
@@ -79,6 +85,7 @@
 
 <style>
   .epic {
+    container-type: inline-size;
     border-top: var(--border-hairline) solid var(--faint);
   }
 
@@ -89,9 +96,9 @@
   }
 
   .toggle {
-    display: flex;
+    display: grid;
     flex: 1;
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: var(--space-1) var(--space-3);
     min-width: 0;
@@ -106,6 +113,14 @@
 
   .toggle:hover .title {
     text-decoration: underline;
+  }
+
+  .lead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    min-width: 0;
   }
 
   .chevron {
@@ -127,9 +142,13 @@
     font-weight: var(--font-weight-medium);
   }
 
-  .meter {
-    flex: none;
-    min-width: 10.5rem;
+  .tail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    min-width: 0;
+    padding-left: calc(0.875rem + var(--space-3));
   }
 
   .due {
@@ -137,11 +156,32 @@
     padding: 0 var(--space-1);
     border: var(--border-hairline) solid transparent;
     border-radius: var(--radius-pill);
-    min-width: 6.5rem;
+    box-sizing: content-box;
+    width: 16ch;
+    min-height: 1lh;
+    overflow: hidden;
+    font-family: var(--font-mono);
     font-size: var(--font-size-xs);
+    text-overflow: ellipsis;
     color: var(--ink-muted);
     text-align: right;
     white-space: nowrap;
+  }
+
+  @container (width >= 40rem) {
+    .toggle {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .tail {
+      padding-left: 0;
+    }
+  }
+
+  @container (width < 26rem) {
+    .due.empty {
+      display: none;
+    }
   }
 
   .details {

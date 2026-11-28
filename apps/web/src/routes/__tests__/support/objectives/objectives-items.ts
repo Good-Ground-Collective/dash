@@ -56,12 +56,22 @@ export class ObjectivesItems {
       {
         ...ObjectivesItems.base('PVT_docs', 'Docs refresh', null),
         url: 'https://github.com/orgs/acme-labs/projects/2',
+        progress: { done: 100, total: 120 },
         hints: ['no_recent_activity'],
         epics: [
           {
             ...ObjectivesItems.base('E_guides', 'Rewrite the guides', 20),
             progress: null,
             hints: ['no_recent_activity'],
+          },
+          {
+            ...ObjectivesItems.base('E_reference', 'Refresh API reference', 21),
+            dueDate: ObjectivesItems.nextYearDay(),
+            progress: { done: 12, total: 12 },
+          },
+          {
+            ...ObjectivesItems.base('E_changelog', 'Publish the changelog', 22),
+            progress: { done: 3, total: 5 },
           },
         ],
       },
@@ -143,6 +153,11 @@ export class ObjectivesItems {
       ),
       total: tasks.length,
     };
+  }
+
+  /** A date in May of next year, so its label always carries the year, the widest form. */
+  static nextYearDay(): string {
+    return `${String(new Date().getFullYear() + 1)}-05-28`;
   }
 
   static ago(minutes: number): string {
