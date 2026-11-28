@@ -48,11 +48,13 @@
         <Chip tone="hint" plain>{hint}</Chip>
       {/each}
       <span class="meter"><ProgressMeter progress={row.progress} /></span>
-      {#if row.due !== null}
-        <span class="due" class:dash={row.due.fromDash}>
-          <DashFieldLabel field={row.due} />
-        </span>
-      {/if}
+      <span
+        class="due"
+        class:dash={row.due?.fromDash}
+        class:empty={row.due === null}
+      >
+        {#if row.due !== null}<DashFieldLabel field={row.due} />{/if}
+      </span>
     </button>
     <OverlayMenu id={row.id} title={row.title} actions={epic.actions} />
   </div>
@@ -129,7 +131,7 @@
 
   .meter {
     flex: none;
-    min-width: 10.5rem;
+    max-width: 100%;
   }
 
   .due {
@@ -137,11 +139,18 @@
     padding: 0 var(--space-1);
     border: var(--border-hairline) solid transparent;
     border-radius: var(--radius-pill);
-    min-width: 6.5rem;
+    width: 6.5rem;
+    min-height: 1lh;
     font-size: var(--font-size-xs);
     color: var(--ink-muted);
     text-align: right;
     white-space: nowrap;
+  }
+
+  @media (width < 40rem) {
+    .due.empty {
+      display: none;
+    }
   }
 
   .details {
