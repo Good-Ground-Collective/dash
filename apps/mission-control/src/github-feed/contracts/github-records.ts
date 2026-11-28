@@ -1,4 +1,7 @@
-import { checkStateSchema } from '@dash/integrations-core';
+import {
+  activityCheckStateSchema,
+  checkStateSchema,
+} from '@dash/integrations-core';
 import { z } from 'zod';
 
 const nodeIdSchema = z
@@ -34,6 +37,18 @@ export const githubRepositoryRecordSchema = z.object({
   fullName: z.string().min(1),
   url: z.url(),
   defaultBranch: z.string().min(1).nullable(),
+  defaultBranchHeadSha: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe(
+      'The default branch head the latest read saw. Null when none was read.',
+    ),
+  defaultBranchState: checkStateSchema
+    .nullable()
+    .describe(
+      'How the default branch head’s checks add up. Null when the head has no checks, when the read could not see them, or when no head was read.',
+    ),
   archived: z.boolean(),
 });
 
@@ -95,6 +110,24 @@ export const githubCheckRollupRecordSchema = z.object({
   pendingCount: z.int().nonnegative(),
 });
 
+export const githubCheckRecordSchema = z.object({
+  subjectNodeId: nodeIdSchema.describe(
+    'The repository whose default branch, or the pull request, the check ran on.',
+  ),
+  subjectKind: z.enum(['default_branch', 'pull_request']),
+  name: z.string().min(1),
+  headSha: z.string().min(1),
+  kind: z.enum(['check_run', 'status']),
+  app: z.string().min(1).nullable(),
+  state: activityCheckStateSchema,
+  url: z.url().nullable(),
+  failingSince: timestampSchema
+    .nullable()
+    .describe(
+      'When the check began failing, kept while it keeps failing. A read leaves it null; the stored row decides it.',
+    ),
+});
+
 export const githubWorkflowRunRecordSchema = z.object({
   nodeId: nodeIdSchema,
   repositoryNodeId: nodeIdSchema,
@@ -134,6 +167,7 @@ export const githubRecordsSchema = z.object({
   releases: z.array(githubReleaseRecordSchema),
   reviewRequests: z.array(githubReviewRequestRecordSchema),
   checkRollups: z.array(githubCheckRollupRecordSchema),
+  checks: z.array(githubCheckRecordSchema),
   workflowRuns: z.array(githubWorkflowRunRecordSchema),
   issues: z.array(githubIssueRecordSchema),
   assignments: z.array(githubAssignmentRecordSchema),
@@ -154,6 +188,7 @@ export type GithubReviewRequestRecord = z.infer<
 export type GithubCheckRollupRecord = z.infer<
   typeof githubCheckRollupRecordSchema
 >;
+export type GithubCheckRecord = z.infer<typeof githubCheckRecordSchema>;
 export type GithubWorkflowRunRecord = z.infer<
   typeof githubWorkflowRunRecordSchema
 >;

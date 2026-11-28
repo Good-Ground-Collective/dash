@@ -33,6 +33,71 @@ describe('ActivityRecords', () => {
   });
 });
 
+describe('ActivityRecords checks', () => {
+  it('stores each check against its subject and the default branch head on its repository', () => {
+    const records = ActivityRecords.from({
+      activity: GithubFeedFixtures.activity(),
+      viewerLogin: 'ada',
+    });
+
+    expect(records.repositories).toEqual([
+      expect.objectContaining({
+        nodeId: 'R_app',
+        defaultBranchHeadSha: 'main-head',
+        defaultBranchState: 'failure',
+      }),
+    ]);
+    expect(
+      records.checks.map(
+        ({ subjectNodeId, subjectKind, name, failingSince }) => ({
+          subjectNodeId,
+          subjectKind,
+          name,
+          failingSince,
+        }),
+      ),
+    ).toEqual([
+      {
+        subjectNodeId: 'R_app',
+        subjectKind: 'default_branch',
+        name: 'build',
+        failingSince: null,
+      },
+      {
+        subjectNodeId: 'R_app',
+        subjectKind: 'default_branch',
+        name: 'codecov/patch',
+        failingSince: null,
+      },
+      {
+        subjectNodeId: 'PR_2',
+        subjectKind: 'pull_request',
+        name: 'lint',
+        failingSince: null,
+      },
+    ]);
+  });
+
+  it('keeps one row for a check name read twice on the same subject, and leaves a repository without a head unmarked', () => {
+    const activity = GithubFeedFixtures.activity();
+
+    const records = ActivityRecords.from({
+      activity: {
+        ...activity,
+        defaultBranches: [],
+        checks: [...activity.checks, ...activity.checks],
+      },
+      viewerLogin: 'ada',
+    });
+
+    expect(records.checks).toHaveLength(3);
+    expect(records.repositories[0]).toMatchObject({
+      defaultBranchHeadSha: null,
+      defaultBranchState: null,
+    });
+  });
+});
+
 describe('ActivityRecords assignments', () => {
   it('assigns review requests to the viewer and issues to each assignee', () => {
     const records = ActivityRecords.from({

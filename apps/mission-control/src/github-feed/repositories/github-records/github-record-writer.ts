@@ -8,6 +8,7 @@ import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-ret
 import {
   githubAssignmentTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubIssueTable,
   githubPullRequestTable,
   githubReleaseTable,
@@ -26,10 +27,16 @@ const prunedTables = [
   githubRepoTable,
   githubReviewRequestTable,
   githubCheckRollupTable,
+  githubCheckTable,
   githubWorkflowRunTable,
   githubIssueTable,
   githubAssignmentTable,
 ] as const;
+
+/** A check that failed before and fails again keeps the time it first failed; one that passes loses it; a new failure starts now. */
+const failingSinceKept = sql.raw(
+  `case when excluded."failing_since" is null then null when "github_check"."state" = 'failure' and "github_check"."failing_since" is not null then "github_check"."failing_since" else excluded."failing_since" end`,
+);
 
 export interface GithubRecordWriter {
   /**
@@ -242,6 +249,25 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
       });
   }
 
+  private static async upsertChecks(props: {
+    transaction: Transaction;
+    connectionId: string;
+    records: GithubRecords;
+    syncedAt: Date;
+  }): Promise<void> {
+    await ReplacedRows.upsert({
+      transaction: props.transaction,
+      table: githubCheckTable,
+      rows: props.records.checks.map((check) => ({
+        ...check,
+        connectionId: props.connectionId,
+        syncedAt: props.syncedAt,
+        failingSince: check.state === 'failure' ? props.syncedAt : null,
+      })),
+      overrides: { failingSince: failingSinceKept },
+    });
+  }
+
   private static async upsertAll(props: {
     transaction: Transaction;
     connectionId: string;
@@ -292,5 +318,6 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     for (const { table, rows } of writes) {
       await ReplacedRows.upsert({ transaction, table, rows });
     }
+    await DrizzleGithubRecordWriter.upsertChecks(props);
   }
 }

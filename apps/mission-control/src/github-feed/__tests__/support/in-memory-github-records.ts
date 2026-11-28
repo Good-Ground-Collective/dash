@@ -163,10 +163,33 @@ export class InMemoryGithubRecords
       releases: [],
       reviewRequests: [],
       checkRollups: [],
+      checks: [],
       workflowRuns: [],
       issues: [],
       assignments: [],
     };
+  }
+
+  /** A check keeps the time it first failed while it keeps failing, as the table's upsert does. */
+  private static withFailingSince(props: {
+    read: GithubRecords['checks'];
+    stored: GithubRecords['checks'];
+    now: Date;
+  }): GithubRecords['checks'] {
+    const key = (check: GithubRecords['checks'][number]) =>
+      `${check.subjectNodeId}:${check.name}`;
+    const failingBefore = new Map(
+      props.stored
+        .filter((check) => check.state === 'failure')
+        .map((check) => [key(check), check.failingSince]),
+    );
+    return props.read.map((check) => ({
+      ...check,
+      failingSince:
+        check.state === 'failure'
+          ? (failingBefore.get(key(check)) ?? props.now.toISOString())
+          : null,
+    }));
   }
 
   /** What a read found plus the merged pull requests and releases from before it that are still within their retention. */
@@ -203,6 +226,11 @@ export class InMemoryGithubRecords
 
     return {
       ...props.read,
+      checks: InMemoryGithubRecords.withFailingSince({
+        read: props.read.checks,
+        stored: props.stored?.checks ?? [],
+        now: props.now,
+      }),
       pullRequests: [
         ...props.read.pullRequests.filter(
           (record) => record.state !== 'merged' || merged(record),

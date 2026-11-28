@@ -5,7 +5,24 @@ const repositoryFields = 'id nameWithOwner url isArchived';
 
 const failedSuiteFields = `conclusion workflowRun { id runNumber url event updatedAt workflow { name } }`;
 
-const pullRequestFields = `
+const checkContextNodeFields = `
+  __typename
+  ... on CheckRun {
+    name status conclusion detailsUrl completedAt databaseId
+    checkSuite { app { slug } workflowRun { databaseId } }
+  }
+  ... on StatusContext { context state targetUrl description }`;
+
+/** How many checks of one head commit a read asks for; GitHub allows at most 100 per page. */
+export const githubCheckContextCount = 100;
+
+const contextCounts =
+  'checkRunCountsByState { state count } statusContextCountsByState { state count }';
+
+class PullRequestFields {
+  /** Authored pull requests also name their checks; the others only count them, which keeps their cost flat. */
+  static selection(props: { withCheckContexts: boolean }): string {
+    return `
   ... on PullRequest {
     id number title url state isDraft mergeable reviewDecision mergedAt updatedAt headRefName headRefOid
     author { login }
@@ -26,9 +43,10 @@ const pullRequestFields = `
         commit {
           statusCheckRollup {
             state
-            contexts(first: 1) {
-              checkRunCountsByState { state count }
-              statusContextCountsByState { state count }
+            ${
+              props.withCheckContexts
+                ? `contexts(first: ${githubCheckContextCount}) { ${contextCounts} nodes { ${checkContextNodeFields} } }`
+                : `contexts(first: 1) { ${contextCounts} }`
             }
           }
           checkSuites(first: 20, filterBy: { appId: ${actionsAppId} }) { nodes { ${failedSuiteFields} } }
@@ -36,6 +54,15 @@ const pullRequestFields = `
       }
     }
   }`;
+  }
+}
+
+const countedPullRequestFields = PullRequestFields.selection({
+  withCheckContexts: false,
+});
+const namedPullRequestFields = PullRequestFields.selection({
+  withCheckContexts: true,
+});
 
 const issueFields = `
   ... on Issue {
@@ -65,16 +92,16 @@ query DashActivity(
   $mergedQuery: String!, $mergedAfter: String, $withMerged: Boolean!
 ) {
   review: search(type: ISSUE, query: $reviewQuery, first: $pageSize, after: $reviewAfter) @include(if: $withReview) {
-    ${pageInfo} nodes { ${pullRequestFields} }
+    ${pageInfo} nodes { ${countedPullRequestFields} }
   }
   authored: search(type: ISSUE, query: $authoredQuery, first: $pageSize, after: $authoredAfter) @include(if: $withAuthored) {
-    ${pageInfo} nodes { ${pullRequestFields} }
+    ${pageInfo} nodes { ${namedPullRequestFields} }
   }
   assigned: search(type: ISSUE, query: $assignedQuery, first: $pageSize, after: $assignedAfter) @include(if: $withAssigned) {
     ${pageInfo} nodes { ${issueFields} }
   }
   merged: search(type: ISSUE, query: $mergedQuery, first: $pageSize, after: $mergedAfter) @include(if: $withMerged) {
-    ${pageInfo} nodes { ${pullRequestFields} }
+    ${pageInfo} nodes { ${countedPullRequestFields} }
   }
 }`;
 
@@ -114,6 +141,10 @@ export const githubActivityQueries = {
       target {
         ... on Commit {
           oid
+          statusCheckRollup {
+            state
+            contexts(first: ${githubCheckContextCount}) { nodes { ${checkContextNodeFields} } }
+          }
           checkSuites(first: 20, filterBy: { appId: ${actionsAppId} }) { nodes { ${failedSuiteFields} } }
         }
       }

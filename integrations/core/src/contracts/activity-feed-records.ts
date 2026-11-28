@@ -46,6 +46,71 @@ export const activityChecksSchema = z.object({
   pending: z.int().nonnegative(),
 });
 
+export const activityCheckStateSchema = z.enum([
+  'success',
+  'failure',
+  'pending',
+  'neutral',
+  'skipped',
+]);
+
+export const activityCheckSchema = z.object({
+  subjectKind: z
+    .enum(['default_branch', 'pull_request'])
+    .describe(
+      'What the check ran on: a repository’s default branch head, or the head of one of the viewer’s pull requests.',
+    ),
+  subjectId: z
+    .string()
+    .min(1)
+    .describe(
+      'The provider’s id of the repository whose default branch, or of the pull request, the check ran on.',
+    ),
+  headSha: z.string().min(1),
+  name: z
+    .string()
+    .min(1)
+    .describe(
+      'What the provider shows the check as: a check run’s name or a commit status’s context.',
+    ),
+  kind: z.enum(['check_run', 'status']),
+  app: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe(
+      'The slug of the app that reported a check run. Null for a commit status.',
+    ),
+  state: activityCheckStateSchema,
+  url: z
+    .url()
+    .nullable()
+    .describe('Where the provider shows the check’s details.'),
+  workflowRunId: z
+    .int()
+    .nullable()
+    .describe(
+      'The Actions workflow run a check run belongs to. Null for anything but an Actions run.',
+    ),
+  jobId: z
+    .int()
+    .nullable()
+    .describe(
+      'The Actions job a check run is. Null for anything but an Actions run.',
+    ),
+});
+
+export const activityDefaultBranchSchema = z.object({
+  repositoryId: z.string().min(1),
+  branch: z.string().min(1),
+  headSha: z.string().min(1),
+  state: checkStateSchema
+    .nullable()
+    .describe(
+      'How the head’s checks add up. Null when the head has no checks or the provider refused to show them.',
+    ),
+});
+
 export const activityReviewerSchema = z.object({
   kind: z.enum(['user', 'team']),
   name: handleSchema,
@@ -157,6 +222,16 @@ export const activitySchema = z.object({
     .describe(
       'The latest run of each workflow that failed on a default branch head or on the head of one of the viewer’s open pull requests.',
     ),
+  defaultBranches: z
+    .array(activityDefaultBranchSchema)
+    .describe(
+      'The head and check state of every default branch that was read.',
+    ),
+  checks: z
+    .array(activityCheckSchema)
+    .describe(
+      'Every check on the head of each default branch read, and the failing checks on the head of each of the viewer’s open pull requests.',
+    ),
   assignedIssues: z.array(activityIssueSchema),
   truncated: z.boolean().describe('True when a cap cut a list short.'),
 });
@@ -164,6 +239,9 @@ export const activitySchema = z.object({
 export type ActivityQuery = z.infer<typeof activityQuerySchema>;
 export type ActivityRepository = z.infer<typeof activityRepositorySchema>;
 export type ActivityChecks = z.infer<typeof activityChecksSchema>;
+export type ActivityCheckState = z.infer<typeof activityCheckStateSchema>;
+export type ActivityCheck = z.infer<typeof activityCheckSchema>;
+export type ActivityDefaultBranch = z.infer<typeof activityDefaultBranchSchema>;
 export type ActivityReviewer = z.infer<typeof activityReviewerSchema>;
 export type ActivityPullRequest = z.infer<typeof activityPullRequestSchema>;
 export type ActivityRelease = z.infer<typeof activityReleaseSchema>;

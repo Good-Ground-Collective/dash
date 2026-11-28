@@ -1,7 +1,9 @@
 import type {
   GithubFeed,
   GithubFeedConnection,
+  GithubFeedDefaultBranch,
   GithubFeedIssue,
+  GithubFeedMyPullRequest,
   GithubFeedPullRequest,
   GithubFeedRelease,
   GithubFeedRun,
@@ -46,6 +48,33 @@ export class SampleFeed {
       headSha: 'abc123',
       requestedReviewers: [],
       checks: null,
+      ...overrides,
+    };
+  }
+
+  static myPull(
+    overrides: Partial<GithubFeedMyPullRequest> = {},
+  ): GithubFeedMyPullRequest {
+    return {
+      ...SampleFeed.pull(),
+      failingChecks: [],
+      checkCount: 0,
+      ...overrides,
+    };
+  }
+
+  static defaultBranch(
+    overrides: Partial<GithubFeedDefaultBranch> = {},
+  ): GithubFeedDefaultBranch {
+    return {
+      repository: {
+        fullName: 'acme-labs/api',
+        url: 'https://github.com/acme-labs/api',
+      },
+      branch: 'main',
+      headSha: 'def456',
+      state: 'success',
+      checks: [],
       ...overrides,
     };
   }
@@ -117,6 +146,7 @@ export class SampleFeed {
       recentMerges: [],
       releases: [],
       failedRuns: [],
+      defaultBranches: [],
       assignedIssues: [],
       ...overrides,
     };

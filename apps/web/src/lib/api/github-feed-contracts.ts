@@ -3,6 +3,14 @@ import { linkSchema } from '#lib/api/github-account-contracts.ts';
 
 const checkStateSchema = z.enum(['pending', 'success', 'failure']);
 
+const checkOutcomeSchema = z.enum([
+  'success',
+  'failure',
+  'pending',
+  'neutral',
+  'skipped',
+]);
+
 export const githubFeedConnectionSchema = z.object({
   id: z.string(),
   accountLogin: z.string(),
@@ -61,6 +69,51 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
     .nullable(),
 });
 
+export const githubFeedMyPullRequestSchema = githubFeedPullRequestSchema.extend(
+  {
+    failingChecks: z
+      .array(z.object({ name: z.string(), url: linkSchema.nullable() }))
+      .describe(
+        'The checks failing on the head commit, as many as Dash could name.',
+      ),
+    checkCount: z
+      .number()
+      .int()
+      .describe(
+        'How many checks and statuses the head commit has, passing or not.',
+      ),
+  },
+);
+
+export const githubFeedCheckSchema = z.object({
+  name: z.string(),
+  kind: z.enum(['check_run', 'status']),
+  app: z
+    .string()
+    .nullable()
+    .describe('The app that reported a check run. Null for a commit status.'),
+  state: checkOutcomeSchema,
+  url: linkSchema.nullable(),
+  failingSince: z.coerce
+    .date()
+    .nullable()
+    .describe('When the check began failing. Null unless it is failing.'),
+});
+
+export const githubFeedDefaultBranchSchema = z.object({
+  repository: z.object({ fullName: z.string(), url: linkSchema }),
+  branch: z.string(),
+  headSha: z.string(),
+  state: checkStateSchema
+    .nullable()
+    .describe(
+      'How the head’s checks add up. Null when the head has no checks or Dash could not read them.',
+    ),
+  checks: z
+    .array(githubFeedCheckSchema)
+    .describe('Failing checks first, then by name.'),
+});
+
 export const githubFeedRunSchema = feedItemSchema.extend({
   workflowName: z.string(),
   runNumber: z.number().int(),
@@ -95,7 +148,7 @@ export const githubFeedIssueSchema = feedItemSchema.extend({
 export const githubFeedSchema = z.object({
   connections: z.array(githubFeedConnectionSchema),
   reviewRequests: z.array(githubFeedPullRequestSchema),
-  myPullRequests: z.array(githubFeedPullRequestSchema),
+  myPullRequests: z.array(githubFeedMyPullRequestSchema),
   recentMerges: z
     .array(githubFeedPullRequestSchema)
     .describe(
@@ -107,12 +160,20 @@ export const githubFeedSchema = z.object({
       'Releases published in the last 48 hours; Home shows the last 24.',
     ),
   failedRuns: z.array(githubFeedRunSchema),
+  defaultBranches: z.array(githubFeedDefaultBranchSchema),
   assignedIssues: z.array(githubFeedIssueSchema),
 });
 
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
+export type GithubFeedMyPullRequest = z.infer<
+  typeof githubFeedMyPullRequestSchema
+>;
+export type GithubFeedCheck = z.infer<typeof githubFeedCheckSchema>;
+export type GithubFeedDefaultBranch = z.infer<
+  typeof githubFeedDefaultBranchSchema
+>;
 export type GithubFeedRelease = z.infer<typeof githubFeedReleaseSchema>;
 export type GithubFeedRun = z.infer<typeof githubFeedRunSchema>;
 export type GithubFeedIssue = z.infer<typeof githubFeedIssueSchema>;

@@ -7,6 +7,11 @@ import type {
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
+import {
+  type GithubCheckContext,
+  githubCheckContextNodesSchema,
+} from '#src/contracts/github-check-response.ts';
+
 const failedConclusions = new Map<string, ActivityRun['conclusion']>([
   ['FAILURE', 'failure'],
   ['TIMED_OUT', 'timed_out'],
@@ -70,15 +75,31 @@ const countsSchema = z.array(
   z.object({ state: z.string(), count: z.int().nonnegative() }),
 );
 
+const rollupStateSchema = z
+  .enum(['SUCCESS', 'FAILURE', 'ERROR', 'PENDING', 'EXPECTED'])
+  .transform((state): CheckState => {
+    if (state === 'SUCCESS') {
+      return 'success';
+    }
+    return state === 'FAILURE' || state === 'ERROR' ? 'failure' : 'pending';
+  });
+
+/** A pull request head's checks as counts, plus the checks themselves when the query named them. */
+export interface GithubPullRequestChecks {
+  summary: ActivityChecks;
+  contexts: GithubCheckContext[];
+}
+
 const checksSchema = z
   .object({
-    state: z.enum(['SUCCESS', 'FAILURE', 'ERROR', 'PENDING', 'EXPECTED']),
+    state: rollupStateSchema,
     contexts: z.object({
       checkRunCountsByState: countsSchema.nullable(),
       statusContextCountsByState: countsSchema.nullable(),
+      nodes: githubCheckContextNodesSchema,
     }),
   })
-  .transform((rollup): ActivityChecks => {
+  .transform((rollup): GithubPullRequestChecks => {
     const counts = { success: 0, failure: 0, pending: 0 };
     for (const { state, count } of [
       ...(rollup.contexts.checkRunCountsByState ?? []),
@@ -91,14 +112,21 @@ const checksSchema = z
           : 'pending';
       counts[bucket] += count;
     }
-    const state: CheckState =
-      rollup.state === 'SUCCESS'
-        ? 'success'
-        : rollup.state === 'FAILURE' || rollup.state === 'ERROR'
-          ? 'failure'
-          : 'pending';
-    return { state, ...counts };
+    return {
+      summary: { state: rollup.state, ...counts },
+      contexts: rollup.contexts.nodes,
+    };
   });
+
+const branchRollupSchema = z
+  .object({
+    state: rollupStateSchema,
+    contexts: z.object({ nodes: githubCheckContextNodesSchema }),
+  })
+  .transform((rollup) => ({
+    state: rollup.state,
+    contexts: rollup.contexts.nodes,
+  }));
 
 const reviewerSchema = z
   .object({
@@ -209,6 +237,7 @@ export const githubDefaultBranchNodeSchema = z
         target: z
           .object({
             oid: z.string().min(1).optional(),
+            statusCheckRollup: branchRollupSchema.nullable().optional(),
             checkSuites: z
               .object({ nodes: z.array(githubFailedSuiteSchema) })
               .optional(),

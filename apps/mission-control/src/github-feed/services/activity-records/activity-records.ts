@@ -1,11 +1,13 @@
 import type {
   Activity,
+  ActivityCheck,
   ActivityPullRequest,
   ActivityRelease,
 } from '@dash/integrations-core';
 
 import type {
   GithubAssignmentRecord,
+  GithubCheckRecord,
   GithubCheckRollupRecord,
   GithubIssueRecord,
   GithubPullRequestRecord,
@@ -36,6 +38,10 @@ export class ActivityRecords {
       (pullRequest) => pullRequest.externalId,
     );
 
+    const branches = new Map(
+      activity.defaultBranches.map((branch) => [branch.repositoryId, branch]),
+    );
+
     return {
       repositories: ActivityRecords.unique(
         activity.repositories.map((repository) => ({
@@ -43,6 +49,10 @@ export class ActivityRecords {
           fullName: repository.fullName,
           url: repository.url,
           defaultBranch: repository.defaultBranch,
+          defaultBranchHeadSha:
+            branches.get(repository.externalId)?.headSha ?? null,
+          defaultBranchState:
+            branches.get(repository.externalId)?.state ?? null,
           archived: repository.archived,
         })),
         (repository) => repository.nodeId,
@@ -64,6 +74,7 @@ export class ActivityRecords {
       checkRollups: pullRequests.flatMap((pullRequest) =>
         ActivityRecords.checkRollup(pullRequest),
       ),
+      checks: ActivityRecords.checks(activity),
       workflowRuns: ActivityRecords.workflowRuns(activity),
       issues: ActivityRecords.issues(activity),
       assignments: ActivityRecords.assignments({ activity, viewerLogin }),
@@ -109,6 +120,23 @@ export class ActivityRecords {
       [...requested, ...assigned],
       (assignment) =>
         `${assignment.subjectNodeId}:${assignment.login}:${assignment.role}`,
+    );
+  }
+
+  private static checks(activity: Activity): GithubCheckRecord[] {
+    return ActivityRecords.unique(
+      activity.checks.map((check: ActivityCheck) => ({
+        subjectNodeId: check.subjectId,
+        subjectKind: check.subjectKind,
+        name: check.name,
+        headSha: check.headSha,
+        kind: check.kind,
+        app: check.app,
+        state: check.state,
+        url: check.url,
+        failingSince: null,
+      })),
+      (check) => `${check.subjectNodeId}:${check.name}`,
     );
   }
 

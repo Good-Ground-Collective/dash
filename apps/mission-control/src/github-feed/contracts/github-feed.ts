@@ -1,4 +1,7 @@
-import { checkStateSchema } from '@dash/integrations-core';
+import {
+  activityCheckStateSchema,
+  checkStateSchema,
+} from '@dash/integrations-core';
 import { z } from 'zod';
 
 import {
@@ -70,6 +73,66 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
     .describe('The head commit’s checks and statuses. Null when it has none.'),
 });
 
+export const githubFeedMyPullRequestSchema = githubFeedPullRequestSchema.extend(
+  {
+    failingChecks: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          url: z
+            .url()
+            .nullable()
+            .describe(
+              'Where the provider shows the check. Null when it gives none.',
+            ),
+        }),
+      )
+      .describe(
+        'The checks failing on the head commit, as many as the read could name.',
+      ),
+    checkCount: z
+      .int()
+      .nonnegative()
+      .describe(
+        'How many checks and statuses the head commit has, passing or not.',
+      ),
+  },
+);
+
+export const githubFeedCheckSchema = z.object({
+  name: z.string().min(1),
+  kind: z.enum(['check_run', 'status']),
+  app: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe('The app that reported a check run. Null for a commit status.'),
+  state: activityCheckStateSchema,
+  url: z
+    .url()
+    .nullable()
+    .describe('Where the provider shows the check. Null when it gives none.'),
+  failingSince: timestampSchema
+    .nullable()
+    .describe(
+      'When the check began failing, kept while it keeps failing. Null unless it is failing.',
+    ),
+});
+
+export const githubFeedDefaultBranchSchema = z.object({
+  repository: z.object({ fullName: z.string().min(1), url: z.url() }),
+  branch: z.string().min(1),
+  headSha: z.string().min(1),
+  state: checkStateSchema
+    .nullable()
+    .describe(
+      'How the head’s checks add up. Null when the head has no checks or GitHub refused to show them to Dash.',
+    ),
+  checks: z
+    .array(githubFeedCheckSchema)
+    .describe('Failing checks first, then by name.'),
+});
+
 export const githubFeedRunSchema = feedItemSchema.extend({
   workflowName: z.string().min(1),
   runNumber: z.int().positive(),
@@ -115,8 +178,8 @@ export const githubFeedSchema = z.object({
       'Open pull requests waiting on your review, directly or through a team.',
     ),
   myPullRequests: z
-    .array(githubFeedPullRequestSchema)
-    .describe('Your open pull requests.'),
+    .array(githubFeedMyPullRequestSchema)
+    .describe('Your open pull requests, with the checks failing on each.'),
   recentMerges: z
     .array(githubFeedPullRequestSchema)
     .describe(
@@ -132,12 +195,24 @@ export const githubFeedSchema = z.object({
     .describe(
       'Workflow runs that failed on a default branch head or on the head of one of your open pull requests.',
     ),
+  defaultBranches: z
+    .array(githubFeedDefaultBranchSchema)
+    .describe(
+      'The default branch of every repository Dash read the latest checks of, by repository name.',
+    ),
   assignedIssues: z.array(githubFeedIssueSchema),
 });
 
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
+export type GithubFeedMyPullRequest = z.infer<
+  typeof githubFeedMyPullRequestSchema
+>;
+export type GithubFeedCheck = z.infer<typeof githubFeedCheckSchema>;
+export type GithubFeedDefaultBranch = z.infer<
+  typeof githubFeedDefaultBranchSchema
+>;
 export type GithubFeedRelease = z.infer<typeof githubFeedReleaseSchema>;
 export type GithubFeedRun = z.infer<typeof githubFeedRunSchema>;
 export type GithubFeedIssue = z.infer<typeof githubFeedIssueSchema>;

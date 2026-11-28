@@ -1,5 +1,7 @@
 import {
   type Activity,
+  type ActivityCheck,
+  type ActivityDefaultBranch,
   type ActivityFeed,
   type ActivityQuery,
   activityQuerySchema,
@@ -34,6 +36,8 @@ const toleratedRepositoryErrors = new Set(['NOT_FOUND', 'FORBIDDEN']);
 interface DefaultBranches {
   repositories: ActivityRepository[];
   runs: ActivityRun[];
+  branches: ActivityDefaultBranch[];
+  checks: ActivityCheck[];
 }
 
 const loginSchema = z
@@ -105,6 +109,8 @@ export class GithubActivityFeed implements ActivityFeed {
   }): Promise<DefaultBranches> {
     const repositories: ActivityRepository[] = [];
     const runs: ActivityRun[] = [];
+    const branches: ActivityDefaultBranch[] = [];
+    const checks: ActivityCheck[] = [];
     for (const batch of GithubRepositoryBatches.split(props.fullNames)) {
       const data = await props.graphql({
         query: githubActivityQueries.defaultBranches(batch.length),
@@ -119,10 +125,14 @@ export class GithubActivityFeed implements ActivityFeed {
           const read = GithubActivityRecords.defaultBranch(node);
           repositories.push(read.repository);
           runs.push(...read.runs);
+          checks.push(...read.checks);
+          if (read.branch !== null) {
+            branches.push(read.branch);
+          }
         }
       }
     }
-    return { repositories, runs };
+    return { repositories, runs, branches, checks };
   }
 
   /** GitHub's search takes whole seconds in UTC. */
@@ -182,6 +192,13 @@ export class GithubActivityFeed implements ActivityFeed {
       releases: props.releases.releases,
       releaseReads: props.releases.releaseReads,
       failedRuns: [...runs.values()],
+      defaultBranches: props.branches.branches,
+      checks: [
+        ...authored.flatMap((node) =>
+          GithubActivityRecords.pullRequestFailingChecks(node),
+        ),
+        ...props.branches.checks,
+      ],
       assignedIssues: assigned.map((node) => GithubActivityRecords.issue(node)),
       truncated: props.truncated,
     };

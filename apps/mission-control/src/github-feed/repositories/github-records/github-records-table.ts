@@ -34,6 +34,10 @@ export const githubRepoTable = pgTable(
     fullName: text('full_name').notNull(),
     url: text('url').notNull(),
     defaultBranch: text('default_branch'),
+    defaultBranchHeadSha: text('default_branch_head_sha'),
+    defaultBranchState: text('default_branch_state', {
+      enum: ['pending', 'success', 'failure'],
+    }),
     archived: boolean('archived').notNull(),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
   },
@@ -129,6 +133,39 @@ export const githubCheckRollupTable = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.connectionId, table.pullRequestNodeId] }),
+  ],
+);
+
+/**
+ * One check of a head commit, by name: every check on a repository's default branch head,
+ * and the failing ones on the head of a pull request of the viewer's. `failing_since`
+ * is when the check started failing, and survives reads that find it still failing.
+ */
+export const githubCheckTable = pgTable(
+  'github_check',
+  {
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => connectionTable.id, { onDelete: 'cascade' }),
+    subjectNodeId: text('subject_node_id').notNull(),
+    subjectKind: text('subject_kind', {
+      enum: ['default_branch', 'pull_request'],
+    }).notNull(),
+    name: text('name').notNull(),
+    headSha: text('head_sha').notNull(),
+    kind: text('kind', { enum: ['check_run', 'status'] }).notNull(),
+    app: text('app'),
+    state: text('state', {
+      enum: ['success', 'failure', 'pending', 'neutral', 'skipped'],
+    }).notNull(),
+    url: text('url'),
+    failingSince: timestamp('failing_since', { withTimezone: true }),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.connectionId, table.subjectNodeId, table.name],
+    }),
   ],
 );
 

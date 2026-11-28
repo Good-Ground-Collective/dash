@@ -19,6 +19,7 @@ const feed = {
   recentMerges: [],
   releases: [],
   failedRuns: [],
+  defaultBranches: [],
   assignedIssues: [],
 };
 
