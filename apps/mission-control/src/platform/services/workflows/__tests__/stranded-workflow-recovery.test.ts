@@ -1,3 +1,4 @@
+import { getFunctionRegistrationByName } from '@dbos-inc/dbos-sdk/internal/decorators';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -268,5 +269,32 @@ describe('DbosStrandedWorkflowRecovery work this version has no workflow for', (
     expect(await recovery.countUnregistered()).toBe(1);
     expect(await recovery.count()).toBe(1);
     expect(spies.warn).not.toHaveBeenCalled();
+  });
+});
+
+class LookupChangedError extends Error {
+  override name = 'LookupChangedError';
+}
+
+describe('the DBOS registration lookup that unregistered-work detection depends on', () => {
+  it('throws for an unknown class name, which recovery treats as not registered', () => {
+    expect(() =>
+      getFunctionRegistrationByName('RemovedClass', 'removedMethod'),
+    ).toThrow();
+  });
+
+  it('does not swallow a lookup failure for a free-function workflow', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery({
+      findRegistration: (className, workflowName) => {
+        if (className === '') {
+          throw new LookupChangedError('lookup changed');
+        }
+        return getFunctionRegistrationByName(className, workflowName);
+      },
+    });
+    spies.list.mockResolvedValue([Queued.workflow()]);
+    Sweep.openGate();
+
+    await expect(recovery.count()).rejects.toThrow('lookup changed');
   });
 });

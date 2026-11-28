@@ -25,6 +25,12 @@ const strandedWorkflowRecoveryPropsSchema = z.object({
     .describe(
       'How long after this recovery is created, at startup, before it counts or moves any work, so a previous container still draining is left to finish.',
     ),
+  findRegistration: z
+    .custom<typeof getFunctionRegistrationByName>()
+    .default(() => getFunctionRegistrationByName)
+    .describe(
+      'Looks up the workflow function this process registered under a class and workflow name.',
+    ),
 });
 
 /** Gets queued work that a deploy left behind running again. */
@@ -75,10 +81,13 @@ export interface StrandedWorkflowRecovery {
  */
 export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   private readonly gateMs: number;
+  private readonly findRegistration: typeof getFunctionRegistrationByName;
   private readonly createdAt = Date.now();
 
   constructor(props: z.input<typeof strandedWorkflowRecoveryPropsSchema> = {}) {
-    this.gateMs = strandedWorkflowRecoveryPropsSchema.parse(props).gateMs;
+    const parsed = strandedWorkflowRecoveryPropsSchema.parse(props);
+    this.gateMs = parsed.gateMs;
+    this.findRegistration = parsed.findRegistration;
   }
 
   untilGateOpensMs(): number {
@@ -170,17 +179,19 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
    * `__tests__/stranded-workflow-recovery.test.ts` pins the throw-on-unknown-class behaviour. Re-check
    * both whenever that pin moves. The lookup returns `undefined` for an unknown workflow name but throws for an
    * unknown class name, as when a class-based workflow has since been removed; that counts as not
-   * registered.
+   * registered. A throw for a free-function workflow (no class name) is not that case and
+   * propagates, so a change in DBOS cannot silently leave every stranded workflow alone.
    */
   private isRegisteredHere(workflow: WorkflowStatus): boolean {
     try {
       return (
-        getFunctionRegistrationByName(
-          workflow.workflowClassName,
-          workflow.workflowName,
-        )?.workflowConfig !== undefined
+        this.findRegistration(workflow.workflowClassName, workflow.workflowName)
+          ?.workflowConfig !== undefined
       );
-    } catch {
+    } catch (error) {
+      if (workflow.workflowClassName === '') {
+        throw error;
+      }
       return false;
     }
   }
