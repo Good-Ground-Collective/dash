@@ -1,14 +1,24 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { API_BASE_URL } from '$app/env/public';
   import type { Viewer } from '#lib/api/mission-control.ts';
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import { Initials } from '#lib/shell/initials.ts';
+  import { serviceAccountsSection } from '#lib/settings/settings-sections.ts';
+  import { NavItems } from '#lib/shell/nav-items.ts';
 
   let { viewer, build }: { viewer: Viewer | null; build: BuildStamp } =
     $props();
+
+  const currentMenuHref = $derived(
+    NavItems.mostSpecific({
+      pathname: page.url.pathname,
+      hrefs: ['/settings', serviceAccountsSection.href],
+    }),
+  );
 
   const signOut = async (): Promise<void> => {
     await HttpPasskeyAuth.inBrowser({ baseUrl: API_BASE_URL }).signOut();
@@ -49,7 +59,14 @@
                 <DropdownMenu.Separator class="separator" />
                 <DropdownMenu.Item>
                   {#snippet child({ props: itemProps })}
-                    <a {...itemProps} class="item" href="/settings">
+                    <a
+                      {...itemProps}
+                      class="item"
+                      href="/settings"
+                      aria-current={currentMenuHref === '/settings'
+                        ? 'page'
+                        : undefined}
+                    >
                       Settings
                     </a>
                   {/snippet}
@@ -59,9 +76,13 @@
                     <a
                       {...itemProps}
                       class="item"
-                      href="/settings/service-accounts"
+                      href={serviceAccountsSection.href}
+                      aria-current={currentMenuHref ===
+                      serviceAccountsSection.href
+                        ? 'page'
+                        : undefined}
                     >
-                      Service accounts
+                      {serviceAccountsSection.label}
                     </a>
                   {/snippet}
                 </DropdownMenu.Item>
@@ -231,6 +252,12 @@
 
   .item[data-highlighted] {
     background: var(--faint);
+  }
+
+  .item[aria-current='page'] {
+    color: var(--ink);
+    font-weight: var(--font-weight-semibold);
+    box-shadow: inset 0 0 0 var(--border-hairline) var(--ink-muted);
   }
 
   .build {

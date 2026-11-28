@@ -49,6 +49,16 @@ class Visit {
       },
     };
   }
+
+  static signedOut(fetched: string[]): AuthPageLoadEvent {
+    return {
+      parent: async () => ({ viewer: null, recoveryCodes: null }),
+      fetch: async (input) => {
+        fetched.push(new URL(String(input)).pathname);
+        return Response.json([]);
+      },
+    };
+  }
 }
 
 const loader = new MissionControlSettingsLoader({
@@ -60,62 +70,87 @@ afterEach(() => {
 });
 
 describe('MissionControlSettingsLoader', () => {
-  it('adds the GitHub feed to the settings data', async () => {
+  it('gives every section the signed-in viewer', async () => {
+    await expect(loader.viewer(Visit.of({}))).resolves.toEqual({
+      viewer: ada,
+    });
+  });
+
+  it('loads only the passkeys for the passkeys section', async () => {
+    const fetched: string[] = [];
     const event = Visit.of({
-      '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
+      '/api/auth/passkey/list-user-passkeys': () => {
+        fetched.push('passkeys');
+        return Response.json([]);
+      },
+      '/integrations/github/feed': () => {
+        fetched.push('feed');
+        return Response.json(feed);
+      },
+      '/briefings': () => {
+        fetched.push('briefings');
+        return Response.json(briefings);
+      },
+    });
+
+    await expect(loader.passkeys(event)).resolves.toEqual({ passkeys: [] });
+    expect(fetched).toEqual(['passkeys']);
+  });
+
+  it('loads the GitHub feed for the connections section', async () => {
+    const event = Visit.of({
       '/integrations/github/feed': () => Response.json(feed),
+    });
+
+    await expect(loader.github(event)).resolves.toEqual({
+      github: { status: 'loaded', feed },
+    });
+  });
+
+  it('keeps the connections section when the feed fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(loader.github(Visit.of({}))).resolves.toMatchObject({
+      github: { status: 'failed' },
+    });
+  });
+});
+
+describe('MissionControlSettingsLoader briefing and sign-in', () => {
+  it('sends a signed-in viewer from /settings to the first section', async () => {
+    await expect(loader.index(Visit.of({}))).rejects.toMatchObject({
+      status: 307,
+      location: '/settings/profile',
+    });
+  });
+
+  it('loads the briefing for the spend section', async () => {
+    const event = Visit.of({
       '/briefings': () => Response.json(briefings),
     });
 
-    await expect(loader.load(event)).resolves.toEqual({
-      viewer: ada,
-      passkeys: [],
-      github: { status: 'loaded', feed },
+    await expect(loader.briefing(event)).resolves.toEqual({
       briefing: { status: 'loaded', briefings },
     });
   });
 
-  it('keeps the rest of settings when the briefing fails', async () => {
+  it('keeps the spend section when the briefing fails', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const event = Visit.of({
-      '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
-      '/integrations/github/feed': () => Response.json(feed),
-    });
 
-    await expect(loader.load(event)).resolves.toEqual({
-      viewer: ada,
-      passkeys: [],
-      github: { status: 'loaded', feed },
+    await expect(loader.briefing(Visit.of({}))).resolves.toEqual({
       briefing: { status: 'failed' },
     });
   });
 
-  it('redirects a signed-out visitor without reading the briefing', async () => {
-    const fetched: string[] = [];
-    const event: AuthPageLoadEvent = {
-      parent: async () => ({ viewer: null, recoveryCodes: null }),
-      fetch: async (input) => {
-        fetched.push(new URL(String(input)).pathname);
-        return Response.json([]);
-      },
-    };
+  it.each(['index', 'viewer', 'passkeys', 'github', 'briefing'] as const)(
+    'sends a signed-out visitor to sign in from %s without reading anything',
+    async (section) => {
+      const fetched: string[] = [];
 
-    await expect(loader.load(event)).rejects.toMatchObject({
-      status: 303,
-      location: '/sign-in',
-    });
-    expect(fetched).not.toContain('/briefings');
-  });
-
-  it('keeps the rest of settings when the feed fails', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const event = Visit.of({
-      '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
-    });
-
-    await expect(loader.load(event)).resolves.toMatchObject({
-      passkeys: [],
-      github: { status: 'failed' },
-    });
-  });
+      await expect(
+        loader[section](Visit.signedOut(fetched)),
+      ).rejects.toMatchObject({ status: 303, location: '/sign-in' });
+      expect(fetched).toEqual([]);
+    },
+  );
 });
