@@ -64,7 +64,12 @@ export const writtenSections = {
 };
 
 class RecordedSnapshot implements BriefingSnapshot {
-  async of(): Promise<BriefingSnapshotDigest> {
+  readonly previousBriefingAts: (Date | null)[] = [];
+
+  async of(props: {
+    previousBriefingAt: Date | null;
+  }): Promise<BriefingSnapshotDigest> {
+    this.previousBriefingAts.push(props.previousBriefingAt);
     return SampleSnapshot.build();
   }
 }
@@ -129,11 +134,12 @@ export class BriefingWorkflowsFixture {
   readonly writer = new ScriptedWriter();
   readonly people = new PeopleAt();
   readonly liveEvents = new InProcessLiveEvents();
+  readonly snapshot = new RecordedSnapshot();
   readonly workflows = new DbosBriefingWorkflows({
     briefings: this.briefings,
     ownerTimeZone: new FixedOwnerTimeZone({ timeZone: 'America/New_York' }),
     people: this.people,
-    snapshot: new RecordedSnapshot(),
+    snapshot: this.snapshot,
     liveEvents: this.liveEvents,
     generation: {
       settings: { monthlyBudgetUsd: 1, prices },
@@ -171,6 +177,7 @@ export class BriefingWorkflowsFixture {
       this.events.push(event),
     );
     this.people.zones = {};
+    this.snapshot.previousBriefingAts.length = 0;
     this.briefings.briefings.length = 0;
   }
 

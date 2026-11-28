@@ -1,8 +1,7 @@
-import { DBOS, Error as DbosError } from '@dbos-inc/dbos-sdk';
+import { DBOS } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
-import type { BriefingWriteOutcome } from '#src/briefing/contracts/briefing-write-outcome.ts';
 import {
   type BriefingProgressEvent,
   type BriefingReadyEvent,
@@ -15,7 +14,6 @@ import {
   BriefingNotConfiguredError,
   BriefingNotRegisteredError,
   BriefingRunOutsideWorkflowError,
-  BriefingWriteFailedError,
 } from '#src/briefing/errors.ts';
 import type { BriefingRepository } from '#src/briefing/repositories/briefings/briefing-repository.ts';
 import type { OwnerTimeZoneReader } from '#src/briefing/repositories/owner-time-zones/owner-time-zone-reader.ts';
@@ -204,16 +202,7 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
     }
     const startedAt = new Date(await DBOS.now());
 
-    const spentMicroUsd = await DBOS.runStep(
-      async () =>
-        this.briefings.spentSince({
-          since: BudgetMonth.of({
-            now: startedAt,
-            timeZone: await this.ownerTimeZone.zone(),
-          }).startsAt,
-        }),
-      { name: 'briefingBudget' },
-    );
+    const spentMicroUsd = await this.spentThisMonth(startedAt);
     this.progress({ runId, stage: 'snapshot' });
     const snapshot = await this.takeSnapshot({
       userId: props.userId,
@@ -224,7 +213,12 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
       generation.settings.monthlyBudgetUsd * microUsdPerUsd,
     );
     if (
-      spentMicroUsd + generation.writer.worstCaseCostMicroUsd(snapshot) >
+      spentMicroUsd +
+        BriefingWriteAttempt.worstCaseCostMicroUsd({
+          writer: generation.writer,
+          snapshot,
+          attempts: writeStepOptions.maxAttempts,
+        }) >
       capMicroUsd
     ) {
       await this.save({
@@ -235,7 +229,11 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
     }
 
     this.progress({ runId, stage: 'writing' });
-    const outcome = await this.write({ writer: generation.writer, snapshot });
+    const outcome = await BriefingWriteAttempt.durably({
+      writer: generation.writer,
+      snapshot,
+      step: writeStepOptions,
+    });
     this.progress({ runId, stage: 'saving' });
     await this.save({
       runId,
@@ -247,6 +245,19 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
         prices: generation.settings.prices,
       }),
     });
+  }
+
+  private async spentThisMonth(startedAt: Date): Promise<number> {
+    return DBOS.runStep(
+      async () =>
+        this.briefings.spentSince({
+          since: BudgetMonth.of({
+            now: startedAt,
+            timeZone: await this.ownerTimeZone.zone(),
+          }).startsAt,
+        }),
+      { name: 'briefingBudget' },
+    );
   }
 
   /** Reads what changed since the person's previous successful briefing. */
@@ -269,26 +280,6 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
       () => this.snapshot.of({ ...props, previousBriefingAt }),
       { name: 'briefingSnapshot' },
     );
-  }
-
-  private async write(props: {
-    writer: BriefingWriter;
-    snapshot: BriefingSnapshotDigest;
-  }): Promise<BriefingWriteOutcome> {
-    try {
-      return await DBOS.runStep(() => BriefingWriteAttempt.of(props), {
-        ...writeStepOptions,
-      });
-    } catch (error) {
-      const last =
-        error instanceof DbosError.DBOSMaxStepRetriesError
-          ? error.errors.at(-1)
-          : error;
-      if (last instanceof BriefingWriteFailedError) {
-        return BriefingWriteAttempt.failed(last);
-      }
-      throw error;
-    }
   }
 
   private async save(props: {

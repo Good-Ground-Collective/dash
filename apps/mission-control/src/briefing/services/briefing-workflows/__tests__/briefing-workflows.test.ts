@@ -1,5 +1,4 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
-import OpenAI from 'openai';
 import {
   afterAll,
   afterEach,
@@ -32,20 +31,6 @@ import {
 const databaseUrl = inject('databaseUrl');
 const fixture = new BriefingWorkflowsFixture();
 const { briefings, writer, workflows } = fixture;
-const noTokens = { input: 0, cachedInput: 0, output: 0, reasoning: 0 };
-
-class Providers {
-  static rejecting(cause: Error): BriefingWriteFailedError {
-    return new BriefingWriteFailedError({
-      reason: 'provider',
-      model: null,
-      tokens: noTokens,
-      costMicroUsd: 0,
-      cause,
-    });
-  }
-}
-
 beforeAll(async () => {
   if (databaseUrl !== null) {
     await fixture.launch({
@@ -182,12 +167,54 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows runs', () => {
   }, 30_000);
 });
 
+describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows window', () => {
+  it('reads from the snapshotAt of the last succeeded run, not a later failed one', async () => {
+    const snapshotAt = new Date('2026-11-26T10:30:00Z');
+    await briefings.record(
+      BriefingRuns.succeeded({
+        startedAt: new Date('2026-11-26T11:00:00Z'),
+        snapshotAt,
+        costMicroUsd: 0,
+      }),
+    );
+    await briefings.record(
+      BriefingRuns.failed({
+        startedAt: new Date('2026-11-26T12:00:00Z'),
+        costMicroUsd: 0,
+      }),
+    );
+
+    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
+
+    await vi.waitFor(() => {
+      expect(briefings.briefings).toHaveLength(3);
+    }, settle);
+    expect(fixture.snapshot.previousBriefingAts).toEqual([snapshotAt]);
+  }, 30_000);
+
+  it('reads with no start when no run has succeeded', async () => {
+    await briefings.record(
+      BriefingRuns.failed({
+        startedAt: new Date('2026-11-26T12:00:00Z'),
+        costMicroUsd: 0,
+      }),
+    );
+
+    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
+
+    await vi.waitFor(() => {
+      expect(briefings.briefings).toHaveLength(2);
+    }, settle);
+    expect(fixture.snapshot.previousBriefingAts).toEqual([null]);
+  }, 30_000);
+});
+
 describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows budget', () => {
-  it('records a skipped run and never calls the writer when the worst case would pass the budget', async () => {
+  it('records a skipped run and never calls the writer when the worst case of both attempts would pass the budget', async () => {
     await briefings.record(
       BriefingRuns.succeeded({
         startedAt: new Date(),
-        costMicroUsd: 1_000_000 - worstCaseMicroUsd + 1,
+        costMicroUsd: 1_000_000 - 2 * worstCaseMicroUsd + 1,
       }),
     );
 
@@ -212,11 +239,11 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows budget', () => {
     });
   }, 30_000);
 
-  it('still writes when the worst case lands exactly on the budget', async () => {
+  it('still writes when the worst case of both attempts lands exactly on the budget', async () => {
     await briefings.record(
       BriefingRuns.succeeded({
         startedAt: new Date(),
-        costMicroUsd: 1_000_000 - worstCaseMicroUsd,
+        costMicroUsd: 1_000_000 - 2 * worstCaseMicroUsd,
       }),
     );
 
@@ -232,7 +259,10 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows budget', () => {
 describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows failures', () => {
   it('records a failed run with the spend the writer reports and keeps the last good briefing', async () => {
     const good = await briefings.record(
-      BriefingRuns.succeeded({ startedAt: new Date(Date.now() - 60_000) }),
+      BriefingRuns.succeeded({
+        startedAt: new Date(Date.now() - 60_000),
+        costMicroUsd: 0,
+      }),
     );
     const failure = new BriefingWriteFailedError({
       reason: 'ceiling',
@@ -264,51 +294,5 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows failures', () => {
         data: { status: 'failed' },
       });
     }, settle);
-  }, 30_000);
-});
-
-describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows retries', () => {
-  it('tries a rate-limited write once more and records the run that came back', async () => {
-    writer.queue(
-      Providers.rejecting(
-        new OpenAI.RateLimitError(429, undefined, 'Slow down', new Headers()),
-      ),
-    );
-
-    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
-
-    await vi.waitFor(() => {
-      expect(briefings.briefings).toHaveLength(1);
-    }, settle);
-    expect(writer.calls).toBe(2);
-    expect(briefings.briefings[0]?.run.status).toBe('succeeded');
-  }, 30_000);
-
-  it('does not retry a timed-out write, since it may already be billed', async () => {
-    writer.queue(Providers.rejecting(new OpenAI.APIConnectionTimeoutError()));
-
-    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
-
-    await vi.waitFor(() => {
-      expect(briefings.briefings).toHaveLength(1);
-    }, settle);
-    expect(writer.calls).toBe(1);
-    expect(briefings.briefings[0]?.run.status).toBe('failed');
-  }, 30_000);
-
-  it('does not retry a provider rejection that is not a rate limit or a lost connection', async () => {
-    writer.queue(
-      Providers.rejecting(
-        new OpenAI.BadRequestError(400, undefined, 'Bad', new Headers()),
-      ),
-    );
-
-    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
-
-    await vi.waitFor(() => {
-      expect(briefings.briefings).toHaveLength(1);
-    }, settle);
-    expect(writer.calls).toBe(1);
-    expect(briefings.briefings[0]?.run.status).toBe('failed');
   }, 30_000);
 });

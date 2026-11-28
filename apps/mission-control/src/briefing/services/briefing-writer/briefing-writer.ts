@@ -9,12 +9,15 @@ import {
 } from '#src/briefing/contracts/briefing-composition.ts';
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
 import {
+  type BriefingLinkedText,
+  type BriefingParagraph,
   type BriefingPrices,
   type BriefingTokens,
   type BriefingWritten,
   briefingWrittenTextSchema,
 } from '#src/briefing/contracts/briefing-written.ts';
 import { briefingInstructions } from '#src/briefing/definitions/briefing-instructions/briefing-instructions.ts';
+import { briefingLimits } from '#src/briefing/definitions/briefing-limits/briefing-limits.ts';
 import {
   BriefingWriteFailedError,
   type BriefingWriteFailureReason,
@@ -22,6 +25,7 @@ import {
 import { BriefingCost } from '#src/briefing/services/briefing-cost/briefing-cost.ts';
 import { BriefingRefLinks } from '#src/briefing/services/briefing-ref-links/briefing-ref-links.ts';
 import { BriefingLengthTrim } from '#src/briefing/services/briefing-length-trim/briefing-length-trim.ts';
+import { BriefingSentences } from '#src/briefing/services/briefing-sentences/briefing-sentences.ts';
 import {
   type OpenAiBriefingWriterProps,
   openAiBriefingWriterPropsSchema,
@@ -91,7 +95,12 @@ export class OpenAiBriefingWriter implements BriefingWriter {
       BriefingRefLinks.attach({ composition: parsed.data, snapshot }),
     );
     const valid = briefingWrittenTextSchema.safeParse(linked);
-    if (!valid.success) throw fail('unreadable', valid.error);
+    if (!valid.success) {
+      throw fail(
+        OpenAiBriefingWriter.isTooShort(linked) ? 'too_short' : 'unreadable',
+        valid.error,
+      );
+    }
 
     return {
       ...valid.data,
@@ -146,6 +155,18 @@ export class OpenAiBriefingWriter implements BriefingWriter {
       .replaceAll('<', '\\u003c')
       .replaceAll('>', '\\u003e');
     return `<snapshot>\n${json}\n</snapshot>`;
+  }
+
+  /** The trim only shortens, so a draft the schema still rejects for its length is one with too few sentences. */
+  private static isTooShort(text: BriefingLinkedText): boolean {
+    const { framingSentences, actionSentences } = briefingLimits;
+    const short = (paragraph: BriefingParagraph, min: number) =>
+      BriefingSentences.count(paragraph.segments) < min;
+    return (
+      short(text.opening, framingSentences.min) ||
+      short(text.closing, framingSentences.min) ||
+      text.actions.some((action) => short(action, actionSentences.min))
+    );
   }
 
   private static tokensOf(response: Response): BriefingTokens {

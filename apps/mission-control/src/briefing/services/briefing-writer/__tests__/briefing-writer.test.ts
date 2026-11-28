@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { FakeOpenAi } from '#src/briefing/__tests__/support/fake-openai.ts';
 import {
+  briefingDraft as draft,
+  settings,
+  BriefingWriterHarness as Harness,
+} from '#src/briefing/__tests__/support/briefing-writer-harness.ts';
+import {
   objectiveUrl,
   pullRequestUrl,
   SampleSnapshot,
@@ -9,58 +14,6 @@ import {
 import { briefingInstructions } from '#src/briefing/definitions/briefing-instructions/briefing-instructions.ts';
 import { BriefingWriteFailedError } from '#src/briefing/errors.ts';
 import { OpenAiBriefingWriter } from '#src/briefing/services/briefing-writer/briefing-writer.ts';
-
-const settings = {
-  model: 'gpt-test',
-  prices: {
-    inputUsdPerMTok: 0.1,
-    cachedInputUsdPerMTok: 0.01,
-    outputUsdPerMTok: 0.5,
-  },
-  maxOutputTokens: 4000,
-};
-
-const draft = {
-  opening: {
-    segments: [
-      { text: 'Your briefing work is ', ref: null },
-      { text: 'due on the 1st', ref: 'o1' },
-      { text: '. The card is up for review.', ref: null },
-    ],
-  },
-  actions: [
-    {
-      segments: [
-        { text: 'Review ', ref: null },
-        { text: 'the card', ref: 'pr1' },
-        { text: '.', ref: null },
-      ],
-    },
-  ],
-  closing: {
-    segments: [
-      { text: 'The pace is too thin to call. Check back soon.', ref: null },
-    ],
-  },
-};
-
-class Harness {
-  readonly fake = new FakeOpenAi();
-  readonly writer = new OpenAiBriefingWriter({
-    client: this.fake.client(),
-    settings,
-  });
-
-  async failure(): Promise<BriefingWriteFailedError> {
-    try {
-      await this.writer.write(SampleSnapshot.build());
-    } catch (error) {
-      if (error instanceof BriefingWriteFailedError) return error;
-      throw error;
-    }
-    throw new Error('Expected the write to fail');
-  }
-}
 
 describe('OpenAiBriefingWriter writing', () => {
   it('returns linked paragraphs with the model, usage, cost and prices', async () => {
@@ -195,8 +148,26 @@ describe('OpenAiBriefingWriter holding to its length', () => {
 
     const error = await harness.failure();
 
-    expect(error.reason).toBe('unreadable');
+    expect(error.reason).toBe('too_short');
     expect(error.costMicroUsd).toBeGreaterThan(0);
+  });
+
+  it('fails a too-short draft as too_short, then writes the valid draft on the next call', async () => {
+    const harness = new Harness();
+    harness.fake
+      .replyWithDraft({
+        draft: {
+          ...draft,
+          closing: { segments: [{ text: 'Just one.', ref: null }] },
+        },
+      })
+      .replyWithDraft({ draft });
+
+    const error = await harness.failure();
+    const written = await harness.writer.write(SampleSnapshot.build());
+
+    expect(error.reason).toBe('too_short');
+    expect(written.closing.segments.length).toBeGreaterThan(0);
   });
 
   it('allows no actions when nothing needs the owner', async () => {
