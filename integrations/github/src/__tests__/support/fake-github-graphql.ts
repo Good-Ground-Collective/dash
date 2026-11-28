@@ -48,6 +48,7 @@ const graphqlRequestBodySchema = z
 export class FakeGithubGraphql {
   readonly calls: GraphqlCall[] = [];
   readonly tokenRequests: string[] = [];
+  readonly documents = new Map<string, string>();
   private readonly operations = new Map<string, GraphqlReply>();
 
   on(props: { operation: string; reply: GraphqlReply }): this {
@@ -143,6 +144,7 @@ export class FakeGithubGraphql {
       authorization: new Headers(init.headers).get('authorization'),
     };
     this.calls.push(call);
+    this.documents.set(operation, body.query);
 
     const reply = this.operations.get(operation);
     return Response.json(

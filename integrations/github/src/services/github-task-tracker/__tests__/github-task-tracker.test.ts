@@ -175,6 +175,23 @@ describe('GithubTaskTracker caps', () => {
     expect(snapshot.truncated).toBe(true);
   });
 
+  it('asks GitHub for up to 10 assignees a ticket and keeps all seven of a ticket’s assignees', async () => {
+    const assignees = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const github = TrackerGithub.withEpics([
+      TrackerNodes.epicItem({
+        number: 10,
+        tickets: [TrackerNodes.ticket({ number: 11, assignees })],
+      }),
+    ]);
+
+    const snapshot = await github.tracker().read(query);
+
+    expect(github.documents.get('DashProjectEpics')).toContain(
+      'assignees(first: 10)',
+    );
+    expect(snapshot.tickets[0]?.assignees).toEqual(assignees);
+  });
+
   it('reads no epics when the organisation can’t be read', async () => {
     const github = new FakeGithubGraphql().on({
       operation: 'DashProjects',
