@@ -7,7 +7,7 @@ import type { BriefingWriter } from '#src/briefing/services/briefing-writer/brie
 
 /** One try at writing the briefing, settled the way a durable step needs: an outcome to keep, or an error worth trying again. */
 export class BriefingWriteAttempt {
-  /** A failed write comes back as an outcome. Only a rate limit or a lost connection is thrown, so the step runs once more. */
+  /** A failed write comes back as an outcome. Only a rate limit or a connection that never sent the request is thrown, so the step runs once more. A timeout may already be billed, so it is not retried. */
   static async of(props: {
     writer: BriefingWriter;
     snapshot: BriefingSnapshotDigest;
@@ -43,6 +43,7 @@ export class BriefingWriteAttempt {
   private static worthRetrying(error: BriefingWriteFailedError): boolean {
     return (
       error.reason === 'provider' &&
+      !(error.cause instanceof OpenAI.APIConnectionTimeoutError) &&
       (error.cause instanceof OpenAI.APIConnectionError ||
         error.cause instanceof OpenAI.RateLimitError)
     );

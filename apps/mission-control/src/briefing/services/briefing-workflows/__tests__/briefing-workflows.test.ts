@@ -290,6 +290,18 @@ describe.skipIf(databaseUrl === null)('DbosBriefingWorkflows retries', () => {
     expect(briefings.briefings[0]?.run.status).toBe('succeeded');
   }, 30_000);
 
+  it('does not retry a timed-out write, since it may already be billed', async () => {
+    writer.queue(Providers.rejecting(new OpenAI.APIConnectionTimeoutError()));
+
+    await workflows.regenerate({ userId: adaId, trigger: 'manual' });
+
+    await vi.waitFor(() => {
+      expect(briefings.briefings).toHaveLength(1);
+    }, settle);
+    expect(writer.calls).toBe(1);
+    expect(briefings.briefings[0]?.run.status).toBe('failed');
+  }, 30_000);
+
   it('does not retry a provider rejection that is not a rate limit or a lost connection', async () => {
     writer.queue(
       Providers.rejecting(

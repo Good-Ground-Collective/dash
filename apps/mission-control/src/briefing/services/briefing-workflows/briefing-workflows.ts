@@ -110,7 +110,10 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
     if (this.registered === null) {
       throw new BriefingNotRegisteredError();
     }
-    await DBOS.registerQueue(queueName, { workerConcurrency: 1 });
+    await DBOS.registerQueue(queueName, {
+      workerConcurrency: 1,
+      globalConcurrency: 1,
+    });
 
     if (this.generation !== null) {
       await DBOS.applySchedules([
