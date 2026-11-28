@@ -1,4 +1,7 @@
-import { checkStateSchema } from '@dash/integrations-core';
+import {
+  activityMergeStateSchema,
+  checkStateSchema,
+} from '@dash/integrations-core';
 import { z } from 'zod';
 
 const nodeIdSchema = z
@@ -16,6 +19,8 @@ export const mergeabilitySchema = z.enum([
   'conflicting',
   'unknown',
 ]);
+
+export const mergeStateSchema = activityMergeStateSchema;
 
 export const reviewDecisionSchema = z.enum([
   'approved',
@@ -46,11 +51,13 @@ export const githubPullRequestRecordSchema = z.object({
   state: pullRequestStateSchema,
   draft: z.boolean(),
   mergeable: mergeabilitySchema,
+  mergeState: mergeStateSchema.nullable(),
   reviewDecision: reviewDecisionSchema.nullable(),
   author: z.string().min(1).nullable(),
   headRef: z.string().min(1),
   headSha: z.string().min(1),
   mergedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 

@@ -31,6 +31,18 @@ describe('ActivityRecords', () => {
       { pullRequestNodeId: 'PR_1', reviewerKind: 'team', reviewer: 'platform' },
     ]);
   });
+
+  it('stores when each pull request was opened and its merge state', () => {
+    const records = ActivityRecords.from({
+      activity: GithubFeedFixtures.activity(),
+      viewerLogin: 'ada',
+    });
+
+    expect(records.pullRequests[0]).toMatchObject({
+      createdAt: '2026-11-20T08:00:00.000Z',
+      mergeState: 'clean',
+    });
+  });
 });
 
 describe('ActivityRecords assignments', () => {

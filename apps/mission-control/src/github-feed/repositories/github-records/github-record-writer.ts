@@ -261,6 +261,7 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
     const pullRequest = (record: GithubRecords['pullRequests'][number]) => ({
       ...dated(record),
       mergedAt: record.mergedAt === null ? null : new Date(record.mergedAt),
+      createdAt: new Date(record.createdAt),
     });
     const release = (record: GithubRecords['releases'][number]) => ({
       ...record,

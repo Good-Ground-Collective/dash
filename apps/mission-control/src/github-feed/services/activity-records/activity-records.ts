@@ -158,6 +158,7 @@ export class ActivityRecords {
       state: pullRequest.state,
       draft: pullRequest.draft,
       mergeable: pullRequest.mergeable,
+      mergeState: pullRequest.mergeState,
       reviewDecision: pullRequest.reviewDecision,
       author: pullRequest.author,
       headRef: pullRequest.headRef,
@@ -166,6 +167,7 @@ export class ActivityRecords {
         pullRequest.mergedAt === null
           ? null
           : new Date(pullRequest.mergedAt).toISOString(),
+      createdAt: new Date(pullRequest.createdAt).toISOString(),
       updatedAt: new Date(pullRequest.updatedAt).toISOString(),
     };
   }

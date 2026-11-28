@@ -1,5 +1,5 @@
 {
-  "id": "f1ed1983-4044-4ed7-bfd9-07de48e9ef57",
+  "id": "75155a1d-c2ad-4114-91ac-a69f42ba6515",
   "prevId": "df64fe75-0b95-4ee8-b8e2-ce8006ce2141",
   "version": "7",
   "dialect": "postgresql",
@@ -1601,12 +1601,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "sections": {
-          "name": "sections",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "paragraphs": {
           "name": "paragraphs",
           "type": "jsonb",
@@ -2526,6 +2520,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "merge_state_status": {
+          "name": "merge_state_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "review_decision": {
           "name": "review_decision",
           "type": "text",
@@ -2555,6 +2555,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
