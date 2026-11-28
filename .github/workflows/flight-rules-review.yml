@@ -23,7 +23,7 @@ jobs:
           echo "::error::dash does not accept pull requests from forks"
           exit 1
 
-      - uses: Good-Ground-Collective/flight-rules-review@354ce9a2d8fa8b9dde08d1f442da9b1c5723cbee # v1.0.1
+      - uses: Good-Ground-Collective/flight-rules-review@f1f02553371d66677fd423cfca4debbd2830a680 # v1.0.2
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           app-id: ${{ vars.FLIGHT_RULES_REVIEW_APP_ID }}
