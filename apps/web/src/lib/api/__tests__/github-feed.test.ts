@@ -48,6 +48,8 @@ const wire = {
       headSha: 'a1b2c3d',
       requestedReviewers: [],
       checks: null,
+      failingChecks: [],
+      checkCount: 0,
     },
   ],
   recentMerges: [],
