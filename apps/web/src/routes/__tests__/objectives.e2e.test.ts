@@ -272,27 +272,32 @@ test('progress bars and the actions button line up whatever the count or due dat
   await expect(docs.filter({ hasText: 'No progress yet' })).toHaveCount(1);
   await expect(docs.filter({ hasText: '12 of 12 done' })).toHaveCount(1);
   await expect(docs.filter({ hasText: '3 of 5 done' })).toHaveCount(1);
-  await expect(docs.filter({ hasText: 'Due 28 May 2027' })).toHaveCount(1);
+  await expect(docs.filter({ hasText: 'Refresh API reference' })).toHaveCount(
+    1,
+  );
 
-  const tracks = Objectives.panel().locator(
-    '[aria-label^="Epics in"] > li .track',
-  );
-  const boxes = await tracks.evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const box = node.getBoundingClientRect();
-      return { x: box.x, width: box.width };
-    }),
-  );
+  const boxes = await EpicGeometries.trackBoxes(Objectives.panel());
   expect(boxes.length).toBeGreaterThanOrEqual(4);
   expect(new Set(boxes.map((box) => box.x)).size).toBe(1);
   expect(new Set(boxes.map((box) => box.width)).size).toBe(1);
 
   const geometry = await EpicGeometries.measure(Objectives.panel());
-  for (const title of ['Sign-in with passkeys']) {
-    const entry = geometry.find((candidate) => candidate.title === title);
-    expect(entry?.chipBesideTitle, `${title} sits beside its chip`).toBe(true);
-    expect(entry?.rowHeight, `${title} row stays one line`).toBeLessThan(60);
-  }
+  const passkeys = geometry.find(
+    (candidate) => candidate.title === 'Sign-in with passkeys',
+  );
+  expect(passkeys?.chipBesideTitle, 'passkeys title sits beside its chip').toBe(
+    true,
+  );
+  expect(passkeys?.rowHeight, 'passkeys row stays one line').toBeLessThan(60);
+
+  const count = await EpicGeometries.initiativeCount(
+    Objectives.panel(),
+    'PVT_docs',
+  );
+  expect(count.text).toBe('100 of 120 done');
+  expect(count.fits, 'a 3-figure count stays inside its progress box').toBe(
+    true,
+  );
 
   const menuX = async (title: string) =>
     (

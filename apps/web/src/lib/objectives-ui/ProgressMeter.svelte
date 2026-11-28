@@ -22,7 +22,7 @@
 <style>
   .progress {
     display: inline-grid;
-    grid-template-columns: 5rem 13ch;
+    grid-template-columns: 4rem 15ch;
     align-items: center;
     gap: var(--space-2);
     font-family: var(--font-mono);
@@ -31,7 +31,7 @@
 
   .track {
     position: relative;
-    width: 5rem;
+    width: 4rem;
     height: 0.375rem;
     overflow: hidden;
     border-radius: var(--radius-pill);
