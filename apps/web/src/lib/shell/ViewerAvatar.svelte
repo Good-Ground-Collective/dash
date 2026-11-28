@@ -245,6 +245,12 @@
     background: var(--faint);
   }
 
+  .item[aria-current='page'] {
+    color: var(--ink);
+    font-weight: var(--font-weight-semibold);
+    box-shadow: inset 0 0 0 var(--border-hairline) var(--ink-muted);
+  }
+
   .build {
     display: flex;
     justify-content: space-between;

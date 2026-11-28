@@ -42,7 +42,7 @@ export interface SettingsLoader {
   readonly passkeys: (
     event: AuthPageLoadEvent,
   ) => Promise<{ passkeys: Passkey[] | null }>;
-  /** `github` is `null` when the feed couldn't be read. */
+  /** `github` is the feed's state, `{ status: 'failed' }` when it couldn't be read; `null` only for a signed-out viewer, who is sent to sign in first. */
   readonly github: (
     event: AuthPageLoadEvent,
   ) => Promise<{ github: GithubFeedState | null }>;
@@ -80,7 +80,6 @@ export class MissionControlSettingsLoader implements SettingsLoader {
   readonly passkeys = async (
     event: AuthPageLoadEvent,
   ): Promise<{ passkeys: Passkey[] | null }> => {
-    await this.viewer(event);
     const { passkeys } = await this.auth.settings(event);
     return { passkeys };
   };

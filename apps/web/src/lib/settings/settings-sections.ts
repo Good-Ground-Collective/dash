@@ -3,12 +3,15 @@ export interface SettingsSection {
   href: string;
 }
 
+/** A list that always has a first member, so "the first section" needs no fallback. */
+type NonEmpty<T> = readonly [T, ...T[]];
+
 export interface SettingsGroup {
   label: string;
-  sections: readonly SettingsSection[];
+  sections: NonEmpty<SettingsSection>;
 }
 
-export const settingsGroups: readonly SettingsGroup[] = [
+export const settingsGroups: NonEmpty<SettingsGroup> = [
   {
     label: 'Account',
     sections: [
@@ -38,10 +41,7 @@ export const settingsGroups: readonly SettingsGroup[] = [
 export class SettingsSections {
   /** The section `/settings` opens on. */
   static first(): SettingsSection {
-    const [group] = settingsGroups;
-    const [section] = group?.sections ?? [];
-    if (section === undefined) throw new Error('Settings has no sections');
-    return section;
+    return settingsGroups[0].sections[0];
   }
 
   /** Whether `pathname` is the section at `href`, trailing slash aside. */

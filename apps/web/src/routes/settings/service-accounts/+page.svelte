@@ -99,7 +99,7 @@
 </script>
 
 <svelte:head>
-  <title>Service accounts · Dash</title>
+  <title>Service accounts · Settings · Dash</title>
 </svelte:head>
 
 <section class="page" aria-labelledby="service-accounts-title">
