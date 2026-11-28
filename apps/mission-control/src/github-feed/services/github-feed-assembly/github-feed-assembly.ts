@@ -49,7 +49,12 @@ export class GithubFeedAssembly {
         timeOf: ({ updatedAt }) => updatedAt,
       }),
       defaultBranches: GithubFeedAssembly.byRepository(
-        groups.flatMap((group) => group.defaultBranches),
+        groups.flatMap((group) =>
+          group.defaultBranches.map((branch) => ({
+            branch,
+            syncedAt: group.lastSyncedAt,
+          })),
+        ),
       ),
       assignedIssues: GithubFeedAssembly.newest({
         items: groups.flatMap((group) => group.assignedIssues),
@@ -79,6 +84,7 @@ export class GithubFeedAssembly {
     );
 
     return {
+      lastSyncedAt: connection.lastSyncedAt,
       reviewRequests: open
         .filter((pullRequest) => requested.has(pullRequest.nodeId))
         .map((pullRequest) => view.pullRequest(pullRequest)),
@@ -102,19 +108,29 @@ export class GithubFeedAssembly {
     };
   }
 
-  /** A repository two connections both read appears once, by the first. */
+  /** A repository two connections both read appears once, by the connection that synced most recently, whatever the order they come in. A connection never synced counts as oldest. */
   private static byRepository(
-    branches: readonly GithubFeedDefaultBranch[],
+    reads: readonly {
+      branch: GithubFeedDefaultBranch;
+      syncedAt: string | null;
+    }[],
   ): GithubFeedDefaultBranch[] {
-    const unique = new Map<string, GithubFeedDefaultBranch>();
-    for (const branch of branches) {
-      if (!unique.has(branch.repository.fullName)) {
-        unique.set(branch.repository.fullName, branch);
+    const unique = new Map<
+      string,
+      { branch: GithubFeedDefaultBranch; syncedAt: string }
+    >();
+    for (const { branch, syncedAt } of reads) {
+      const stamp = syncedAt ?? '';
+      const kept = unique.get(branch.repository.fullName);
+      if (kept === undefined || stamp > kept.syncedAt) {
+        unique.set(branch.repository.fullName, { branch, syncedAt: stamp });
       }
     }
-    return [...unique.values()].toSorted((left, right) =>
-      left.repository.fullName.localeCompare(right.repository.fullName),
-    );
+    return [...unique.values()]
+      .map(({ branch }) => branch)
+      .toSorted((left, right) =>
+        left.repository.fullName.localeCompare(right.repository.fullName),
+      );
   }
 
   private static newest<T extends Item>(props: {

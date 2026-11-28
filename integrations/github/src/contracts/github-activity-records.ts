@@ -223,6 +223,7 @@ export class GithubActivityRecords {
         branch: branch.name,
         headSha,
         state: rollup?.state ?? null,
+        checksTruncated: rollup?.truncated ?? false,
       },
       checks: (rollup?.contexts ?? []).map((context) =>
         GithubActivityRecords.check({

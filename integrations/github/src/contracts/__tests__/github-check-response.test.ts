@@ -76,4 +76,28 @@ describe('githubCheckContextSchema commit statuses', () => {
 
     expect(read.url).toBeNull();
   });
+
+  it.each([
+    'javascript:alert(1)',
+    'myapp://open/check',
+    'ftp://example.com/log',
+    'mailto:ci@example.com',
+  ])('drops a check run link that is not http(s): %s', (detailsUrl) => {
+    const read = githubCheckContextSchema.parse(
+      checkRunNode({ name: 'build', detailsUrl }),
+    );
+
+    expect(read.url).toBeNull();
+  });
+
+  it.each(['javascript:alert(1)', 'myapp://open/check'])(
+    'drops a status link that is not http(s): %s',
+    (targetUrl) => {
+      const read = githubCheckContextSchema.parse(
+        statusContextNode({ context: 'legacy', targetUrl }),
+      );
+
+      expect(read.url).toBeNull();
+    },
+  );
 });

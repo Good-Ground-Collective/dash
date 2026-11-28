@@ -74,6 +74,7 @@ export class SampleFeed {
       branch: 'main',
       headSha: 'def456',
       state: 'success',
+      checksTruncated: false,
       checks: [],
       ...overrides,
     };

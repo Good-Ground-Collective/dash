@@ -1,5 +1,5 @@
 {
-  "id": "faaaa851-aa20-4359-93a5-2e00770e441a",
+  "id": "bca81f74-8c0c-4796-8eff-efe61f5e349d",
   "prevId": "df64fe75-0b95-4ee8-b8e2-ce8006ce2141",
   "version": "7",
   "dialect": "postgresql",
@@ -2835,6 +2835,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "default_branch_checks_truncated": {
+          "name": "default_branch_checks_truncated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "archived": {
           "name": "archived",

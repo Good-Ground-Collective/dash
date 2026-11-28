@@ -1,4 +1,4 @@
-import type { ActivityCheckState } from '@dash/integrations-core';
+import { type ActivityCheckState, webUrlSchema } from '@dash/integrations-core';
 import { z } from 'zod';
 
 const checkRunFailures = new Set([
@@ -15,7 +15,9 @@ const statusFailures = new Set(['FAILURE', 'ERROR']);
 const detailsUrlSchema = z
   .string()
   .nullable()
-  .transform((url) => (url !== null && URL.canParse(url) ? url : null));
+  .transform((url) =>
+    url !== null && webUrlSchema.safeParse(url).success ? url : null,
+  );
 
 /** What one node of a head commit's `statusCheckRollup.contexts` says, as the provider-neutral check fields. */
 export interface GithubCheckContext {

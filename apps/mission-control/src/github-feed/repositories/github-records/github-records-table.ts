@@ -38,6 +38,9 @@ export const githubRepoTable = pgTable(
     defaultBranchState: text('default_branch_state', {
       enum: ['pending', 'success', 'failure'],
     }),
+    defaultBranchChecksTruncated: boolean('default_branch_checks_truncated')
+      .notNull()
+      .default(false),
     archived: boolean('archived').notNull(),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
   },

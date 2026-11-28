@@ -120,6 +120,7 @@ export class GithubFeedFixtures {
           branch: 'main',
           headSha: 'main-head',
           state: 'failure',
+          checksTruncated: false,
         },
       ],
       checks: [

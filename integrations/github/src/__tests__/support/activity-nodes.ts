@@ -143,13 +143,15 @@ export class ActivityNodes {
     app?: string | null;
     workflowRunId?: number | null;
     jobId?: number | null;
+    detailsUrl?: string;
   }): GithubBody {
     return {
       __typename: 'CheckRun',
       name: props.name,
       status: props.status ?? 'COMPLETED',
       conclusion: props.conclusion === undefined ? 'SUCCESS' : props.conclusion,
-      detailsUrl: `https://github.com/acme/app/runs/${props.name}`,
+      detailsUrl:
+        props.detailsUrl ?? `https://github.com/acme/app/runs/${props.name}`,
       completedAt: updatedAt,
       databaseId: props.jobId ?? null,
       checkSuite: {
@@ -183,7 +185,11 @@ export class ActivityNodes {
   static defaultBranchNode(props: {
     fullName: string;
     suites?: GithubJson[];
-    rollup?: { state: string; contexts: GithubJson[] } | null;
+    rollup?: {
+      state: string;
+      contexts: GithubJson[];
+      totalCount?: number;
+    } | null;
   }): GithubBody {
     return {
       ...ActivityNodes.repositoryNode(props),
@@ -196,7 +202,11 @@ export class ActivityNodes {
               ? null
               : {
                   state: props.rollup.state,
-                  contexts: { nodes: props.rollup.contexts },
+                  contexts: {
+                    totalCount:
+                      props.rollup.totalCount ?? props.rollup.contexts.length,
+                    nodes: props.rollup.contexts,
+                  },
                 },
           checkSuites: { nodes: props.suites ?? [] },
         },

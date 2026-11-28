@@ -33,6 +33,7 @@ export class GithubRecordRows {
       defaultBranch: row.defaultBranch,
       defaultBranchHeadSha: row.defaultBranchHeadSha,
       defaultBranchState: row.defaultBranchState,
+      defaultBranchChecksTruncated: row.defaultBranchChecksTruncated,
       archived: row.archived,
     };
   }

@@ -33,10 +33,12 @@ const prunedTables = [
   githubAssignmentTable,
 ] as const;
 
-/** A check that failed before and fails again keeps the time it first failed; one that passes loses it; a new failure starts now. */
-const failingSinceKept = sql.raw(
-  `case when excluded."failing_since" is null then null when "github_check"."state" = 'failure' and "github_check"."failing_since" is not null then "github_check"."failing_since" else excluded."failing_since" end`,
-);
+/**
+ * failing_since is kept only across consecutive failing reads: a check that failed before and
+ * fails again keeps the time it first failed, a new failure starts at the read time, and a
+ * pending, success, neutral or skipped read clears it. A failure after a pending read starts afresh.
+ */
+const failingSinceKept = sql`case when excluded.${sql.identifier(githubCheckTable.failingSince.name)} is null then null when ${githubCheckTable.state} = 'failure' and ${githubCheckTable.failingSince} is not null then ${githubCheckTable.failingSince} else excluded.${sql.identifier(githubCheckTable.failingSince.name)} end`;
 
 export interface GithubRecordWriter {
   /**

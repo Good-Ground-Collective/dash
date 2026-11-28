@@ -170,7 +170,7 @@ export class InMemoryGithubRecords
     };
   }
 
-  /** A check keeps the time it first failed while it keeps failing, as the table's upsert does. */
+  /** A check keeps the time it first failed only across consecutive failing reads; a pending, success, neutral or skipped read clears it. As the table's upsert does. */
   private static withFailingSince(props: {
     read: GithubRecords['checks'];
     stored: GithubRecords['checks'];

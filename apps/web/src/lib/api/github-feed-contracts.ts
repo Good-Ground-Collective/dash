@@ -97,7 +97,9 @@ export const githubFeedCheckSchema = z.object({
   failingSince: z.coerce
     .date()
     .nullable()
-    .describe('When the check began failing. Null unless it is failing.'),
+    .describe(
+      'When the check began failing, kept only across consecutive failing reads. A pending, success, neutral or skipped read clears it, so a later failure starts afresh. Null unless it is failing.',
+    ),
 });
 
 export const githubFeedDefaultBranchSchema = z.object({
@@ -108,6 +110,11 @@ export const githubFeedDefaultBranchSchema = z.object({
     .nullable()
     .describe(
       'How the head’s checks add up. Null when the head has no checks or Dash could not read them.',
+    ),
+  checksTruncated: z
+    .boolean()
+    .describe(
+      'True when the head has more checks than Dash could name, so `checks` lists only some of them.',
     ),
   checks: z
     .array(githubFeedCheckSchema)

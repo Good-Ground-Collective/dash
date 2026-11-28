@@ -1,6 +1,7 @@
 import {
   activityCheckStateSchema,
   checkStateSchema,
+  webUrlSchema,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
@@ -79,8 +80,7 @@ export const githubFeedMyPullRequestSchema = githubFeedPullRequestSchema.extend(
       .array(
         z.object({
           name: z.string().min(1),
-          url: z
-            .url()
+          url: webUrlSchema
             .nullable()
             .describe(
               'Where the provider shows the check. Null when it gives none.',
@@ -108,14 +108,13 @@ export const githubFeedCheckSchema = z.object({
     .nullable()
     .describe('The app that reported a check run. Null for a commit status.'),
   state: activityCheckStateSchema,
-  url: z
-    .url()
+  url: webUrlSchema
     .nullable()
     .describe('Where the provider shows the check. Null when it gives none.'),
   failingSince: timestampSchema
     .nullable()
     .describe(
-      'When the check began failing, kept while it keeps failing. Null unless it is failing.',
+      'When the check began failing, kept only across consecutive failing reads. A pending, success, neutral or skipped read clears it, so a later failure starts afresh. Null unless it is failing.',
     ),
 });
 
@@ -127,6 +126,11 @@ export const githubFeedDefaultBranchSchema = z.object({
     .nullable()
     .describe(
       'How the head’s checks add up. Null when the head has no checks or GitHub refused to show them to Dash.',
+    ),
+  checksTruncated: z
+    .boolean()
+    .describe(
+      'True when the head has more checks than Dash could name, so `checks` lists only some of them.',
     ),
   checks: z
     .array(githubFeedCheckSchema)

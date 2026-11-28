@@ -10,6 +10,7 @@ export class GithubFeedBranches {
         branch: 'main',
         headSha: 'c0ffee1',
         state: 'success',
+        checksTruncated: false,
         checks: [
           {
             name: 'build',
@@ -29,6 +30,7 @@ export class GithubFeedBranches {
         branch: 'main',
         headSha: 'c0ffee2',
         state: 'failure',
+        checksTruncated: false,
         checks: [
           {
             name: 'build',

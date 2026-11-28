@@ -38,6 +38,7 @@ const wire = {
       branch: 'main',
       headSha: 'c0ffee',
       state: 'failure',
+      checksTruncated: false,
       checks: [
         {
           name: 'build',

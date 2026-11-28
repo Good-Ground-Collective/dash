@@ -121,11 +121,15 @@ const checksSchema = z
 const branchRollupSchema = z
   .object({
     state: rollupStateSchema,
-    contexts: z.object({ nodes: githubCheckContextNodesSchema }),
+    contexts: z.object({
+      totalCount: z.int().nonnegative(),
+      nodes: githubCheckContextNodesSchema,
+    }),
   })
   .transform((rollup) => ({
     state: rollup.state,
     contexts: rollup.contexts.nodes,
+    truncated: rollup.contexts.totalCount > rollup.contexts.nodes.length,
   }));
 
 const reviewerSchema = z

@@ -18,6 +18,14 @@ import type {
   GithubWorkflowRunRecord,
 } from '#src/github-feed/contracts/github-records.ts';
 
+const checkSeverity = {
+  success: 0,
+  skipped: 1,
+  neutral: 2,
+  pending: 3,
+  failure: 4,
+} as const satisfies Record<GithubCheckRecord['state'], number>;
+
 /**
  * A provider's activity read as the rows the GitHub tables keep. Duplicates collapse on
  * their keys, so one read never writes the same row twice. A review request found by the
@@ -53,6 +61,8 @@ export class ActivityRecords {
             branches.get(repository.externalId)?.headSha ?? null,
           defaultBranchState:
             branches.get(repository.externalId)?.state ?? null,
+          defaultBranchChecksTruncated:
+            branches.get(repository.externalId)?.checksTruncated ?? false,
           archived: repository.archived,
         })),
         (repository) => repository.nodeId,
@@ -123,9 +133,11 @@ export class ActivityRecords {
     );
   }
 
+  /** A check name read twice on one subject keeps its worst state, whatever the order, with that check's own kind, app and url. */
   private static checks(activity: Activity): GithubCheckRecord[] {
-    return ActivityRecords.unique(
-      activity.checks.map((check: ActivityCheck) => ({
+    const worst = new Map<string, GithubCheckRecord>();
+    for (const record of activity.checks.map(
+      (check: ActivityCheck): GithubCheckRecord => ({
         subjectNodeId: check.subjectId,
         subjectKind: check.subjectKind,
         name: check.name,
@@ -135,9 +147,18 @@ export class ActivityRecords {
         state: check.state,
         url: check.url,
         failingSince: null,
-      })),
-      (check) => `${check.subjectNodeId}:${check.name}`,
-    );
+      }),
+    )) {
+      const key = `${record.subjectNodeId}:${record.name}`;
+      const kept = worst.get(key);
+      if (
+        kept === undefined ||
+        checkSeverity[record.state] > checkSeverity[kept.state]
+      ) {
+        worst.set(key, record);
+      }
+    }
+    return [...worst.values()];
   }
 
   private static workflowRuns(activity: Activity): GithubWorkflowRunRecord[] {

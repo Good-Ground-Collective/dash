@@ -93,6 +93,7 @@ describe('GithubActivityRecords default branch checks', () => {
       branch: 'main',
       headSha: 'head-acme/app',
       state: 'failure',
+      checksTruncated: false,
     });
     expect(read.checks).toEqual([
       {
@@ -113,6 +114,37 @@ describe('GithubActivityRecords default branch checks', () => {
         state: 'failure',
       }),
     ]);
+  });
+});
+
+describe('GithubActivityRecords default branch check truncation', () => {
+  const { defaultBranchNode, checkRunNode } = ActivityNodes;
+
+  const defaultBranch = (node: ReturnType<typeof defaultBranchNode>) =>
+    GithubActivityRecords.defaultBranch(
+      githubDefaultBranchNodeSchema.unwrap().parse(node),
+    );
+
+  it('flags a head with more checks than the read returned', () => {
+    const read = defaultBranch(
+      defaultBranchNode({
+        fullName: 'acme/app',
+        rollup: {
+          state: 'FAILURE',
+          totalCount: 140,
+          contexts: [checkRunNode({ name: 'build' })],
+        },
+      }),
+    );
+
+    expect(read.branch?.checksTruncated).toBe(true);
+    expect(read.checks).toHaveLength(1);
+  });
+
+  it('asks GitHub how many checks the head has', () => {
+    expect(githubActivityQueries.defaultBranches(1)).toContain(
+      'totalCount nodes',
+    );
   });
 });
 

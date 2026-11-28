@@ -10,6 +10,9 @@ const handleSchema = z
   .min(1)
   .describe('The account handle as the provider shows it.');
 
+/** A link a person can open: an http(s) URL. A provider's `javascript:` or app-scheme link is not one. */
+export const webUrlSchema = z.url({ protocol: /^https?$/u });
+
 export const activityQuerySchema = z.object({
   installationId: z.string().min(1),
   account: z.object({
@@ -82,8 +85,7 @@ export const activityCheckSchema = z.object({
       'The slug of the app that reported a check run. Null for a commit status.',
     ),
   state: activityCheckStateSchema,
-  url: z
-    .url()
+  url: webUrlSchema
     .nullable()
     .describe('Where the provider shows the check’s details.'),
   workflowRunId: z
@@ -108,6 +110,11 @@ export const activityDefaultBranchSchema = z.object({
     .nullable()
     .describe(
       'How the head’s checks add up. Null when the head has no checks or the provider refused to show them.',
+    ),
+  checksTruncated: z
+    .boolean()
+    .describe(
+      'True when the head has more checks than the read could name, so `checks` lists only some of them.',
     ),
 });
 

@@ -15,4 +15,5 @@ CREATE TABLE "github_check" (
 --> statement-breakpoint
 ALTER TABLE "github_repo" ADD COLUMN "default_branch_head_sha" text;--> statement-breakpoint
 ALTER TABLE "github_repo" ADD COLUMN "default_branch_state" text;--> statement-breakpoint
+ALTER TABLE "github_repo" ADD COLUMN "default_branch_checks_truncated" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "github_check" ADD CONSTRAINT "github_check_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "public"."connection"("id") ON DELETE cascade ON UPDATE no action;

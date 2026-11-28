@@ -17,14 +17,14 @@ const bindParameterBudget = 60_000;
 /**
  * Upserts for tables a sync replaces whole: a repeated read overwrites each row in place, keyed on
  * the table's primary key. Large reads go in several statements on the caller's transaction. A
- * column named in `overrides` is set by the given expression instead of from the incoming row.
+ * column named in `overrides`, which must be one of the table's columns, is set by the given expression instead of from the incoming row.
  */
 export class ReplacedRows {
   static async upsert<T extends PgTable>(props: {
     transaction: Transaction;
     table: T;
     rows: readonly PgInsertValue<T>[];
-    overrides?: Record<string, SQL>;
+    overrides?: Partial<Record<keyof T['$inferInsert'], SQL>>;
   }): Promise<void> {
     if (props.rows.length === 0) {
       return;

@@ -105,6 +105,7 @@ export class FeedView {
           branch: defaultBranch,
           headSha,
           state: repository.defaultBranchState,
+          checksTruncated: repository.defaultBranchChecksTruncated,
           checks: this.records.checks
             .filter(
               (check) =>

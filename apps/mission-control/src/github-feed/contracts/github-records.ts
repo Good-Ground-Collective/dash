@@ -1,6 +1,7 @@
 import {
   activityCheckStateSchema,
   checkStateSchema,
+  webUrlSchema,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
@@ -48,6 +49,11 @@ export const githubRepositoryRecordSchema = z.object({
     .nullable()
     .describe(
       'How the default branch head’s checks add up. Null when the head has no checks, when the read could not see them, or when no head was read.',
+    ),
+  defaultBranchChecksTruncated: z
+    .boolean()
+    .describe(
+      'True when the default branch head has more checks than the latest read could name. False when none was read.',
     ),
   archived: z.boolean(),
 });
@@ -120,11 +126,11 @@ export const githubCheckRecordSchema = z.object({
   kind: z.enum(['check_run', 'status']),
   app: z.string().min(1).nullable(),
   state: activityCheckStateSchema,
-  url: z.url().nullable(),
+  url: webUrlSchema.nullable(),
   failingSince: timestampSchema
     .nullable()
     .describe(
-      'When the check began failing, kept while it keeps failing. A read leaves it null; the stored row decides it.',
+      'When the check began failing, kept only across consecutive failing reads; a non-failing read clears it. A read leaves it null; the stored row decides it.',
     ),
 });
 

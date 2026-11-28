@@ -112,6 +112,7 @@ describe('GithubFeedAssembly default branches', () => {
         branch: 'main',
         headSha: 'main-head',
         state: 'failure',
+        checksTruncated: false,
         checks: [
           expect.objectContaining({
             name: 'build',
@@ -135,6 +136,69 @@ describe('GithubFeedAssembly default branches', () => {
     ]);
 
     expect(feed.defaultBranches).toHaveLength(1);
+  });
+});
+
+describe('GithubFeedAssembly default branches read by several connections', () => {
+  describe('a repository read by two connections', () => {
+    const older = () =>
+      CheckedConnections.read({ lastSyncedAt: '2026-11-26T11:00:00.000Z' });
+
+    const newer = () => {
+      const connection = CheckedConnections.read({
+        connectionId: guestId,
+        kind: 'guest',
+        lastSyncedAt: '2026-11-26T12:00:00.000Z',
+      });
+      return {
+        ...connection,
+        records: {
+          ...connection.records,
+          repositories: connection.records.repositories.map((repository) => ({
+            ...repository,
+            defaultBranchHeadSha: 'newer-head',
+            defaultBranchState: 'success' as const,
+          })),
+        },
+      };
+    };
+
+    it.each([
+      { order: 'older first', connections: () => [older(), newer()] },
+      { order: 'newer first', connections: () => [newer(), older()] },
+    ])(
+      'shows the entry of the most recently synced connection ($order)',
+      ({ connections }) => {
+        const feed = GithubFeedAssembly.assemble(connections());
+
+        expect(feed.defaultBranches).toEqual([
+          expect.objectContaining({ headSha: 'newer-head', state: 'success' }),
+        ]);
+      },
+    );
+  });
+
+  it('carries whether the head has more checks than the read named', () => {
+    const connection = CheckedConnections.read();
+    const truncated = {
+      ...connection,
+      records: {
+        ...connection.records,
+        repositories: connection.records.repositories.map((repository) => ({
+          ...repository,
+          defaultBranchChecksTruncated: true,
+        })),
+      },
+    };
+
+    expect(
+      GithubFeedAssembly.assemble([truncated]).defaultBranches[0]
+        ?.checksTruncated,
+    ).toBe(true);
+    expect(
+      GithubFeedAssembly.assemble([connection]).defaultBranches[0]
+        ?.checksTruncated,
+    ).toBe(false);
   });
 });
 

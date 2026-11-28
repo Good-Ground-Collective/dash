@@ -1,3 +1,4 @@
+import type { ActivityCheck } from '@dash/integrations-core';
 import { describe, expect, it } from 'vitest';
 
 import { GithubFeedFixtures } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
@@ -95,6 +96,94 @@ describe('ActivityRecords checks', () => {
       defaultBranchHeadSha: null,
       defaultBranchState: null,
     });
+  });
+});
+
+class Deploys {
+  static failing(overrides: Partial<ActivityCheck> = {}): ActivityCheck {
+    return {
+      ...GithubFeedFixtures.checkReads().checks[0]!,
+      name: 'deploy',
+      kind: 'check_run',
+      app: 'vercel',
+      state: 'failure',
+      url: 'https://vercel.example.com/failed',
+      ...overrides,
+    };
+  }
+
+  static passing(): ActivityCheck {
+    return Deploys.failing({
+      kind: 'status',
+      app: null,
+      state: 'success',
+      url: 'https://ci.example.com/passed',
+    });
+  }
+
+  static stored(checks: ActivityCheck[]) {
+    return ActivityRecords.from({
+      activity: { ...GithubFeedFixtures.activity(), checks },
+      viewerLogin: 'ada',
+    }).checks.filter(({ name }) => name === 'deploy');
+  }
+}
+
+describe('ActivityRecords checks read twice with different states', () => {
+  it.each([
+    {
+      order: 'failure then success',
+      checks: () => [Deploys.failing(), Deploys.passing()],
+    },
+    {
+      order: 'success then failure',
+      checks: () => [Deploys.passing(), Deploys.failing()],
+    },
+  ])(
+    'keeps the failure and its own kind, app and url ($order)',
+    ({ checks }) => {
+      expect(Deploys.stored(checks())).toEqual([
+        expect.objectContaining({
+          state: 'failure',
+          kind: 'check_run',
+          app: 'vercel',
+          url: 'https://vercel.example.com/failed',
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    ['failure', 'pending'],
+    ['pending', 'neutral'],
+    ['neutral', 'skipped'],
+    ['skipped', 'success'],
+  ] as const)('ranks %s above %s', (worse, better) => {
+    const [kept] = Deploys.stored([
+      Deploys.failing({ state: better }),
+      Deploys.failing({ state: worse }),
+      Deploys.failing({ state: better }),
+    ]);
+
+    expect(kept?.state).toBe(worse);
+  });
+});
+
+describe('ActivityRecords default branch check truncation', () => {
+  it('stores whether a default branch head has more checks than were read', () => {
+    const activity = GithubFeedFixtures.activity();
+    const records = ActivityRecords.from({
+      activity: {
+        ...activity,
+        defaultBranches: activity.defaultBranches.map((branch) => ({
+          ...branch,
+          checksTruncated: true,
+        })),
+      },
+      viewerLogin: 'ada',
+    });
+
+    expect(records.repositories[0]?.defaultBranchChecksTruncated).toBe(true);
   });
 });
 

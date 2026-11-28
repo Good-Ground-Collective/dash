@@ -234,3 +234,31 @@ describe.skipIf(databaseUrl === null)(
     });
   },
 );
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter failing_since across a pending read',
+  () => {
+    const third = new Date(later.getTime() + 15 * 60_000);
+
+    it('starts afresh when a check fails again after a pending read', async () => {
+      const withLintState = (state: 'failure' | 'pending') =>
+        merged.checks.map((check) =>
+          check.name === 'lint' ? { ...check, state } : check,
+        );
+      await Checks.write({ checks: withLintState('failure'), at: fixedNow });
+      const pending = await Checks.write({
+        checks: withLintState('pending'),
+        at: later,
+      });
+      const failedAgain = await Checks.write({
+        checks: withLintState('failure'),
+        at: third,
+      });
+
+      expect(Checks.lintOf(pending)?.failingSince).toBeNull();
+      expect(Checks.lintOf(failedAgain)?.failingSince).toBe(
+        third.toISOString(),
+      );
+    });
+  },
+);

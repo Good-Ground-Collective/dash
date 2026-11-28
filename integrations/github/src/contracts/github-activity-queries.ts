@@ -143,7 +143,7 @@ export const githubActivityQueries = {
           oid
           statusCheckRollup {
             state
-            contexts(first: ${githubCheckContextCount}) { nodes { ${checkContextNodeFields} } }
+            contexts(first: ${githubCheckContextCount}) { totalCount nodes { ${checkContextNodeFields} } }
           }
           checkSuites(first: 20, filterBy: { appId: ${actionsAppId} }) { nodes { ${failedSuiteFields} } }
         }
