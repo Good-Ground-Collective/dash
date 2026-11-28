@@ -247,12 +247,12 @@ export class GithubFeedView {
 
   private groupsOf(tab: GithubTabKey): FeedGroup[] {
     const ids = new Set(this.connections.map((connection) => connection.id));
-    const mine = <T extends { connectionId: string; updatedAt: Date }>(
+    const inView = <T extends { connectionId: string; updatedAt: Date }>(
       items: readonly T[],
+      order: (a: T, b: T) => number = (a, b) =>
+        b.updatedAt.getTime() - a.updatedAt.getTime(),
     ): T[] =>
-      items
-        .filter((item) => ids.has(item.connectionId))
-        .toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      items.filter((item) => ids.has(item.connectionId)).toSorted(order);
     const group = (key: FeedGroupKey, rows: FeedRow[]): FeedGroup => ({
       key,
       ...groupCopy[key],
@@ -260,9 +260,10 @@ export class GithubFeedView {
     });
 
     if (tab === 'review') {
-      const oldestFirst = this.feed.reviewRequests
-        .filter((pull) => ids.has(pull.connectionId))
-        .toSorted((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      const oldestFirst = inView(
+        this.feed.reviewRequests,
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      );
       return [
         group(
           'reviewRequests',
@@ -272,7 +273,7 @@ export class GithubFeedView {
     }
 
     if (tab === 'mine') {
-      const pulls = MyPullGroups.split(mine(this.feed.myPullRequests));
+      const pulls = MyPullGroups.split(inView(this.feed.myPullRequests));
       return myPullGroupKeys.map((key) =>
         group(
           key,
@@ -284,7 +285,7 @@ export class GithubFeedView {
     return [
       group(
         'assignedIssues',
-        mine(this.feed.assignedIssues).map((issue) =>
+        inView(this.feed.assignedIssues).map((issue) =>
           FeedRows.assignedIssue(issue),
         ),
       ),

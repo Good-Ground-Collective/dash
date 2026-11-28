@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GithubFeedPullRequest } from '#lib/api/github-feed-contracts.ts';
+import type { GithubFeedMyPullRequest } from '#lib/api/github-feed-contracts.ts';
 import { GithubFeedView } from '#lib/github-feed/feed-view.ts';
 import { SampleFeed } from './support/sample-feed.ts';
 
@@ -110,7 +110,7 @@ describe('GithubFeedView tab bodies', () => {
   });
 
   it('titles My PRs groups in order, hiding empty ones, or shows one empty card', () => {
-    const mine = (pulls: GithubFeedPullRequest[]): string[] =>
+    const mine = (pulls: GithubFeedMyPullRequest[]): string[] =>
       new GithubFeedView({
         feed: SampleFeed.feed({ myPullRequests: pulls }),
         tab: 'mine',
@@ -118,9 +118,9 @@ describe('GithubFeedView tab bodies', () => {
 
     expect(
       mine([
-        SampleFeed.pull({ id: 'a', mergeState: 'blocked' }),
-        SampleFeed.pull({ id: 'b' }),
-        SampleFeed.pull({ id: 'c', reviewDecision: 'changes_requested' }),
+        SampleFeed.myPull({ id: 'a', mergeState: 'blocked' }),
+        SampleFeed.myPull({ id: 'b' }),
+        SampleFeed.myPull({ id: 'c', reviewDecision: 'changes_requested' }),
       ]),
     ).toEqual(['Changes requested', 'Ready to merge', 'Waiting on review']);
     expect(mine([])).toEqual(['My pull requests']);
