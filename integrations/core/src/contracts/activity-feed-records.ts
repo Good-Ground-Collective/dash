@@ -51,7 +51,7 @@ export const activityReviewerSchema = z.object({
   name: handleSchema,
 });
 
-export const activityMergeStateSchema = z.enum([
+export const activityMergeStates = [
   'clean',
   'blocked',
   'behind',
@@ -60,7 +60,9 @@ export const activityMergeStateSchema = z.enum([
   'draft',
   'has_hooks',
   'unknown',
-]);
+] as const;
+
+export const activityMergeStateSchema = z.enum(activityMergeStates);
 
 export const activityPullRequestSchema = externalRecordSchema.extend({
   repositoryId: z.string().min(1),
@@ -72,7 +74,7 @@ export const activityPullRequestSchema = externalRecordSchema.extend({
   mergeable: z.enum(['mergeable', 'conflicting', 'unknown']),
   mergeState: activityMergeStateSchema
     .nullable()
-    .describe('Null when the provider has not computed it.'),
+    .describe('Null when the provider does not report one.'),
   reviewDecision: z
     .enum(['approved', 'changes_requested', 'review_required'])
     .nullable(),

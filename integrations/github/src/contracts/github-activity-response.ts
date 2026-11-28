@@ -1,9 +1,10 @@
-import type {
-  ActivityChecks,
-  ActivityRepository,
-  ActivityReviewer,
-  ActivityRun,
-  CheckState,
+import {
+  activityMergeStateSchema,
+  type ActivityChecks,
+  type ActivityRepository,
+  type ActivityReviewer,
+  type ActivityRun,
+  type CheckState,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
@@ -142,18 +143,7 @@ export const githubPullRequestNodeSchema = z.object({
       'UNSTABLE',
     ])
     .transform((value) => value.toLowerCase())
-    .pipe(
-      z.enum([
-        'behind',
-        'blocked',
-        'clean',
-        'dirty',
-        'draft',
-        'has_hooks',
-        'unknown',
-        'unstable',
-      ]),
-    )
+    .pipe(activityMergeStateSchema)
     .nullable(),
   reviewDecision: z
     .enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'])

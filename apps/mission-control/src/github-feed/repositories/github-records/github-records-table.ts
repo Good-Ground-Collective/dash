@@ -8,6 +8,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { activityMergeStates } from '@dash/integrations-core';
 import { connectionTable } from '#src/connections/repositories/connections/connections-table.ts';
 
 /** How the latest reads of a GitHub connection went, and whose work they read. */
@@ -57,16 +58,7 @@ export const githubPullRequestTable = pgTable(
       enum: ['mergeable', 'conflicting', 'unknown'],
     }).notNull(),
     mergeState: text('merge_state_status', {
-      enum: [
-        'clean',
-        'blocked',
-        'behind',
-        'unstable',
-        'dirty',
-        'draft',
-        'has_hooks',
-        'unknown',
-      ],
+      enum: activityMergeStates,
     }),
     reviewDecision: text('review_decision', {
       enum: ['approved', 'changes_requested', 'review_required'],

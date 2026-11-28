@@ -57,7 +57,9 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
       'unknown',
     ])
     .nullable()
-    .describe('Null when GitHub has not computed the merge state yet.'),
+    .describe(
+      'Null until the pull request is next read from GitHub; GitHub reports a state it is still computing as unknown.',
+    ),
   reviewDecision: z
     .enum(['approved', 'changes_requested', 'review_required'])
     .nullable(),
