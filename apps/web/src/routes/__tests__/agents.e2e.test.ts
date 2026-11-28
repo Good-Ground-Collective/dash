@@ -133,7 +133,7 @@ test('stale and lost sessions are flagged, and the totals count them', async () 
 test('subagents roll up into one row and expand to list each one', async () => {
   const orchestrator = Sessions.session('studio-hooks');
   await expect(orchestrator.locator('.rollup')).toHaveText(
-    '4 working, 1 asking, 2 done, 1 stale',
+    '4 working (1 stale), 1 asking, 2 done',
   );
   await expect(orchestrator.locator('li.subagent')).toHaveCount(0);
 
@@ -164,7 +164,7 @@ test('a live event updates the rollup, a session’s liveness and the groups wit
 
   await Sessions.change('subagent-done');
   await expect(Sessions.session('studio-hooks').locator('.rollup')).toHaveText(
-    '3 working, 1 asking, 3 done, 1 stale',
+    '3 working (1 stale), 1 asking, 3 done',
   );
   await expect(
     Sessions.session('studio-hooks').locator(
@@ -177,7 +177,7 @@ test('a live event updates the rollup, a session’s liveness and the groups wit
     Sessions.session('studio-hooks').locator('li.subagent'),
   ).toHaveCount(8);
   await expect(Sessions.session('studio-hooks').locator('.rollup')).toHaveText(
-    '4 working, 1 asking, 3 done, 1 stale',
+    '4 working (1 stale), 1 asking, 3 done',
   );
   await expect(page.locator('li.session')).toHaveCount(6);
 

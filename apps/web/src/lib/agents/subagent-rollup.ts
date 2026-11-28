@@ -23,20 +23,30 @@ export class SubagentRollup {
       .filter((entry) => entry.count > 0);
   }
 
-  /** “12 working, 3 done”, then how many of them went silent: “2 stale, 1 lost”. Empty when there are none. */
+  /** “12 working, 3 done”, with silent ones nested in their status: “4 working (1 stale), 2 done”. Empty when there are none. */
   static phrase(subagents: readonly Subagent[]): string {
-    const counted = SubagentRollup.counts(subagents).map(
-      (entry) => `${entry.count} ${AgentWording.statusLabel(entry.status)}`,
-    );
-    const silent = (['stale', 'lost'] as const)
-      .map((liveness) => ({
-        liveness,
-        count: subagents.filter((subagent) => subagent.liveness === liveness)
-          .length,
-      }))
+    return agentStatuses
+      .map((status) => {
+        const inStatus = subagents.filter(
+          (subagent) => subagent.status === status,
+        );
+        const silent = (['stale', 'lost'] as const)
+          .map((liveness) => ({
+            liveness,
+            count: inStatus.filter((subagent) => subagent.liveness === liveness)
+              .length,
+          }))
+          .filter((entry) => entry.count > 0)
+          .map((entry) => `${entry.count} ${entry.liveness}`);
+        const label = `${inStatus.length} ${AgentWording.statusLabel(status)}`;
+        return {
+          count: inStatus.length,
+          text: silent.length > 0 ? `${label} (${silent.join(', ')})` : label,
+        };
+      })
       .filter((entry) => entry.count > 0)
-      .map((entry) => `${entry.count} ${entry.liveness}`);
-    return [...counted, ...silent].join(', ');
+      .map((entry) => entry.text)
+      .join(', ');
   }
 
   /** “3 subagents”. */

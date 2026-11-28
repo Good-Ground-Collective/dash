@@ -30,14 +30,32 @@ describe('SubagentRollup', () => {
     );
   });
 
-  it('adds how many of them went silent', () => {
+  it('nests silent subagents in their status so the numbers sum to the total', () => {
     const subagents = [
-      ...Many.of({ working: 2 }),
-      SampleAgentSessions.subagent('quiet', { liveness: 'stale' }),
-      SampleAgentSessions.subagent('gone', { liveness: 'lost' }),
+      ...Many.of({ working: 2, complete: 1 }),
+      SampleAgentSessions.subagent('quiet', {
+        status: 'working',
+        liveness: 'stale',
+      }),
+      SampleAgentSessions.subagent('gone', {
+        status: 'working',
+        liveness: 'lost',
+      }),
+      SampleAgentSessions.subagent('late', {
+        status: 'complete',
+        liveness: 'stale',
+      }),
     ];
 
-    expect(SubagentRollup.phrase(subagents)).toBe('4 working, 1 stale, 1 lost');
+    expect(SubagentRollup.phrase(subagents)).toBe(
+      '4 working (1 stale, 1 lost), 2 done (1 stale)',
+    );
+    expect(
+      SubagentRollup.counts(subagents).reduce(
+        (sum, entry) => sum + entry.count,
+        0,
+      ),
+    ).toBe(subagents.length);
   });
 
   it('says nothing when there are no subagents', () => {
