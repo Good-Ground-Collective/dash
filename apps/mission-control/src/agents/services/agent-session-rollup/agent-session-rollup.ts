@@ -53,6 +53,7 @@ export class AgentSessionRollup {
   private static activity(state: AgentSessionState): AgentActivity {
     return {
       status: state.status,
+      liveness: state.liveness,
       summary: state.summary,
       question: state.question,
       error: state.error,

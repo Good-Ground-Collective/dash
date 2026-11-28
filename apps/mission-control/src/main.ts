@@ -24,8 +24,6 @@ import { DrizzleGithubRecordReader } from '#src/github-feed/repositories/github-
 import { DrizzleGithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
 import { DrizzleSyncRequestRepository } from '#src/github-feed/repositories/sync-requests/sync-request-repository.ts';
 import { HealthModule } from '#src/health/module.ts';
-import { HeartbeatModule } from '#src/heartbeat/module.ts';
-import { DrizzleHeartbeatRepository } from '#src/heartbeat/repositories/heartbeats/heartbeat-repository.ts';
 import { LiveModule } from '#src/live/module.ts';
 import { IntegrationsModule } from '#src/integrations/module.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
@@ -104,10 +102,6 @@ const agents = new AgentsModule({
   sessionRepository: agentSessions,
   liveEvents,
 });
-const heartbeat = new HeartbeatModule({
-  liveEvents,
-  repository: new DrizzleHeartbeatRepository({ database }),
-});
 
 const briefings = new DrizzleBriefingRepository({ database });
 const ownerTimeZone = new DrizzleOwnerTimeZoneReader({ database });
@@ -162,17 +156,9 @@ const platform = new PlatformModule({
       initiatives: new DrizzleStoredInitiatives({ database }),
     }),
     new LiveModule({ liveEvents, identity: auth.identity }),
-    heartbeat,
     briefing,
   ],
-  workflowModules: [
-    heartbeat,
-    agents,
-    githubFeed,
-    objectives,
-    connections,
-    briefing,
-  ],
+  workflowModules: [agents, githubFeed, objectives, connections, briefing],
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

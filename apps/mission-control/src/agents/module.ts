@@ -6,6 +6,8 @@ import { AgentSessionsRoutes } from '#src/agents/exposures/agent-sessions/agent-
 import type { AgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import type { AgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
 import { AgentHeartbeatRetentionWorkflows } from '#src/agents/services/agent-heartbeat-retention-workflows/agent-heartbeat-retention-workflows.ts';
+import { PublishingAgentSessionWatchdog } from '#src/agents/services/agent-session-watchdog/agent-session-watchdog.ts';
+import { AgentSessionWatchdogWorkflows } from '#src/agents/services/agent-session-watchdog-workflows/agent-session-watchdog-workflows.ts';
 import {
   type AgentHeartbeats,
   CallerCheckedAgentHeartbeats,
@@ -27,12 +29,14 @@ const agentsModulePropsSchema = z.object({
 /**
  * Agent sessions: `agent.heartbeat` messages that agents send with service account keys, the
  * current state of each session and subagent they keep, and `GET /api/agents/sessions` for
- * signed-in people. Raw heartbeats are kept for 30 days.
+ * signed-in people. Raw heartbeats are kept for 30 days. A working agent that goes quiet is
+ * marked stale, then lost.
  */
 export class AgentsModule implements HttpModule, WorkflowModule {
   readonly plugin: FastifyPluginAsyncZod;
   readonly heartbeats: AgentHeartbeats;
   private readonly retention: AgentHeartbeatRetentionWorkflows;
+  private readonly watchdog: AgentSessionWatchdogWorkflows;
 
   constructor(input: z.input<typeof agentsModulePropsSchema>) {
     const props = agentsModulePropsSchema.parse(input);
@@ -42,6 +46,12 @@ export class AgentsModule implements HttpModule, WorkflowModule {
     });
     this.retention = new AgentHeartbeatRetentionWorkflows({
       repository: props.heartbeatRepository,
+    });
+    this.watchdog = new AgentSessionWatchdogWorkflows({
+      watchdog: new PublishingAgentSessionWatchdog({
+        repository: props.sessionRepository,
+        liveEvents: props.liveEvents,
+      }),
     });
 
     const heartbeatRoutes = new AgentHeartbeatsRoutes({
@@ -60,9 +70,11 @@ export class AgentsModule implements HttpModule, WorkflowModule {
 
   async activate(): Promise<void> {
     await this.retention.activate();
+    await this.watchdog.activate();
   }
 
   registerWorkflows(): void {
     this.retention.registerWorkflows();
+    this.watchdog.registerWorkflows();
   }
 }

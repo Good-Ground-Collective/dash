@@ -16,6 +16,7 @@ import type {
   AgentHeartbeatQuestion,
   AgentHeartbeatWorkspace,
 } from '#src/agents/contracts/agent-heartbeat.ts';
+import { agentLivenesses } from '#src/agents/definitions/agent-liveness/agent-liveness.ts';
 
 /** The `agent_id` of a session's own row. Subagents carry their own id; an empty string keeps the parent inside the primary key, where `null` could not be. */
 export const parentAgentId = '';
@@ -31,6 +32,9 @@ export const agentSessionTable = pgTable(
     benchId: text('bench_id'),
     harness: text('harness').notNull(),
     status: text('status', { enum: agentHeartbeatStatuses }).notNull(),
+    liveness: text('liveness', { enum: agentLivenesses })
+      .notNull()
+      .default('live'),
     summary: text('summary'),
     question: jsonb('question').$type<AgentHeartbeatQuestion>(),
     error: jsonb('error').$type<AgentHeartbeatError>(),

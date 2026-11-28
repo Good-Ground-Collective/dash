@@ -40,3 +40,11 @@ export class AgentHeartbeatRetentionNotRegisteredError extends Error {
     super('Register the heartbeat retention workflow before activating it');
   }
 }
+
+export class AgentSessionWatchdogNotRegisteredError extends Error {
+  override name = 'AgentSessionWatchdogNotRegisteredError';
+
+  constructor() {
+    super('Register the agent session watchdog workflow before activating it');
+  }
+}
