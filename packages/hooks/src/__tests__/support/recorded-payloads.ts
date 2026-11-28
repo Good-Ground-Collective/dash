@@ -25,6 +25,29 @@ export class RecordedPayloads {
     return payloads[command];
   }
 
+  /** The `PostToolUse` Claude Code sends when an agent launches `childAgentId` in the background. */
+  static backgroundLaunch(
+    paths: PayloadPaths,
+    childAgentId: string,
+  ): RecordedPayload {
+    return {
+      ...RecordedPayloads.common(paths),
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Agent',
+      tool_input: { description: 'Implement the ticket', prompt: 'Go' },
+      tool_response: {
+        isAsync: true,
+        status: 'async_launched',
+        agentId: childAgentId,
+        description: 'Implement the ticket',
+        prompt: 'Go',
+        outputFile: `${paths.transcriptPath}.${childAgentId}`,
+      },
+      tool_use_id: 'toolu_01LAUNCH',
+      duration_ms: 40,
+    };
+  }
+
   private static common(paths: PayloadPaths) {
     return {
       session_id: RecordedPayloads.SESSION_ID,

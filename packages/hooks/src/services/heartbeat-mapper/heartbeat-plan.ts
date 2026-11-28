@@ -24,6 +24,10 @@ export interface HeartbeatPlan {
   awaitsAnswer?: boolean | undefined;
   /** The AskUserQuestion tool call this heartbeat asks or answers. */
   toolUseId?: string | undefined;
+  /** A `complete` heartbeat that is sent as `waiting` while the agent has background children still running. */
+  settlesChildren?: boolean | undefined;
+  /** The ID of a subagent this agent just launched in the background. */
+  launchedChild?: string | undefined;
   /** The session's last heartbeat, after which the relay may delete its outbox once it is delivered. */
   endsSession?: boolean | undefined;
 }

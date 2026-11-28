@@ -69,16 +69,25 @@ export class FileSessionLedger implements SessionLedger {
     await mkdir(this.config.outboxDirectory, { recursive: true });
 
     return new FileLock({ lockPath: `${statePath}.lock` }).hold(async () => {
-      const state = await this.load(statePath, outboxPath);
-      if (!this.shouldWrite(plan, state, now)) {
+      const loaded = await this.load(statePath, outboxPath);
+      const state = FileSessionLedger.withLaunchedChild(plan, loaded);
+      const effective = FileSessionLedger.settled(plan, state);
+      if (!this.shouldWrite(effective, state, now)) {
+        if (state !== loaded) {
+          await FileSessionLedger.save(statePath, state);
+        }
         return undefined;
       }
 
-      const heartbeat = FileSessionLedger.numberedHeartbeat(plan, state, now);
+      const heartbeat = FileSessionLedger.numberedHeartbeat(
+        effective,
+        state,
+        now,
+      );
       await appendFile(outboxPath, `${LineFitter.fit(heartbeat)}\n`);
       await FileSessionLedger.save(
         statePath,
-        FileSessionLedger.advance(plan, state, now),
+        FileSessionLedger.advance(effective, state, now),
       );
       return heartbeat;
     });
@@ -112,7 +121,7 @@ export class FileSessionLedger implements SessionLedger {
    */
   private livenessDue(key: string, state: SessionState, now: Date): boolean {
     const last = state.agents[key];
-    if (last === 'complete' || last === 'failed' || last === 'error') {
+    if (FileSessionLedger.isFinished(last)) {
       return false;
     }
     if (last === 'question') {
@@ -149,6 +158,92 @@ export class FileSessionLedger implements SessionLedger {
     return sessionId.replaceAll(/[^\w-]/g, '_');
   }
 
+  /** The state with the plan's background child recorded under the agent that launched it. */
+  private static withLaunchedChild(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): SessionState {
+    if (plan.launchedChild === undefined) {
+      return state;
+    }
+
+    const key = plan.draft.agentId ?? mainAgentKey;
+    const known = state.children[key] ?? [];
+    if (known.includes(plan.launchedChild)) {
+      return state;
+    }
+
+    return {
+      ...state,
+      children: { ...state.children, [key]: [...known, plan.launchedChild] },
+    };
+  }
+
+  /**
+   * The plan as it should be written given the agent's background children. A turn end becomes
+   * `waiting` while a child is still running. A child recorded after its launcher already
+   * reported `complete`, because `PostToolUse` runs in the background and lost the race with the
+   * stop, moves the launcher to `waiting`, unless the session has ended.
+   */
+  private static settled(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): HeartbeatPlan {
+    const key = plan.draft.agentId ?? mainAgentKey;
+    const hasRunningChild =
+      FileSessionLedger.runningChildren(key, state).length > 0;
+
+    if (
+      plan.settlesChildren &&
+      plan.draft.status === 'complete' &&
+      hasRunningChild
+    ) {
+      return { ...plan, draft: { ...plan.draft, status: 'waiting' } };
+    }
+    if (
+      plan.launchedChild !== undefined &&
+      hasRunningChild &&
+      state.agents[key] === 'complete' &&
+      !state.ended
+    ) {
+      return {
+        ...plan,
+        draft: { ...plan.draft, status: 'waiting' },
+        condition: 'always',
+      };
+    }
+
+    return plan;
+  }
+
+  private static runningChildren(key: string, state: SessionState): string[] {
+    return (state.children[key] ?? []).filter(
+      (child) => !FileSessionLedger.isFinished(state.agents[child]),
+    );
+  }
+
+  private static isFinished(
+    status: SessionState['agents'][string] | undefined,
+  ): boolean {
+    return status === 'complete' || status === 'failed' || status === 'error';
+  }
+
+  /** The children of every agent that are still running, with finished ones forgotten. */
+  private static forgettingFinished(
+    children: SessionState['children'],
+    agents: SessionState['agents'],
+  ): SessionState['children'] {
+    const running = Object.entries(children).map(
+      ([key, ids]) =>
+        [
+          key,
+          ids.filter((child) => !FileSessionLedger.isFinished(agents[child])),
+        ] as const,
+    );
+
+    return Object.fromEntries(running.filter(([, ids]) => ids.length > 0));
+  }
+
   /** The heartbeat with its `seq`, envelope and the session's model, checked against the standards schema. */
   private static numberedHeartbeat(
     plan: HeartbeatPlan,
@@ -181,10 +276,13 @@ export class FileSessionLedger implements SessionLedger {
       Object.entries(state.awaitingAnswer).filter(([agent]) => agent !== key),
     );
 
+    const agents = { ...state.agents, [key]: plan.draft.status };
+
     return {
       nextSeq: state.nextSeq + 1,
       lastWrittenAt: now.getTime(),
-      agents: { ...state.agents, [key]: plan.draft.status },
+      agents,
+      children: FileSessionLedger.forgettingFinished(state.children, agents),
       awaitingAnswer: plan.awaitsAnswer
         ? { ...awaitingAnswer, [key]: plan.toolUseId ?? '' }
         : awaitingAnswer,
