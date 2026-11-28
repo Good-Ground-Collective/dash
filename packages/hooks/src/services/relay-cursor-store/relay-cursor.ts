@@ -7,7 +7,7 @@ export const relayCursorSchema = z.object({
     .nonnegative()
     .default(0)
     .describe(
-      'The outbox file the offset belongs to. A different file, after retention deleted the old one, is read from its start.',
+      'The outbox file the offset belongs to; a different file is read from its start. Inodes get reused, so retention deletes the cursor along with its outbox.',
     ),
   offset: z
     .int()

@@ -15,7 +15,7 @@ const relayHaltFileSchema = jsonLineSchema.pipe(
  * hooks nor a relay started by hand try that key again. Changing the key, URL or reporter name
  * changes the fingerprint and lifts the halt.
  */
-export class RelayHalt {
+export class RelayHaltRecord {
   static async record(props: {
     haltPath: string;
     fingerprint: string;

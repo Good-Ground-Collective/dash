@@ -1,5 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { z } from 'zod';
 
 import { HooksConfig } from '#src/config/hooks-config.js';
@@ -8,7 +6,11 @@ import { MissionControlRefusedKeyError } from '#src/errors.js';
 import { FileHookLog, type HookLog } from '#src/services/hook-log/hook-log.js';
 import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
 import { OutboxDelivery } from '#src/services/outbox-delivery/outbox-delivery.js';
-import { RelayHalt } from '#src/services/relay-halt/relay-halt.js';
+import {
+  type RelayClock,
+  SystemRelayClock,
+} from '#src/services/relay-clock/relay-clock.js';
+import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
 
 const outboxHeartbeatRelayPropsSchema = z.object({
@@ -27,6 +29,10 @@ const outboxHeartbeatRelayPropsSchema = z.object({
     .describe(
       'The longest wait between attempts while Mission Control is unreachable. The relay keeps trying for as long as it is.',
     ),
+  clock: z
+    .custom<RelayClock>()
+    .default(() => new SystemRelayClock())
+    .describe('Real time and timers unless a test drives them.'),
 });
 
 export type OutboxHeartbeatRelayProps = z.input<
@@ -59,6 +65,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   private readonly log: HookLog;
   private readonly lock: RelayLock;
   private readonly delivery: OutboxDelivery;
+  private readonly clock: RelayClock;
 
   constructor(props: OutboxHeartbeatRelayProps) {
     const valid = outboxHeartbeatRelayPropsSchema.parse(props);
@@ -68,6 +75,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
     this.pollMs = valid.pollMs;
     this.minBackoffMs = valid.minBackoffMs;
     this.maxBackoffMs = valid.maxBackoffMs;
+    this.clock = valid.clock;
     this.log = new FileHookLog({ logPath: valid.config.relayLogPath });
     this.lock = new RelayLock({ pidPath: valid.config.relayPidPath });
     this.delivery = new OutboxDelivery({
@@ -106,18 +114,21 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   }
 
   private async relayUntilIdle(): Promise<'drained' | 'halted'> {
-    let quietSince = Date.now();
+    let quietSince = this.clock.now();
     let failures = 0;
 
     for (;;) {
       try {
         if (await this.delivery.deliverAll()) {
-          quietSince = Date.now();
-        } else if (Date.now() - quietSince >= this.relayConfig.idleExitMs) {
+          quietSince = this.clock.now();
+        } else if (
+          this.clock.now() - quietSince >=
+          this.relayConfig.idleExitMs
+        ) {
           return 'drained';
         }
         failures = 0;
-        await sleep(this.pollMs);
+        await this.clock.sleep(this.pollMs);
       } catch (cause) {
         if (cause instanceof MissionControlRefusedKeyError) {
           await this.halt(cause);
@@ -127,7 +138,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
           this.log.failure({ event: 'relay', cause, now: new Date() });
         }
         failures += 1;
-        await sleep(this.backoffMs(failures));
+        await this.clock.sleep(this.backoffMs(failures));
       }
     }
   }
@@ -135,7 +146,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   private async halt(cause: MissionControlRefusedKeyError): Promise<void> {
     const now = new Date();
     this.log.failure({ event: 'relay', cause, now });
-    await RelayHalt.record({
+    await RelayHaltRecord.record({
       haltPath: this.config.relayHaltPath,
       fingerprint: this.relayConfig.fingerprint,
       status: cause.status,
@@ -144,7 +155,7 @@ export class OutboxHeartbeatRelay implements HeartbeatRelay {
   }
 
   private isHalted(): boolean {
-    return RelayHalt.isHalted(
+    return RelayHaltRecord.isHalted(
       this.config.relayHaltPath,
       this.relayConfig.fingerprint,
     );

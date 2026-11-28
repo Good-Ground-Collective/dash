@@ -6,7 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { OutboxReader } from '#src/services/outbox-reader/outbox-reader.js';
-import { relayCursorSchema } from '#src/services/relay-cursors/relay-cursor.js';
+import { relayCursorSchema } from '#src/services/relay-cursor-store/relay-cursor.js';
 
 let directory: string;
 let outboxPath: string;

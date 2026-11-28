@@ -14,8 +14,8 @@ import type { HookLog } from '#src/services/hook-log/hook-log.js';
 import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
 import type { OutboxBatch } from '#src/services/outbox-reader/outbox-batch.js';
 import { OutboxReader } from '#src/services/outbox-reader/outbox-reader.js';
-import type { RelayCursor } from '#src/services/relay-cursors/relay-cursor.js';
-import { RelayCursors } from '#src/services/relay-cursors/relay-cursors.js';
+import type { RelayCursor } from '#src/services/relay-cursor-store/relay-cursor.js';
+import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 
 const outboxDeliveryPropsSchema = z.object({
   config: z.instanceof(HooksConfig),
@@ -70,7 +70,7 @@ export class OutboxDelivery {
   /** Whether any session has lines its cursor hasn't passed. */
   async hasUndelivered(): Promise<boolean> {
     for (const stem of await this.outboxStems()) {
-      const cursor = await RelayCursors.load(this.cursorsDirectory, stem);
+      const cursor = await RelayCursorStore.load(this.cursorsDirectory, stem);
       const batch = await OutboxReader.read(this.outboxPath(stem), cursor);
       if (batch !== undefined && batch.endOffset > batch.startOffset) {
         return true;
@@ -80,7 +80,7 @@ export class OutboxDelivery {
   }
 
   private async deliverSession(stem: string): Promise<boolean> {
-    let cursor = await RelayCursors.load(this.cursorsDirectory, stem);
+    let cursor = await RelayCursorStore.load(this.cursorsDirectory, stem);
     let progressed = false;
 
     for (;;) {
@@ -94,7 +94,7 @@ export class OutboxDelivery {
 
       await this.send(stem, batch);
       cursor = OutboxDelivery.advance(cursor, batch);
-      await RelayCursors.save(this.cursorsDirectory, stem, cursor);
+      await RelayCursorStore.save(this.cursorsDirectory, stem, cursor);
       progressed = true;
     }
 
@@ -150,7 +150,7 @@ export class OutboxDelivery {
           outbox?.ino === cursor.inode && outbox.size === cursor.offset;
         if (delivered && (await OutboxDelivery.hasEnded(statePath))) {
           await rm(this.outboxPath(stem), { force: true });
-          await RelayCursors.remove(this.cursorsDirectory, stem);
+          await RelayCursorStore.remove(this.cursorsDirectory, stem);
         }
       });
     } catch (cause) {
@@ -168,7 +168,7 @@ export class OutboxDelivery {
         ? name.slice(0, -'.json'.length)
         : undefined;
       if (stem !== undefined && !live.has(stem)) {
-        await RelayCursors.remove(this.cursorsDirectory, stem);
+        await RelayCursorStore.remove(this.cursorsDirectory, stem);
       }
     }
   }

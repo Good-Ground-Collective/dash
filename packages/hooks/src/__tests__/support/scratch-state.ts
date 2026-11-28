@@ -100,6 +100,6 @@ export class ScratchState {
   }
 
   async remove(): Promise<void> {
-    await rm(this.directory, { recursive: true, force: true });
+    await rm(this.directory, { recursive: true, force: true, maxRetries: 3 });
   }
 }
