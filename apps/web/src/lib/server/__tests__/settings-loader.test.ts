@@ -20,6 +20,21 @@ const feed = {
   assignedIssues: [],
 };
 
+const briefings = {
+  configured: true,
+  latest: null,
+  lastRun: null,
+  history: [],
+  budget: {
+    month: '2026-11',
+    spentUsd: 1.5,
+    capUsd: 100,
+    runs: 3,
+    reached: false,
+  },
+  running: null,
+};
+
 class Visit {
   static of(answers: Record<string, () => Response>): AuthPageLoadEvent {
     return {
@@ -44,17 +59,17 @@ afterEach(() => {
 
 describe('MissionControlSettingsLoader', () => {
   it('adds the GitHub feed to the settings data', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const event = Visit.of({
       '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
       '/integrations/github/feed': () => Response.json(feed),
+      '/briefings': () => Response.json(briefings),
     });
 
     await expect(loader.load(event)).resolves.toEqual({
       viewer: ada,
       passkeys: [],
       github: { status: 'loaded', feed },
-      briefing: { status: 'failed' },
+      briefing: { status: 'loaded', briefings },
     });
   });
 
