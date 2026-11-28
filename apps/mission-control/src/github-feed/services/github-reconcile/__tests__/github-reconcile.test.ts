@@ -8,6 +8,7 @@ import {
   guestId,
   ownedId,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
+import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 import { GithubFeedHarness } from '#src/github-feed/__tests__/support/github-feed-harness.ts';
 
 const unclaimedId = '40000000-0000-4000-8000-000000000001';
@@ -250,5 +251,56 @@ describe('GithubReconcile staleConnections', () => {
     vi.setSystemTime(new Date(fixedNow.getTime() + 24 * 60 * 60_000));
 
     expect(await harness.module.reconcile.staleConnections()).toEqual([]);
+  });
+});
+
+describe('GithubReconcile staleConnections eligibility', () => {
+  it('does not list a stale connection whose installation is suspended', async () => {
+    const harness = await Reconciling.linked();
+    harness.records.add(
+      GithubFeedFixtures.target({
+        connectionId: unclaimedId,
+        connectedBy: adaId,
+        suspended: true,
+      }),
+    );
+    for (const connectionId of [ownedId, unclaimedId]) {
+      await harness.records.replace({
+        connectionId,
+        viewerLogin: 'ada',
+        records: InMemoryGithubRecords.empty(),
+        truncated: false,
+        syncedAt: fixedNow,
+      });
+    }
+    vi.setSystemTime(new Date(fixedNow.getTime() + 46 * 60_000));
+
+    expect(await harness.module.reconcile.staleConnections()).toEqual([
+      { connectionId: ownedId, lastSyncedAt: fixedNow },
+    ]);
+  });
+
+  it('lists no more stale connections than one run reads', async () => {
+    const harness = await Reconciling.linked();
+    const ids = Array.from(
+      { length: 51 },
+      (_, index) =>
+        `50000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    for (const connectionId of ids) {
+      harness.records.add(
+        GithubFeedFixtures.target({ connectionId, connectedBy: adaId }),
+      );
+      await harness.records.replace({
+        connectionId,
+        viewerLogin: 'ada',
+        records: InMemoryGithubRecords.empty(),
+        truncated: false,
+        syncedAt: fixedNow,
+      });
+    }
+    vi.setSystemTime(new Date(fixedNow.getTime() + 46 * 60_000));
+
+    expect(await harness.module.reconcile.staleConnections()).toHaveLength(50);
   });
 });

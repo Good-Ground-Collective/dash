@@ -10,10 +10,7 @@ import {
 } from '#src/github-feed/errors.ts';
 import type { GithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import type { GithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
-import {
-  type ErrorDescriber,
-  RedactingErrorDescriber,
-} from '#src/github-feed/services/github-reconcile/redacting-error-describer.ts';
+import { RedactingErrorDescriber } from '#src/github-feed/services/github-reconcile/redacting-error-describer.ts';
 
 /** The most connections one scheduled run reads. The least recently tried go first, so all of them take turns. */
 const maxConnectionsPerRun = 50;
@@ -34,7 +31,7 @@ export interface StaleConnection {
 }
 
 export interface GithubReconcile {
-  /** Connections last read successfully more than three schedule intervals ago. */
+  /** Connections last read successfully more than three schedule intervals ago, oldest first, up to the most one run reads. A suspended connection can't be read, so it is not listed. */
   staleConnections(): Promise<StaleConnection[]>;
   dueConnectionIds(): Promise<string[]>;
   connectionIdsOf(props: { userId: string }): Promise<string[]>;
@@ -50,8 +47,7 @@ export class SourcedGithubReconcile implements GithubReconcile {
   private readonly sources: readonly GithubSource[];
   private readonly reader: GithubRecordReader;
   private readonly writer: GithubRecordWriter;
-  private readonly errorDescriber: ErrorDescriber =
-    new RedactingErrorDescriber();
+  private readonly errorDescriber = new RedactingErrorDescriber();
 
   constructor(props: {
     sources: readonly GithubSource[];
@@ -67,6 +63,7 @@ export class SourcedGithubReconcile implements GithubReconcile {
     return this.reader.staleSyncs({
       before: new Date(Date.now() - staleAfterMs),
       kinds: this.kinds(),
+      limit: maxConnectionsPerRun,
     });
   }
 

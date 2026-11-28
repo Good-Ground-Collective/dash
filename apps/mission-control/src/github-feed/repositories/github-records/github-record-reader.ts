@@ -42,10 +42,11 @@ export interface GithubRecordReader {
     kinds: readonly ConnectionKind[];
     limit: number;
   }): Promise<GithubSyncTarget[]>;
-  /** Connections whose last good read finished before `before`, oldest first. One never read successfully has no such time and is not listed. */
+  /** Unsuspended connections whose last good read finished before `before`, oldest first, up to `limit`. One never read successfully has no such time and is not listed. */
   staleSyncs(props: {
     before: Date;
     kinds: readonly ConnectionKind[];
+    limit: number;
   }): Promise<{ connectionId: string; lastSyncedAt: Date }[]>;
   /** Every GitHub connection `connectedBy` made, owned or guest, with its stored records. */
   recordsFor(props: { connectedBy: string }): Promise<ConnectionRecords[]>;
@@ -105,6 +106,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
   async staleSyncs(props: {
     before: Date;
     kinds: readonly ConnectionKind[];
+    limit: number;
   }): Promise<{ connectionId: string; lastSyncedAt: Date }[]> {
     const rows = await this.database.orm
       .select({
@@ -119,10 +121,12 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
       .where(
         and(
           ...DrizzleGithubRecordReader.connectionFilter(props),
+          eq(connectionTable.suspended, false),
           lt(githubSyncTable.lastSyncedAt, props.before),
         ),
       )
-      .orderBy(asc(githubSyncTable.lastSyncedAt));
+      .orderBy(asc(githubSyncTable.lastSyncedAt))
+      .limit(props.limit);
     return rows.flatMap(({ connectionId, lastSyncedAt }) =>
       lastSyncedAt === null ? [] : [{ connectionId, lastSyncedAt }],
     );

@@ -1,22 +1,34 @@
 import { DBOS, type WorkflowStatus } from '@dbos-inc/dbos-sdk';
 import { z } from 'zod';
 
+/**
+ * How long a process must have been up before it may move work off another version. A deploy
+ * starts the new container, waits up to Kamal's 60 s `deploy_timeout` (deploy/mission-control.yml)
+ * for it to be healthy, then drains and stops the old one, which takes the proxy drain and
+ * `docker stop` time on top. Five minutes covers all of that with headroom, so by then the
+ * previous container is gone and nothing it still runs can be mistaken for work it left behind.
+ */
+export const previousContainerGoneAfterMs = 5 * 60_000;
+
 const strandedWorkflowRecoveryPropsSchema = z.object({
-  graceMs: z
+  gateMs: z
     .number()
     .min(0)
-    .default(2 * 60_000)
+    .default(previousContainerGoneAfterMs)
     .describe(
-      'Least age of a queued workflow before it counts as stranded, so one the draining previous container has only just enqueued is left to it.',
+      'How long after this recovery is created, at startup, before it counts or moves any work, so a previous container still draining is left to finish.',
     ),
 });
 
 /** Gets queued work that a deploy left behind running again. */
 export interface StrandedWorkflowRecovery {
-  /** How many queued workflows a deploy has stranded right now. */
+  /** How long until the previous container can be taken to be gone; zero once it can. */
+  untilGateOpensMs(): number;
+
+  /** How many queued workflows a deploy has stranded right now; zero while the gate is closed. */
   count(): Promise<number>;
 
-  /** Re-runs each stranded workflow on the running version, returning how many it moved. */
+  /** Re-runs each stranded workflow on the running version, returning how many it moved. Does nothing while the gate is closed. */
   recover(): Promise<number>;
 }
 
@@ -24,14 +36,29 @@ export interface StrandedWorkflowRecovery {
  * Every deploy runs under a new application version, and a queued workflow is only started by
  * the version it was enqueued under. The replaced container is gone, so work it left waiting
  * would never run and would keep any deduplication ID it holds. This moves such work to the
- * running version under its own ID. Work that has already started is never touched, because the
- * previous container may still be finishing it while a deploy overlaps.
+ * running version under its own ID, on its own queue.
+ *
+ * Nothing is counted or moved until the previous container is gone, because work another
+ * version has queued or is running may belong to a container that is still draining: moving a
+ * started workflow while its container still runs it would run it twice. Work on a `_dbos`
+ * internal queue, work on this version and work on no queue are never touched.
+ *
+ * Work that had already started is rewound from step 0 rather than resumed: its checkpoints
+ * were written by older code, and replaying them against changed code can fail or diverge, so
+ * the steps run again on the running version. A briefing that had already committed its record
+ * step before the deploy therefore writes a second briefing when it re-runs. That is accepted:
+ * it is narrow, and the briefing budget caps it.
  */
 export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
-  private readonly graceMs: number;
+  private readonly gateMs: number;
+  private readonly createdAt = Date.now();
 
   constructor(props: z.input<typeof strandedWorkflowRecoveryPropsSchema> = {}) {
-    this.graceMs = strandedWorkflowRecoveryPropsSchema.parse(props).graceMs;
+    this.gateMs = strandedWorkflowRecoveryPropsSchema.parse(props).gateMs;
+  }
+
+  untilGateOpensMs(): number {
+    return Math.max(0, this.createdAt + this.gateMs - Date.now());
   }
 
   async count(): Promise<number> {
@@ -40,33 +67,44 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
 
   async recover(): Promise<number> {
     const version = DBOS.applicationVersion;
-    const stranded = await this.stranded();
+    let moved = 0;
 
-    for (const workflow of stranded) {
+    for (const workflow of await this.stranded()) {
       DBOS.logger.warn(
         `Re-running stranded workflow ${workflow.workflowID} (${workflow.workflowName}) on queue ${workflow.queueName}, queued under version ${workflow.applicationVersion}`,
       );
-      await DBOS.cancelWorkflow(workflow.workflowID);
-      await DBOS.rewindWorkflow(workflow.workflowID, {
-        applicationVersion: version,
-        queueName: workflow.queueName,
-      });
+      try {
+        await DBOS.cancelWorkflow(workflow.workflowID);
+        await DBOS.rewindWorkflow(workflow.workflowID, {
+          applicationVersion: version,
+          queueName: workflow.queueName,
+        });
+        moved += 1;
+      } catch (error) {
+        DBOS.logger.warn(
+          `Could not re-run stranded workflow ${workflow.workflowID} on queue ${workflow.queueName}: ${error instanceof Error ? error.name : 'non-error thrown'}`,
+        );
+      }
     }
-    return stranded.length;
+    return moved;
   }
 
   private async stranded(): Promise<
     (WorkflowStatus & { queueName: string })[]
   > {
-    const cutoff = Date.now() - this.graceMs;
+    if (this.untilGateOpensMs() > 0) {
+      return [];
+    }
     const queued = await DBOS.listQueuedWorkflows({
-      status: ['ENQUEUED', 'DELAYED'],
+      status: ['ENQUEUED', 'DELAYED', 'PENDING'],
+      loadInput: false,
+      loadOutput: false,
     });
     return queued.flatMap((workflow) =>
       workflow.applicationVersion !== undefined &&
       workflow.applicationVersion !== DBOS.applicationVersion &&
       workflow.queueName !== undefined &&
-      workflow.createdAt <= cutoff
+      !workflow.queueName.startsWith('_dbos')
         ? [{ ...workflow, queueName: workflow.queueName }]
         : [],
     );

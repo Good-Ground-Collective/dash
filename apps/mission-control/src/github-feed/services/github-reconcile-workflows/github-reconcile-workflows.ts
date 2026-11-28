@@ -18,15 +18,19 @@ const scheduleName = 'github-reconcile-every-15-minutes';
 /** Least time from one read of a connection starting to a follow-up read of it starting, so steady webhook traffic neither spends the installation's GitHub rate limit nor keeps the queue's two slots busy. */
 const minReadGapMs = 60_000;
 
-/** Longest a connection read may run once started; past it the read is cancelled, so a hung read cannot keep later reads of that connection from being enqueued. */
-const readTimeoutMs = 10 * 60_000;
-
-/** Twice the schedule interval: a read still unfinished this long after it was enqueued has stopped making progress, so it no longer stands in for a new one. */
-const maxHolderAgeMs = 2 * 15 * 60_000;
+/** Twice the schedule interval, and well past the read timeout: a read still running this long after it started has stopped making progress, so it no longer stands in for a new one. */
+const maxRunningHolderMs = 2 * 15 * 60_000;
 
 const githubReconcileWorkflowsPropsSchema = z.object({
   reconcile: z.custom<GithubReconcile>(),
   syncRequests: z.custom<Pick<GithubSyncRequests, 'requestedSince'>>(),
+  readTimeoutMs: z
+    .number()
+    .positive()
+    .default(10 * 60_000)
+    .describe(
+      'Longest a connection read may run once started; past it the read is cancelled, so a hung read cannot keep later reads of that connection from being enqueued.',
+    ),
 });
 
 /**
@@ -76,6 +80,7 @@ export class GithubReconcileWorkflows
 {
   private readonly reconcile: GithubReconcile;
   private readonly syncRequests: Pick<GithubSyncRequests, 'requestedSince'>;
+  private readonly readTimeoutMs: number;
   private registered: {
     connection: ConnectionWorkflow;
     scheduled: ScheduledWorkflow;
@@ -86,6 +91,7 @@ export class GithubReconcileWorkflows
     const parsed = githubReconcileWorkflowsPropsSchema.parse(props);
     this.reconcile = parsed.reconcile;
     this.syncRequests = parsed.syncRequests;
+    this.readTimeoutMs = parsed.readTimeoutMs;
   }
 
   async activate(): Promise<void> {
@@ -162,8 +168,9 @@ export class GithubReconcileWorkflows
             () => this.reconcile.staleConnections(),
             { name: 'githubStaleConnections' },
           );
+          const now = await DBOS.now();
           for (const connection of stale) {
-            GithubReconcileWorkflows.logStale(connection);
+            GithubReconcileWorkflows.logStale({ connection, now });
           }
           await enqueue(
             await DBOS.runStep(() => this.reconcile.dueConnectionIds(), {
@@ -225,34 +232,50 @@ export class GithubReconcileWorkflows
         queueName,
         enqueueOptions,
         duplicationPolicy: 'return-existing',
-        timeoutMS: readTimeoutMs,
+        timeoutMS: this.readTimeoutMs,
       })(props.connectionId);
 
     const holder = await start();
     const status = await holder.getStatus();
-    if (status !== null && GithubReconcileWorkflows.isStuck(status)) {
+    if (status !== null && (await GithubReconcileWorkflows.isStuck(status))) {
       await DBOS.cancelWorkflow(holder.workflowID);
       await start();
     }
   }
 
-  private static isStuck(status: WorkflowStatus): boolean {
+  /**
+   * A holder on another version is never started by this one. A queued holder on this version
+   * is left alone however long it has waited, because DBOS starts queued work in the order it
+   * was created and cancelling it would put its replacement at the back. A running holder is
+   * stuck once it has run longer than the read timeout allows for.
+   */
+  private static async isStuck(status: WorkflowStatus): Promise<boolean> {
     const unfinished = ['ENQUEUED', 'DELAYED', 'PENDING'].includes(
       status.status,
     );
-    const elsewhere = status.applicationVersion !== DBOS.applicationVersion;
+    if (!unfinished) {
+      return false;
+    }
+    if (status.applicationVersion !== DBOS.applicationVersion) {
+      return true;
+    }
+
+    const startedAt = status.dequeuedAt ?? status.createdAt;
     return (
-      unfinished &&
-      (elsewhere || Date.now() - status.createdAt > maxHolderAgeMs)
+      status.status === 'PENDING' &&
+      (await DBOS.now()) - startedAt > maxRunningHolderMs
     );
   }
 
-  private static logStale(connection: StaleConnection): void {
+  private static logStale(props: {
+    connection: StaleConnection;
+    now: number;
+  }): void {
     const minutes = Math.round(
-      (Date.now() - new Date(connection.lastSyncedAt).getTime()) / 60_000,
+      (props.now - new Date(props.connection.lastSyncedAt).getTime()) / 60_000,
     );
     DBOS.logger.warn(
-      `GitHub connection ${connection.connectionId} has not synced for ${minutes} minutes`,
+      `GitHub connection ${props.connection.connectionId} has not synced for ${minutes} minutes`,
     );
   }
 

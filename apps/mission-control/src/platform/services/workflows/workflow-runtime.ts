@@ -30,6 +30,12 @@ const dbosLogLevels = {
 export const workflowRuntimePropsSchema = z.object({
   databaseUrl: postgresUrlSchema,
   logLevel: logLevelSchema,
+  recovery: z
+    .custom<StrandedWorkflowRecovery>()
+    .optional()
+    .describe(
+      'Moves work a deploy stranded; share it with whatever reports on that work. Defaults to a new one created with the runtime.',
+    ),
 });
 
 /** `launch` must follow every module's `registerWorkflows()`, because DBOS fixes its registry at launch. */
@@ -42,12 +48,13 @@ export interface WorkflowRuntime extends HealthProbe {
 export class DbosWorkflowRuntime implements WorkflowRuntime {
   readonly name = 'workflows';
   private readonly props: z.output<typeof workflowRuntimePropsSchema>;
-  private readonly recovery: StrandedWorkflowRecovery =
-    new DbosStrandedWorkflowRecovery();
+  private readonly recovery: StrandedWorkflowRecovery;
   private recoverStranded: (() => Promise<void>) | null = null;
+  private sweepTimer: NodeJS.Timeout | null = null;
 
   constructor(props: z.input<typeof workflowRuntimePropsSchema>) {
     this.props = workflowRuntimePropsSchema.parse(props);
+    this.recovery = this.props.recovery ?? new DbosStrandedWorkflowRecovery();
   }
 
   async check(): Promise<void> {
@@ -74,7 +81,7 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
     );
     await DBOS.launch();
 
-    await this.recoverAfterLaunch();
+    this.sweepWhenPreviousContainerIsGone();
     await DBOS.applySchedules([
       {
         scheduleName: recoveryScheduleName,
@@ -85,11 +92,22 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
   }
 
   async shutdown(): Promise<void> {
+    if (this.sweepTimer !== null) {
+      clearTimeout(this.sweepTimer);
+      this.sweepTimer = null;
+    }
     await DBOS.shutdown();
   }
 
-  /** A failed sweep must not stop the app starting; the schedule tries again. */
-  private async recoverAfterLaunch(): Promise<void> {
+  /** Sweeps once as soon as the previous container is gone, instead of waiting for the next schedule tick. A failed sweep is logged, never thrown; the schedule tries again. */
+  private sweepWhenPreviousContainerIsGone(): void {
+    this.sweepTimer = setTimeout(() => {
+      void this.sweep();
+    }, this.recovery.untilGateOpensMs());
+    this.sweepTimer.unref();
+  }
+
+  private async sweep(): Promise<void> {
     try {
       await this.recovery.recover();
     } catch (error) {
