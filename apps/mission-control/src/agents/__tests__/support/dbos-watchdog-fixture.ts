@@ -7,6 +7,7 @@ import { PublishingAgentSessionWatchdog } from '#src/agents/services/agent-sessi
 import {
   AgentSessionWatchdogWorkflows,
   agentSessionWatchdogScheduleName,
+  retiredExampleScheduleName,
 } from '#src/agents/services/agent-session-watchdog-workflows/agent-session-watchdog-workflows.ts';
 import type { LiveEvent } from '#src/live/contracts/live-event.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
@@ -29,6 +30,7 @@ export class DbosWatchdogFixture {
   private readonly liveEvents = new InProcessLiveEvents();
   private store: AgentRecordsDatabase | undefined;
   private runtime: DbosWorkflowRuntime | undefined;
+  private workflows: AgentSessionWatchdogWorkflows | undefined;
   private startedAt = new Date('2026-11-27T10:00:00Z');
 
   constructor(props: z.input<typeof dbosWatchdogFixturePropsSchema>) {
@@ -55,13 +57,16 @@ export class DbosWatchdogFixture {
       serverUrl: this.props.databaseUrl,
       name: this.props.name,
     });
-    const workflows = new AgentSessionWatchdogWorkflows({
+    this.workflows = new AgentSessionWatchdogWorkflows({
       watchdog: new PublishingAgentSessionWatchdog({
         repository: this.store.sessions,
         liveEvents: this.liveEvents,
       }),
     });
-    workflows.registerWorkflows();
+    this.workflows.registerWorkflows();
+    const retiredExample = DBOS.registerWorkflow(async () => {}, {
+      name: 'exampleScheduledHeartbeat',
+    });
 
     const url = new URL(this.props.databaseUrl);
     url.pathname = `/${this.props.name}`;
@@ -70,8 +75,29 @@ export class DbosWatchdogFixture {
       logLevel: 'error',
     });
     await this.runtime.launch();
-    await workflows.activate();
+    await DBOS.applySchedules([
+      {
+        scheduleName: retiredExampleScheduleName,
+        workflowFn: retiredExample,
+        schedule: '*/30 * * * * *',
+      },
+    ]);
+    await this.activate();
     await DBOS.pauseSchedule(agentSessionWatchdogScheduleName);
+  }
+
+  /** Activates the watchdog's schedules, as the agents module does at startup. */
+  async activate(): Promise<void> {
+    if (this.workflows === undefined) {
+      throw new TypeError('Launch the watchdog fixture before activating it');
+    }
+    await this.workflows.activate();
+  }
+
+  /** The names of the schedules DBOS holds for this application. */
+  async scheduleNames(): Promise<string[]> {
+    const schedules = await DBOS.listSchedules();
+    return schedules.map(({ scheduleName }) => scheduleName);
   }
 
   async stop(): Promise<void> {

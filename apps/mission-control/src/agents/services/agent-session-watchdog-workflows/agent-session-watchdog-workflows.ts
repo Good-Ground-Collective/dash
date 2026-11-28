@@ -8,6 +8,9 @@ import type { WorkflowModule } from '#src/platform/contracts/workflow-module.ts'
 export const agentSessionWatchdogScheduleName =
   'agent-session-watchdog-every-minute';
 
+/** The schedule the removed example heartbeat module applied. DBOS keeps firing a stored schedule whose workflow is gone, so activation deletes it. */
+export const retiredExampleScheduleName = 'example-heartbeat-every-30-seconds';
+
 const agentSessionWatchdogWorkflowsPropsSchema = z.object({
   watchdog: z.custom<AgentSessionWatchdog>(),
 });
@@ -27,6 +30,9 @@ export class AgentSessionWatchdogWorkflows implements WorkflowModule {
   async activate(): Promise<void> {
     if (this.scheduled === null) {
       throw new AgentSessionWatchdogNotRegisteredError();
+    }
+    if ((await DBOS.getSchedule(retiredExampleScheduleName)) !== null) {
+      await DBOS.deleteSchedule(retiredExampleScheduleName);
     }
     await DBOS.applySchedules([
       {

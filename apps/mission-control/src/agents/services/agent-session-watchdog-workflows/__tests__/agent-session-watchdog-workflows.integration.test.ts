@@ -10,6 +10,10 @@ import {
 
 import { AgentRecordsDatabase } from '#src/agents/__tests__/support/agent-records-database.ts';
 import { DbosWatchdogFixture } from '#src/agents/__tests__/support/dbos-watchdog-fixture.ts';
+import {
+  agentSessionWatchdogScheduleName,
+  retiredExampleScheduleName,
+} from '#src/agents/services/agent-session-watchdog-workflows/agent-session-watchdog-workflows.ts';
 
 const databaseUrl = inject('databaseUrl');
 const fixture = new DbosWatchdogFixture({
@@ -71,5 +75,20 @@ describe.skipIf(databaseUrl === null)('Agent session watchdog on DBOS', () => {
 
     expect(await fixture.liveness()).toEqual({ asking: 'live' });
     expect(fixture.published).toEqual([]);
+  }, 30_000);
+
+  it('deletes the retired example schedule on activation, and activates again once it is gone', async () => {
+    expect(await fixture.scheduleNames()).not.toContain(
+      retiredExampleScheduleName,
+    );
+
+    await fixture.activate();
+
+    expect(await fixture.scheduleNames()).toEqual(
+      expect.arrayContaining([agentSessionWatchdogScheduleName]),
+    );
+    expect(await fixture.scheduleNames()).not.toContain(
+      retiredExampleScheduleName,
+    );
   }, 30_000);
 });
