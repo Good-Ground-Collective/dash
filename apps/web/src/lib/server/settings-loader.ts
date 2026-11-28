@@ -22,6 +22,11 @@ import {
   type GithubFeedLoader,
   MissionControlGithubFeedLoader,
 } from '#lib/server/github-feed-loader.ts';
+import {
+  MissionControlWatchedChecksLoader,
+  type WatchedChecksLoader,
+} from '#lib/server/watched-checks/watched-checks-loader.ts';
+import type { WatchedChecksState } from '#lib/watched-checks/watched-checks-view.ts';
 
 export const settingsLoaderPropsSchema = z.object({
   apiBaseUrl: missionControlBaseUrlSchema,
@@ -46,6 +51,10 @@ export interface SettingsLoader {
   readonly github: (
     event: AuthPageLoadEvent,
   ) => Promise<{ github: GithubFeedState | null }>;
+  /** The feed and the person's watch rules, `{ status: 'failed' }` when either couldn't be read. */
+  readonly watchedChecks: (
+    event: AuthPageLoadEvent,
+  ) => Promise<{ watched: WatchedChecksState }>;
   /** What Mission Control stored for the briefing, whose budget Settings reads out. */
   readonly briefing: (
     event: AuthPageLoadEvent,
@@ -56,12 +65,16 @@ export class MissionControlSettingsLoader implements SettingsLoader {
   private readonly auth: AuthPageLoader;
   private readonly feeds: GithubFeedLoader;
   private readonly briefings: BriefingLoader;
+  private readonly watchedChecksLoader: WatchedChecksLoader;
 
   constructor(props: SettingsLoaderProps) {
     const { apiBaseUrl } = settingsLoaderPropsSchema.parse(props);
     this.auth = new MissionControlAuthPageLoader({ apiBaseUrl });
     this.feeds = new MissionControlGithubFeedLoader({ apiBaseUrl });
     this.briefings = new MissionControlBriefingLoader({ apiBaseUrl });
+    this.watchedChecksLoader = new MissionControlWatchedChecksLoader({
+      apiBaseUrl,
+    });
   }
 
   readonly viewer = async (
@@ -89,6 +102,13 @@ export class MissionControlSettingsLoader implements SettingsLoader {
   ): Promise<{ github: GithubFeedState | null }> => {
     await this.viewer(event);
     return { github: await this.feeds.read(event) };
+  };
+
+  readonly watchedChecks = async (
+    event: AuthPageLoadEvent,
+  ): Promise<{ watched: WatchedChecksState }> => {
+    await this.viewer(event);
+    return { watched: await this.watchedChecksLoader.read(event) };
   };
 
   readonly briefing = async (

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { GithubFeedStub } from './github-feed-stub.ts';
+import { GithubWatchedChecksStub } from './github-watched-checks-stub.ts';
 import {
   type StubAccount,
   GithubStubAccounts,
@@ -26,7 +27,7 @@ const publicMemberships = ['initech'];
  * to the web app with the `connect=` result Mission Control's callbacks send. Avatars are small
  * SVGs served here, so the page never calls GitHub. `POST /__stub/scenario?name=…` picks
  * whether the person has authorized yet, or whether listing fails. `/accounts/lookup` finds the
- * `findable` organisations, and their install link, numbered afresh by each lookup, records a request. `/feed` is `GithubFeedStub`.
+ * `findable` organisations, and their install link, numbered afresh by each lookup, records a request. `/feed` is `GithubFeedStub`, and `/watched-checks` is `GithubWatchedChecksStub`.
  */
 export class GithubStub {
   private readonly webOrigin: () => string;
@@ -34,7 +35,8 @@ export class GithubStub {
   private accounts: StubAccount[] = GithubStubAccounts.sample();
   /** Numbers each lookup's install link, standing in for the fresh signed state Mission Control gives it. */
   private lookups = 0;
-  private readonly feed = new GithubFeedStub();
+  private readonly watched = new GithubWatchedChecksStub();
+  private readonly feed = new GithubFeedStub({ watched: this.watched });
 
   constructor(props: {
     /** The web app the round trips send the person back to. */
@@ -48,6 +50,7 @@ export class GithubStub {
     this.accounts = GithubStubAccounts.sample();
     this.lookups = 0;
     this.feed.reset();
+    this.watched.reset();
   }
 
   /** Whether Dash would hold a GitHub connection: authorized, with an installation that isn't suspended. */
@@ -67,10 +70,10 @@ export class GithubStub {
     request: IncomingMessage;
     response: ServerResponse;
     url: URL;
+    body: string;
     signedIn: boolean;
   }): void {
     const { response, url } = props;
-    const origin = `http://${props.request.headers.host ?? 'localhost'}`;
     const returnTo = url.searchParams.get('returnTo') ?? '/setup/github';
     const back = (query: string): void => {
       response.writeHead(302, {
@@ -79,8 +82,11 @@ export class GithubStub {
       response.end();
     };
     const page = url.pathname.replace(/^\/integrations\/github/u, '');
+    const reply = this.jsonReply({ ...props, page, returnTo });
 
-    if (page.startsWith('/__stub/avatars/')) {
+    if (reply !== null) {
+      GithubStub.send(response, reply);
+    } else if (page.startsWith('/__stub/avatars/')) {
       response.writeHead(200, { 'content-type': 'image/svg+xml' });
       response.end(
         GithubStubAccounts.avatar(page.slice('/__stub/avatars/'.length)),
@@ -102,26 +108,47 @@ export class GithubStub {
     } else if (page === '/__stub/feed') {
       this.feed.choose(url.searchParams.get('name'));
       response.writeHead(204).end();
-    } else if (page === '/feed') {
-      const reply = this.feed.feed({ signedIn: props.signedIn });
-      response.writeHead(reply.status, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(reply.body));
-    } else if (page === '/accounts') {
-      const reply = this.list({ origin, signedIn: props.signedIn, returnTo });
-      response.writeHead(reply.status, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(reply.body));
-    } else if (page === '/accounts/lookup') {
-      const reply = this.lookUp({
-        origin,
-        signedIn: props.signedIn,
-        returnTo,
-        login: url.searchParams.get('login') ?? '',
-      });
-      response.writeHead(reply.status, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(reply.body));
     } else {
       response.writeHead(404).end();
     }
+  }
+
+  /** The JSON answers of the feed, the watched checks and the account lists, or `null` for any other page. */
+  private jsonReply(props: {
+    request: IncomingMessage;
+    url: URL;
+    body: string;
+    signedIn: boolean;
+    page: string;
+    returnTo: string;
+  }): StubJson | null {
+    const { page, url, signedIn, returnTo } = props;
+    const origin = `http://${props.request.headers.host ?? 'localhost'}`;
+
+    if (page === '/feed') {
+      return this.feed.feed({ signedIn });
+    }
+    if (page.startsWith('/watched-checks')) {
+      return this.watched.serve({
+        method: props.request.method ?? 'GET',
+        page,
+        query: url.searchParams,
+        body: props.body,
+        signedIn,
+      });
+    }
+    if (page === '/accounts') {
+      return this.list({ origin, signedIn, returnTo });
+    }
+    if (page === '/accounts/lookup') {
+      return this.lookUp({
+        origin,
+        signedIn,
+        returnTo,
+        login: url.searchParams.get('login') ?? '',
+      });
+    }
+    return null;
   }
 
   private list(props: {
@@ -239,5 +266,10 @@ export class GithubStub {
           }
         : account,
     );
+  }
+
+  private static send(response: ServerResponse, reply: StubJson): void {
+    response.writeHead(reply.status, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(reply.body));
   }
 }

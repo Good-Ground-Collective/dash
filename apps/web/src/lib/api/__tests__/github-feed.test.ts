@@ -61,6 +61,7 @@ const wire = {
       branch: 'main',
       headSha: 'c0ffee',
       state: 'failure',
+      watchedState: 'failing',
       checksTruncated: false,
       checks: [
         {
@@ -70,6 +71,8 @@ const wire = {
           state: 'failure',
           url: 'https://github.com/acme/web/actions/runs/9',
           failingSince: '2026-11-24T08:00:00.000Z',
+          watched: true,
+          watchSource: 'rule',
         },
       ],
     },

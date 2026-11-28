@@ -117,6 +117,35 @@ describe('MissionControlSettingsLoader', () => {
   });
 });
 
+describe('MissionControlSettingsLoader watched checks', () => {
+  const chosen = {
+    rules: [{ id: 'r1', pattern: 'Deploy*' }],
+    overrides: [],
+  };
+
+  it('loads the feed and the person’s choices for the watched checks section', async () => {
+    const event = Visit.of({
+      '/integrations/github/feed': () => Response.json(feed),
+      '/integrations/github/watched-checks': () => Response.json(chosen),
+    });
+
+    await expect(loader.watchedChecks(event)).resolves.toMatchObject({
+      watched: { status: 'loaded', chosen },
+    });
+  });
+
+  it('keeps the section when either read fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const event = Visit.of({
+      '/integrations/github/feed': () => Response.json(feed),
+    });
+
+    await expect(loader.watchedChecks(event)).resolves.toEqual({
+      watched: { status: 'failed' },
+    });
+  });
+});
+
 describe('MissionControlSettingsLoader briefing and sign-in', () => {
   it('sends a signed-in viewer from /settings to the first section', async () => {
     await expect(loader.index(Visit.of({}))).rejects.toMatchObject({
@@ -143,7 +172,14 @@ describe('MissionControlSettingsLoader briefing and sign-in', () => {
     });
   });
 
-  it.each(['index', 'viewer', 'passkeys', 'github', 'briefing'] as const)(
+  it.each([
+    'index',
+    'viewer',
+    'passkeys',
+    'github',
+    'watchedChecks',
+    'briefing',
+  ] as const)(
     'sends a signed-out visitor to sign in from %s without reading anything',
     async (section) => {
       const fetched: string[] = [];

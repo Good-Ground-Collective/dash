@@ -15,14 +15,21 @@ import type {
   GithubRepositoryRecord,
 } from '#src/github-feed/contracts/github-records.ts';
 import type { ConnectionRecords } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
+import type { WatchedCheckPolicy } from '#src/github-feed/services/watched-checks/watched-check-policy.ts';
+import { WatchedStateRollup } from '#src/github-feed/services/watched-checks/watched-state-rollup.ts';
 
 /** One connection's rows as feed items, each with its repository and its link on GitHub. */
 export class FeedView {
   private readonly connectionId: string;
   private readonly records: GithubRecords;
   private readonly repositories: ReadonlyMap<string, GithubRepositoryRecord>;
+  private readonly policy: WatchedCheckPolicy;
 
-  constructor(props: { connection: ConnectionRecords }) {
+  constructor(props: {
+    connection: ConnectionRecords;
+    policy: WatchedCheckPolicy;
+  }) {
+    this.policy = props.policy;
     this.connectionId = props.connection.connectionId;
     this.records = props.connection.records;
     this.repositories = new Map(
@@ -94,36 +101,47 @@ export class FeedView {
     };
   }
 
-  /** Every default branch whose head was read, with the checks of that head. */
+  /** Every default branch whose head was read, with the checks of that head and how its watched checks add up. */
   defaultBranches(): GithubFeedDefaultBranch[] {
     return this.records.repositories.flatMap((repository) => {
       const { defaultBranch, defaultBranchHeadSha: headSha } = repository;
       if (defaultBranch === null || headSha === null) {
         return [];
       }
+      const checks = this.records.checks
+        .filter(
+          (check) =>
+            check.subjectKind === 'default_branch' &&
+            check.subjectNodeId === repository.nodeId &&
+            check.headSha === headSha,
+        )
+        .toSorted(FeedView.failingFirst)
+        .map((check) => {
+          const watchSource = this.policy.watchSource({
+            repository: repository.fullName,
+            checkName: check.name,
+          });
+          return {
+            name: check.name,
+            kind: check.kind,
+            app: check.app,
+            state: check.state,
+            url: check.url,
+            failingSince: check.failingSince,
+            watched: watchSource !== null,
+            watchSource,
+          };
+        });
+
       return [
         {
           repository: { fullName: repository.fullName, url: repository.url },
           branch: defaultBranch,
           headSha,
           state: repository.defaultBranchState,
+          watchedState: WatchedStateRollup.of(checks),
           checksTruncated: repository.defaultBranchChecksTruncated,
-          checks: this.records.checks
-            .filter(
-              (check) =>
-                check.subjectKind === 'default_branch' &&
-                check.subjectNodeId === repository.nodeId &&
-                check.headSha === headSha,
-            )
-            .toSorted(FeedView.failingFirst)
-            .map((check) => ({
-              name: check.name,
-              kind: check.kind,
-              app: check.app,
-              state: check.state,
-              url: check.url,
-              failingSince: check.failingSince,
-            })),
+          checks,
         },
       ];
     });

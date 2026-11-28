@@ -19,6 +19,7 @@ import {
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import { InMemoryGithubRecords } from '#src/github-feed/__tests__/support/in-memory-github-records.ts';
 import { InMemorySyncRequestRepository } from '#src/github-feed/__tests__/support/in-memory-sync-requests.ts';
+import { InMemoryWatchedChecks } from '#src/github-feed/__tests__/support/in-memory-watched-checks.ts';
 import { GithubFeedModule } from '#src/github-feed/module.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import { HttpServer } from '#src/platform/exposures/http/http-server.ts';
@@ -52,6 +53,7 @@ export class GithubFeedHarness {
   readonly webhookEvents = new InMemoryWebhookEventRegistry();
   readonly connections = new InMemoryConnectionRepository();
   readonly syncRequests = new InMemorySyncRequestRepository();
+  readonly watchedChecks = new InMemoryWatchedChecks();
   readonly module: GithubFeedModule;
   private app: ZodFastifyInstance | undefined;
 
@@ -75,6 +77,7 @@ export class GithubFeedHarness {
       writer: this.records,
       connections: this.connections,
       syncRequests: this.syncRequests,
+      watchedChecks: this.watchedChecks,
       webhookEvents: this.webhookEvents,
     });
   }

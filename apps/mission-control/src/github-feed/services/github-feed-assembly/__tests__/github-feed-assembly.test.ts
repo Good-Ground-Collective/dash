@@ -112,12 +112,15 @@ describe('GithubFeedAssembly default branches', () => {
         branch: 'main',
         headSha: 'main-head',
         state: 'failure',
+        watchedState: 'none',
         checksTruncated: false,
         checks: [
           expect.objectContaining({
             name: 'build',
             state: 'failure',
             failingSince,
+            watched: false,
+            watchSource: null,
           }),
           expect.objectContaining({
             name: 'codecov/patch',

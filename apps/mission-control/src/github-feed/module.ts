@@ -14,9 +14,11 @@ import type { WebhookEventRegistry } from '#src/connections/services/webhook-eve
 import type { GithubSource } from '#src/github-feed/contracts/github-source.ts';
 import { githubFeedEvents } from '#src/github-feed/definitions/feed-events/feed-events.ts';
 import { FeedRoutes } from '#src/github-feed/exposures/feed-routes/feed-routes.ts';
+import { WatchedCheckRoutes } from '#src/github-feed/exposures/watched-check-routes/watched-check-routes.ts';
 import type { GithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import type { GithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
 import type { SyncRequestRepository } from '#src/github-feed/repositories/sync-requests/sync-request-repository.ts';
+import type { WatchedChecksRepository } from '#src/github-feed/repositories/watched-checks/watched-checks-repository.ts';
 import { GithubFeedEventHandler } from '#src/github-feed/services/github-feed-event-handler/github-feed-event-handler.ts';
 import {
   type GithubReconcile,
@@ -36,12 +38,13 @@ const githubFeedModulePropsSchema = z.object({
   writer: z.custom<GithubRecordWriter>(),
   connections: z.custom<Pick<ConnectionRepository, 'connectionIdsFor'>>(),
   syncRequests: z.custom<SyncRequestRepository>(),
+  watchedChecks: z.custom<WatchedChecksRepository>(),
   webhookEvents: z.custom<WebhookEventRegistry>(),
 });
 
 /**
  * The GitHub feed: tables every kind of connection writes into, a reconcile that keeps
- * them fresh, and `GET /integrations/github/feed`. Owned connections are read through the
+ * them fresh, `GET /integrations/github/feed`, and the routes that choose which checks the feed watches. Owned connections are read through the
  * GitHub integration's activity feed; without the App configured there is nothing to read.
  * Webhook events the feed shows read their connection again within seconds.
  */
@@ -91,10 +94,16 @@ export class GithubFeedModule
     }
     const routes = new FeedRoutes({
       reader: props.reader,
+      checks: props.watchedChecks,
+      identity: props.identity,
+    });
+    const watchedCheckRoutes = new WatchedCheckRoutes({
+      checks: props.watchedChecks,
       identity: props.identity,
     });
     this.plugin = async (app) => {
       routes.register(app);
+      watchedCheckRoutes.register(app);
     };
   }
 

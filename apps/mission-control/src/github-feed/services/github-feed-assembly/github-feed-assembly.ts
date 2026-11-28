@@ -4,6 +4,7 @@ import type {
 } from '#src/github-feed/contracts/github-feed.ts';
 import type { ConnectionRecords } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import { FeedView } from '#src/github-feed/services/github-feed-assembly/feed-view.ts';
+import { WatchedCheckPolicy } from '#src/github-feed/services/watched-checks/watched-check-policy.ts';
 
 interface Item {
   id: string;
@@ -12,12 +13,16 @@ interface Item {
 /**
  * The feed's groups, built from stored rows. It reads every connection the same way,
  * whatever its kind, and filters by the login each connection was read for. An item two
- * connections both see appears once.
+ * connections both see appears once. The policy says which default-branch checks count; with
+ * none given, nothing is watched.
  */
 export class GithubFeedAssembly {
-  static assemble(connections: readonly ConnectionRecords[]): GithubFeed {
+  static assemble(
+    connections: readonly ConnectionRecords[],
+    policy: WatchedCheckPolicy = new WatchedCheckPolicy(),
+  ): GithubFeed {
     const groups = connections.map((connection) =>
-      GithubFeedAssembly.groupsOf(connection),
+      GithubFeedAssembly.groupsOf({ connection, policy }),
     );
     return {
       connections: connections.map((connection) => ({
@@ -63,7 +68,11 @@ export class GithubFeedAssembly {
     };
   }
 
-  private static groupsOf(connection: ConnectionRecords) {
+  private static groupsOf(props: {
+    connection: ConnectionRecords;
+    policy: WatchedCheckPolicy;
+  }) {
+    const { connection } = props;
     const { records, viewerLogin } = connection;
     const me = viewerLogin?.toLowerCase() ?? null;
     const assigned = (role: 'review_requested' | 'assignee') =>
@@ -77,7 +86,7 @@ export class GithubFeedAssembly {
       );
     const requested = assigned('review_requested');
     const mine = assigned('assignee');
-    const view = new FeedView({ connection });
+    const view = new FeedView({ connection, policy: props.policy });
 
     const open = records.pullRequests.filter(
       (pullRequest) => pullRequest.state === 'open',

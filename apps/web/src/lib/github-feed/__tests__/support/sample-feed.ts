@@ -1,5 +1,6 @@
 import type {
   GithubFeed,
+  GithubFeedCheck,
   GithubFeedConnection,
   GithubFeedDefaultBranch,
   GithubFeedIssue,
@@ -65,6 +66,20 @@ export class SampleFeed {
     };
   }
 
+  static check(overrides: Partial<GithubFeedCheck> = {}): GithubFeedCheck {
+    return {
+      name: 'build',
+      kind: 'check_run',
+      app: 'github-actions',
+      state: 'success',
+      url: null,
+      failingSince: null,
+      watched: false,
+      watchSource: null,
+      ...overrides,
+    };
+  }
+
   static defaultBranch(
     overrides: Partial<GithubFeedDefaultBranch> = {},
   ): GithubFeedDefaultBranch {
@@ -76,6 +91,7 @@ export class SampleFeed {
       branch: 'main',
       headSha: 'def456',
       state: 'success',
+      watchedState: 'none',
       checksTruncated: false,
       checks: [],
       ...overrides,

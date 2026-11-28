@@ -3,6 +3,10 @@ import { linkSchema } from '#lib/api/github-account-contracts.ts';
 
 const checkStateSchema = z.enum(['pending', 'success', 'failure']);
 
+const watchSourceSchema = z.enum(['rule', 'repo']);
+
+const watchedStateSchema = z.enum(['failing', 'pending', 'passing', 'none']);
+
 const checkOutcomeSchema = z.enum([
   'success',
   'failure',
@@ -116,6 +120,16 @@ export const githubFeedCheckSchema = z.object({
     .describe(
       'When the check began failing, kept only across consecutive failing reads. A pending, success, neutral or skipped read clears it, so a later failure starts afresh. Null unless it is failing.',
     ),
+  watched: z
+    .boolean()
+    .describe(
+      'Whether the check counts toward `watchedState`: a repository says to watch it, or a rule matches its name and the repository doesn’t ignore it.',
+    ),
+  watchSource: watchSourceSchema
+    .nullable()
+    .describe(
+      'What made the check watched: a rule for every repository, or this repository’s own exception. Null when it isn’t watched.',
+    ),
 });
 
 export const githubFeedDefaultBranchSchema = z.object({
@@ -127,6 +141,9 @@ export const githubFeedDefaultBranchSchema = z.object({
     .describe(
       'How the head’s checks add up. Null when the head has no checks or Dash could not read them.',
     ),
+  watchedState: watchedStateSchema.describe(
+    'How the head’s watched checks add up, ignoring the rest. `none` when nothing on the head is watched, and then the repository is in no failure count.',
+  ),
   checksTruncated: z
     .boolean()
     .describe(
@@ -187,6 +204,8 @@ export const githubFeedSchema = z.object({
   assignedIssues: z.array(githubFeedIssueSchema),
 });
 
+export type WatchedState = z.infer<typeof watchedStateSchema>;
+export type WatchSource = z.infer<typeof watchSourceSchema>;
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
