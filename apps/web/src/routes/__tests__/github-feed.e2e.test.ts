@@ -235,7 +235,7 @@ test('Settings › Connections lists owned installs with where to manage them', 
   await page.request.post(
     `${missionControl}/integrations/github/__stub/scenario?name=linked`,
   );
-  await page.goto('/settings');
+  await page.goto('/settings/github');
 
   const connections = page.getByRole('region', { name: 'Connections' });
   const installs = connections.getByRole('list', { name: 'GitHub installs' });
@@ -278,7 +278,7 @@ test('when the feed fails, home still renders with an inline error', async () =>
   await expect(
     page.getByRole('status').filter({ hasText: 'GitHub activity didn’t load' }),
   ).toBeVisible();
-  await page.goto('/settings');
+  await page.goto('/settings/github');
   await expect(page.getByRole('region', { name: 'Connections' })).toContainText(
     'didn’t list your connections',
   );

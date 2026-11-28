@@ -9,4 +9,4 @@ const settingsLoader: SettingsLoader = new MissionControlSettingsLoader({
   apiBaseUrl: API_BASE_URL,
 });
 
-export const load: PageServerLoad = settingsLoader.load;
+export const load: PageServerLoad = settingsLoader.index;

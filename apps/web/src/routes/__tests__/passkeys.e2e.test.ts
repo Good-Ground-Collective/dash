@@ -235,6 +235,11 @@ test('settings adds, renames and removes passkeys, keeping the last', async () =
     .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
     .click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('link', { name: 'Passkeys' })
+    .click();
+  await expect(page).toHaveURL('/settings/passkeys');
   const passkeys = page.getByRole('list', { name: 'Your passkeys' });
 
   await expect(passkeys.getByRole('listitem')).toHaveCount(1);
@@ -263,6 +268,7 @@ test('settings adds, renames and removes passkeys, keeping the last', async () =
 test('signed out: no renewals, autofill-ready sign-in, setup closed', async () => {
   const { page } = device;
   await device.setPresence(false);
+  await page.goto('/settings/profile');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL('/sign-in');
 

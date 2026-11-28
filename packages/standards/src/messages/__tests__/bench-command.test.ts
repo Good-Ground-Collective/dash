@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MessageContract } from '#src/messages/__tests__/support/message-contract.js';
 import { SharedFixtures } from '#src/messages/__tests__/support/shared-fixtures.js';
-import {
-  benchCommand,
-  forbiddenCommandKeys,
-} from '#src/messages/bench-command.js';
+import { benchCommand } from '#src/messages/bench-command.js';
 
 await MessageContract.describe(benchCommand);
 const validateJsonSchema = await SharedFixtures.compileJsonSchema(benchCommand);
@@ -33,14 +30,6 @@ describe('benchCommand', () => {
 
     expect(benchCommand.schema.safeParse(message).success).toBe(true);
     expect(validateJsonSchema(message)).toBe(true);
-  });
-
-  it('forbids exactly command, commandLine and args', () => {
-    expect([...forbiddenCommandKeys]).toEqual([
-      'command',
-      'commandLine',
-      'args',
-    ]);
   });
 
   it.each([

@@ -99,11 +99,10 @@
 </script>
 
 <svelte:head>
-  <title>Service accounts · Dash</title>
+  <title>Service accounts · Settings · Dash</title>
 </svelte:head>
 
 <section class="page" aria-labelledby="service-accounts-title">
-  <a class="back" href="/settings">Settings</a>
   <header class="heading">
     <div>
       <h1 id="service-accounts-title">Service accounts</h1>
@@ -248,21 +247,6 @@
     display: grid;
     gap: var(--space-5);
     max-width: 52rem;
-  }
-
-  .back {
-    justify-self: start;
-    font-size: var(--font-size-sm);
-    color: var(--ink-muted);
-    text-decoration: none;
-  }
-
-  .back::before {
-    content: '← ';
-  }
-
-  .back:hover {
-    color: var(--ink);
   }
 
   .heading {

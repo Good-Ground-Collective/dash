@@ -167,7 +167,7 @@ test('adds a passkey on another device, names it, and continues to GitHub', asyn
     page.getByRole('heading', { name: 'Connect GitHub' }),
   ).toBeFocused();
 
-  await page.goto('/settings');
+  await page.goto('/settings/passkeys');
   await expect(
     page.getByRole('list', { name: 'Your passkeys' }).getByText('Phone'),
   ).toBeVisible();

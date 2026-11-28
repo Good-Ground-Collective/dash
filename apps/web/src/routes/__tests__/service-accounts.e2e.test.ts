@@ -34,7 +34,11 @@ test.beforeAll(async ({ browser, baseURL }, testInfo) => {
 
 test('settings links to an empty service accounts page', async () => {
   await page.goto('/settings');
-  await page.getByRole('link', { name: 'Manage' }).click();
+  await expect(page).toHaveURL('/settings/profile');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('link', { name: 'Service accounts' })
+    .click();
 
   await expect(page).toHaveURL('/settings/service-accounts');
   await expect(
@@ -118,7 +122,7 @@ test('revoking a key and removing an account', async () => {
 });
 
 test('a stale session confirms with a passkey, then issues the key with the account’s scopes', async () => {
-  await page.goto('/settings');
+  await page.goto('/settings/passkeys');
   await page.getByLabel('Add a passkey').fill('Desk');
   await page.getByRole('button', { name: 'Add passkey' }).click();
   await expect(

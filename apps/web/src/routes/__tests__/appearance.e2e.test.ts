@@ -12,7 +12,7 @@ class Appearance {
   static async start(page: Page): Promise<void> {
     await page.request.post(`${missionControl}/api/auth/__stub/reset`);
     await page.request.post(`${missionControl}/api/auth/__stub/sign-in`);
-    await page.goto('/settings');
+    await page.goto('/settings/appearance');
     await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
   }
 
@@ -40,7 +40,7 @@ test('switching to dark applies at once and survives a reload', async ({
   await expect(html).toHaveAttribute('data-mode', 'dark');
   await expect(mode.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await page.waitForLoadState('networkidle');
-  const served = await page.request.get('/settings');
+  const served = await page.request.get('/settings/appearance');
   expect(await served.text()).toContain('data-mode="dark"');
   await page.reload();
   await expect(html).toHaveAttribute('data-mode', 'dark');
