@@ -53,6 +53,26 @@ export interface GithubAppSettings {
   webhookSecret: string;
 }
 
+export interface BriefingPrices {
+  inputUsdPerMTok: number;
+  cachedInputUsdPerMTok: number;
+  outputUsdPerMTok: number;
+}
+
+export interface BriefingSettings {
+  apiKey: string;
+  model: string;
+  prices: BriefingPrices;
+  monthlyBudgetUsd: number;
+  maxOutputTokens: number;
+}
+
+const usdSchema = z
+  .string()
+  .regex(/^\d+(\.\d+)?$/u, 'Expected a decimal number such as 0.10')
+  .transform(Number)
+  .pipe(z.number().min(0));
+
 export const appConfigSchema = z
   .object({
     NODE_ENV: environmentSchema,
@@ -81,6 +101,43 @@ export const appConfigSchema = z
     GITHUB_APP_CLIENT_SECRET: optionalSecretSchema,
     GITHUB_APP_PRIVATE_KEY: optionalSecretSchema,
     GITHUB_WEBHOOK_SECRET: optionalSecretSchema,
+    OPENAI_API_KEY: optionalSecretSchema.describe(
+      'Turns the AI briefing on. Unset, the briefing is off and production still boots.',
+    ),
+    BRIEFING_MODEL: z
+      .string()
+      .min(1)
+      .default('gpt-6-luna')
+      .describe(
+        "The OpenAI model. gpt-6-luna is OpenAI's most efficient model for high-volume tasks, checked 2026-11-27.",
+      ),
+    BRIEFING_INPUT_USD_PER_MTOK: usdSchema
+      .default(0.1)
+      .describe(
+        'USD per million input tokens. OpenAI has no pricing API, so this is the Standard tier, short context (up to 272K input) estimate from its pricing page, checked 2026-11-27.',
+      ),
+    BRIEFING_CACHED_INPUT_USD_PER_MTOK: usdSchema
+      .default(0.01)
+      .describe(
+        'USD per million cached input tokens, Standard tier, short context, from the pricing page checked 2026-11-27.',
+      ),
+    BRIEFING_OUTPUT_USD_PER_MTOK: usdSchema
+      .default(0.5)
+      .describe(
+        'USD per million output tokens, Standard tier, short context, from the pricing page checked 2026-11-27.',
+      ),
+    BRIEFING_MONTHLY_BUDGET_USD: usdSchema
+      .default(100)
+      .describe("The briefing's monthly spend budget in USD."),
+    BRIEFING_MAX_OUTPUT_TOKENS: z
+      .string()
+      .regex(/^\d+$/u, 'Expected a positive whole number')
+      .transform(Number)
+      .pipe(z.number().int().positive())
+      .default(4000)
+      .describe(
+        'The per-run ceiling, sent as max_output_tokens. It includes reasoning tokens.',
+      ),
   })
   .refine(
     (env) => {
@@ -161,6 +218,20 @@ export const appConfigSchema = z
             privateKey: env.GITHUB_APP_PRIVATE_KEY,
             webhookSecret: env.GITHUB_WEBHOOK_SECRET,
           },
+    briefing:
+      env.OPENAI_API_KEY === undefined
+        ? null
+        : {
+            apiKey: env.OPENAI_API_KEY,
+            model: env.BRIEFING_MODEL,
+            prices: {
+              inputUsdPerMTok: env.BRIEFING_INPUT_USD_PER_MTOK,
+              cachedInputUsdPerMTok: env.BRIEFING_CACHED_INPUT_USD_PER_MTOK,
+              outputUsdPerMTok: env.BRIEFING_OUTPUT_USD_PER_MTOK,
+            },
+            monthlyBudgetUsd: env.BRIEFING_MONTHLY_BUDGET_USD,
+            maxOutputTokens: env.BRIEFING_MAX_OUTPUT_TOKENS,
+          },
   }));
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -175,6 +246,8 @@ export class AppConfig {
   readonly authSecret: string;
   /** The release tag and commit `bin/image` bakes in. Unset, the version is `dev` and the commit null. */
   readonly build: { version: string; commit: string | null };
+  /** The AI briefing's OpenAI settings, or null when `OPENAI_API_KEY` is unset and the briefing is off. */
+  readonly briefing: BriefingSettings | null;
   readonly corsOrigins: readonly string[];
   readonly databaseUrl: string;
   readonly environment: Environment;
@@ -204,6 +277,7 @@ export class AppConfig {
     this.authBaseUrl = config.authBaseUrl;
     this.build = config.build;
     this.githubApp = config.githubApp;
+    this.briefing = config.briefing;
     this.secureCookies = config.environment === 'production';
     this.apiKeyPrefix =
       config.environment === 'production' ? 'dash_live_' : 'dash_dev_';

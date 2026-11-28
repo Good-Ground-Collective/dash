@@ -36,6 +36,7 @@ run+=(
   --env DASH_BETTER_AUTH_SECRET --env DASH_DATABASE_URL
   --env DASH_GITHUB_APP_ID --env DASH_GITHUB_APP_SLUG --env DASH_GITHUB_APP_CLIENT_ID
   --env DASH_GITHUB_APP_CLIENT_SECRET --env DASH_GITHUB_APP_PRIVATE_KEY --env DASH_GITHUB_WEBHOOK_SECRET
+  --env DASH_OPENAI_API_KEY
 )
 [[ $common == "$root"/* ]] || run+=(--volume "$common:$common")
 [[ -d $HOME/.ssh ]] && run+=(--volume "$HOME/.ssh:/root/.ssh:ro")

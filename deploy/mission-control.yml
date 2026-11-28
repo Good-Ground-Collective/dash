@@ -48,6 +48,7 @@ env:
     - GITHUB_APP_CLIENT_SECRET
     - GITHUB_APP_PRIVATE_KEY
     - GITHUB_WEBHOOK_SECRET
+    - OPENAI_API_KEY
 
 ssh:
   user: dash

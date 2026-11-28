@@ -363,6 +363,7 @@ jobs:
           DASH_GITHUB_APP_CLIENT_SECRET: ${{ secrets.DASH_GITHUB_APP_CLIENT_SECRET }}
           DASH_GITHUB_APP_PRIVATE_KEY: ${{ secrets.DASH_GITHUB_APP_PRIVATE_KEY }}
           DASH_GITHUB_WEBHOOK_SECRET: ${{ secrets.DASH_GITHUB_WEBHOOK_SECRET }}
+          DASH_OPENAI_API_KEY: ${{ secrets.DASH_OPENAI_API_KEY }}
 
   deploy:
     needs: [release, images]
@@ -449,6 +450,7 @@ jobs:
           DASH_GITHUB_APP_CLIENT_SECRET: ${{ secrets.DASH_GITHUB_APP_CLIENT_SECRET }}
           DASH_GITHUB_APP_PRIVATE_KEY: ${{ secrets.DASH_GITHUB_APP_PRIVATE_KEY }}
           DASH_GITHUB_WEBHOOK_SECRET: ${{ secrets.DASH_GITHUB_WEBHOOK_SECRET }}
+          DASH_OPENAI_API_KEY: ${{ secrets.DASH_OPENAI_API_KEY }}
 
       - name: Deploy web
         if: steps.gate.outputs.go == 'true'
@@ -464,6 +466,7 @@ jobs:
           DASH_GITHUB_APP_CLIENT_SECRET: ${{ secrets.DASH_GITHUB_APP_CLIENT_SECRET }}
           DASH_GITHUB_APP_PRIVATE_KEY: ${{ secrets.DASH_GITHUB_APP_PRIVATE_KEY }}
           DASH_GITHUB_WEBHOOK_SECRET: ${{ secrets.DASH_GITHUB_WEBHOOK_SECRET }}
+          DASH_OPENAI_API_KEY: ${{ secrets.DASH_OPENAI_API_KEY }}
 
       - name: Smoke check
         if: steps.gate.outputs.go == 'true'

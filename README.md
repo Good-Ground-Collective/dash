@@ -231,6 +231,14 @@ Pull requests run `image-check` for each app, so a broken image fails before mer
 
    Kamal's env file turns the key's newlines into literal `\n`; Mission Control turns them back. Locally, `bin/kamal` passes the same `DASH_GITHUB_*` names through from the environment.
 
+   The AI briefing is optional and Mission Control boots without it. To turn it on, set the OpenAI key as a secret; Mission Control reads it as `OPENAI_API_KEY`:
+
+   ```sh
+   gh secret set DASH_OPENAI_API_KEY --env production
+   ```
+
+   The model, prices, monthly budget and output ceiling default sensibly (see `apps/mission-control/.env.example`); override them with `BRIEFING_MODEL`, `BRIEFING_INPUT_USD_PER_MTOK`, `BRIEFING_CACHED_INPUT_USD_PER_MTOK`, `BRIEFING_OUTPUT_USD_PER_MTOK`, `BRIEFING_MONTHLY_BUDGET_USD` and `BRIEFING_MAX_OUTPUT_TOKENS` under `env.clear` in `deploy/mission-control.yml` when needed.
+
 9. Delete the repository-level `DASH_BETTER_AUTH_SECRET` and `DASH_DATABASE_URL` secrets, so only `main` deploys can read them: `gh secret delete DASH_BETTER_AUTH_SECRET` and `gh secret delete DASH_DATABASE_URL`.
 
 ### Deploying by hand

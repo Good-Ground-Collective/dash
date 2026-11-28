@@ -216,3 +216,82 @@ describe('AppConfig GitHub App', () => {
     ).toThrow(/or none of them/u);
   });
 });
+
+describe('AppConfig briefing', () => {
+  const briefingEnv = { ...developmentEnv, OPENAI_API_KEY: 'sk-test' };
+  const customBriefing = {
+    OPENAI_API_KEY: 'sk-custom',
+    BRIEFING_MODEL: 'gpt-custom',
+    BRIEFING_INPUT_USD_PER_MTOK: '1.25',
+    BRIEFING_CACHED_INPUT_USD_PER_MTOK: '0.125',
+    BRIEFING_OUTPUT_USD_PER_MTOK: '10',
+    BRIEFING_MONTHLY_BUDGET_USD: '25.5',
+    BRIEFING_MAX_OUTPUT_TOKENS: '2000',
+  };
+
+  it.each([
+    ['development', developmentEnv],
+    ['production', productionEnv],
+  ])('is off in %s when the API key is unset', (_label, env) => {
+    expect(new AppConfig(env).briefing).toBeNull();
+  });
+
+  it('rejects an empty API key instead of silently turning the briefing off', () => {
+    expect(
+      () => new AppConfig({ ...developmentEnv, OPENAI_API_KEY: '' }),
+    ).toThrow(/OPENAI_API_KEY/u);
+  });
+
+  it('uses the verified defaults when only the key is set', () => {
+    expect(new AppConfig(briefingEnv).briefing).toEqual({
+      apiKey: 'sk-test',
+      model: 'gpt-6-luna',
+      prices: {
+        inputUsdPerMTok: 0.1,
+        cachedInputUsdPerMTok: 0.01,
+        outputUsdPerMTok: 0.5,
+      },
+      monthlyBudgetUsd: 100,
+      maxOutputTokens: 4000,
+    });
+  });
+
+  it('reads a full custom group', () => {
+    expect(
+      new AppConfig({ ...developmentEnv, ...customBriefing }).briefing,
+    ).toEqual({
+      apiKey: 'sk-custom',
+      model: 'gpt-custom',
+      prices: {
+        inputUsdPerMTok: 1.25,
+        cachedInputUsdPerMTok: 0.125,
+        outputUsdPerMTok: 10,
+      },
+      monthlyBudgetUsd: 25.5,
+      maxOutputTokens: 2000,
+    });
+  });
+});
+
+describe('AppConfig briefing validation', () => {
+  const briefingEnv = { ...developmentEnv, OPENAI_API_KEY: 'sk-test' };
+
+  it.each([
+    ['BRIEFING_INPUT_USD_PER_MTOK', 'cheap'],
+    ['BRIEFING_CACHED_INPUT_USD_PER_MTOK', 'cheap'],
+    ['BRIEFING_OUTPUT_USD_PER_MTOK', 'cheap'],
+    ['BRIEFING_MONTHLY_BUDGET_USD', 'lots'],
+    ['BRIEFING_MONTHLY_BUDGET_USD', '-5'],
+    ['BRIEFING_MAX_OUTPUT_TOKENS', '0'],
+    ['BRIEFING_MAX_OUTPUT_TOKENS', '-1'],
+    ['BRIEFING_MAX_OUTPUT_TOKENS', '1.5'],
+    ['BRIEFING_MAX_OUTPUT_TOKENS', 'many'],
+    ['BRIEFING_MODEL', ''],
+  ])('rejects %s=%j and names the variable', (name, value) => {
+    const build = (): AppConfig =>
+      new AppConfig({ ...briefingEnv, [name]: value });
+
+    expect(build).toThrow(ConfigError);
+    expect(build).toThrow(new RegExp(name, 'u'));
+  });
+});
