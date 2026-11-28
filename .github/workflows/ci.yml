@@ -116,6 +116,8 @@ jobs:
       - name: End-to-end test affected packages
         if: github.event_name == 'pull_request'
         run: pnpm turbo run test:e2e --affected
+        env:
+          TURBO_SCM_BASE: origin/${{ github.base_ref }}
 
       - name: End-to-end test all packages
         if: github.event_name == 'push'
