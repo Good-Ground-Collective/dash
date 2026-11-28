@@ -137,4 +137,21 @@ describe('briefing sections', () => {
     expect(read.latest?.sections).toBeNull();
     expect(read.latest?.paragraphs).toHaveLength(1);
   });
+
+  it('rejects a run whose sections are malformed instead of showing an empty briefing', async () => {
+    const malformed = {
+      ...SampleBriefings.run(),
+      sections: { opening: 'text', actions: [], closing: [] },
+    };
+
+    const client = new HttpBriefings({
+      baseUrl: 'https://api.example.test',
+      fetch: new RecordingFetch({
+        response: () =>
+          Response.json({ ...SampleBriefings.briefings(), latest: malformed }),
+      }).fetch,
+    });
+
+    await expect(client.latest()).rejects.toThrow();
+  });
 });

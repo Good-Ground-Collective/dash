@@ -51,11 +51,12 @@ test('on a phone the card has no sideways scroll and a full-size Regenerate', as
   );
   const button = await briefing.regenerate().boundingBox();
   const card = await briefing.region().boundingBox();
+  if (button === null || card === null) {
+    throw new Error('The regenerate button and the card must both be laid out');
+  }
   expect(overflow).toBeLessThanOrEqual(0);
-  expect(button?.height ?? 0).toBeGreaterThanOrEqual(touchTarget);
-  expect((card?.x ?? 0) + (card?.width ?? 999)).toBeLessThanOrEqual(
-    phone.width,
-  );
+  expect(button.height).toBeGreaterThanOrEqual(touchTarget);
+  expect(card.x + card.width).toBeLessThanOrEqual(phone.width);
 });
 
 test('the generated and data-age line sits under the title on a phone', async () => {
@@ -69,7 +70,8 @@ test('the generated and data-age line sits under the title on a phone', async ()
     .region()
     .getByText(/^Generated /u)
     .boundingBox();
-  expect(generated?.y ?? 0).toBeGreaterThan(
-    (title?.y ?? 0) + (title?.height ?? 0) - 1,
-  );
+  if (title === null || generated === null) {
+    throw new Error('The title and the generated line must both be laid out');
+  }
+  expect(generated.y).toBeGreaterThan(title.y + title.height - 1);
 });

@@ -76,7 +76,7 @@ export const briefingRunSchema = z.object({
   sourceCounts: briefingCountsSchema.nullable(),
   sections: briefingSectionsSchema
     .nullable()
-    .catch(null)
+    .default(null)
     .describe(
       'The briefing. Null for a run that wrote none, and for runs from before the briefing had this shape, which keep their `paragraphs`.',
     ),
