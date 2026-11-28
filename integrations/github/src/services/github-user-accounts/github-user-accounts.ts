@@ -10,6 +10,10 @@ import { z } from 'zod';
 import { githubProfileSchema } from '#src/contracts/github-account.ts';
 import type { GithubRequest } from '#src/contracts/github-request.ts';
 import type { GithubInstallations } from '#src/services/github-installations/github-installations.ts';
+import {
+  githubErrorStatusSchema,
+  GithubUserToken,
+} from '#src/services/github-user-token/github-user-token.ts';
 
 const pageSize = 100;
 
@@ -80,9 +84,6 @@ const membershipSchema = z
     return role === 'member' ? 'member' : null;
   });
 
-/** How `@octokit/request` reports an HTTP error. */
-const statusSchema = z.object({ status: z.number() });
-
 /** GitHub answers a rate limit with 403. A primary limit sends `x-ratelimit-remaining: 0` and a secondary one may send `retry-after`, but either may come with only its message, which a refused permission never carries. */
 const rateLimitedSchema = z
   .object({
@@ -122,7 +123,7 @@ export class GithubUserAccounts {
   }
 
   async list(props: { accessToken: string }): Promise<UserAccounts> {
-    const [personal, listed] = await GithubUserAccounts.asUser(async () =>
+    const [personal, listed] = await GithubUserToken.call(async () =>
       Promise.all([
         this.profile(props),
         this.readPages({ ...props, schema: installationPageSchema }),
@@ -146,7 +147,7 @@ export class GithubUserAccounts {
   async listInstallationIds(props: {
     accessToken: string;
   }): Promise<readonly string[]> {
-    return GithubUserAccounts.asUser(async () =>
+    return GithubUserToken.call(async () =>
       this.readPages({ ...props, schema: installationIdPageSchema }),
     );
   }
@@ -155,7 +156,7 @@ export class GithubUserAccounts {
     accessToken: string;
   }): Promise<AccountProfile> {
     const { data } = await this.request('GET /user', {
-      headers: GithubUserAccounts.bearer(props),
+      headers: GithubUserToken.bearer(props),
     });
     return githubProfileSchema.parse(data);
   }
@@ -217,15 +218,15 @@ export class GithubUserAccounts {
         : null;
     }
 
-    return GithubUserAccounts.asUser(async () => {
+    return GithubUserToken.call(async () => {
       try {
         const { data } = await this.request(
           'GET /user/memberships/orgs/{org}',
-          { headers: GithubUserAccounts.bearer(props), org: account.login },
+          { headers: GithubUserToken.bearer(props), org: account.login },
         );
         return membershipSchema.parse(data);
       } catch (error) {
-        const status = statusSchema.safeParse(error).data?.status;
+        const status = githubErrorStatusSchema.safeParse(error).data?.status;
         const refused =
           status === 404 ||
           (status === 403 && !rateLimitedSchema.safeParse(error).success);
@@ -244,7 +245,7 @@ export class GithubUserAccounts {
     const installations: T[] = [];
     for (let page = 1; ; page += 1) {
       const { data } = await this.request('GET /user/installations', {
-        headers: GithubUserAccounts.bearer(props),
+        headers: GithubUserToken.bearer(props),
         per_page: pageSize,
         page,
       });
@@ -282,21 +283,5 @@ export class GithubUserAccounts {
       }
       return { failed: true, value: null };
     }
-  }
-
-  /** GitHub answers 401 to a user token that was revoked or has expired. Only calls made with the user token go through here. */
-  private static async asUser<T>(work: () => Promise<T>): Promise<T> {
-    try {
-      return await work();
-    } catch (error) {
-      if (statusSchema.safeParse(error).data?.status === 401) {
-        throw new GrantRevokedError({ provider: 'github', cause: error });
-      }
-      throw error;
-    }
-  }
-
-  private static bearer(props: { accessToken: string }) {
-    return { authorization: `Bearer ${props.accessToken}` };
   }
 }

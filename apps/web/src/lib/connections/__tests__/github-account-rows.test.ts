@@ -80,7 +80,7 @@ describe('GithubAccountRows.view', () => {
       label: 'Installed · details missing',
     });
     expect(incomplete.role).toBe('Organisation');
-    expect(incomplete.action.label).toBe('Manage');
+    expect(incomplete.action?.label).toBe('Manage');
   });
 
   it('offers Install app on an installable account', () => {
@@ -97,6 +97,46 @@ describe('GithubAccountRows.view', () => {
       role: 'Personal account',
       badge: { kind: 'installable', label: null },
       action: { label: 'Install app', primary: true },
+    });
+  });
+});
+
+describe('GithubAccountRows.view requests', () => {
+  it('offers Request install on an organisation the person looked up', () => {
+    const row = GithubAccountRows.view(
+      Sample.entry(
+        {
+          state: 'requestable',
+          installUrl:
+            'https://github.com/apps/dash/installations/new/permissions?target_id=42',
+        },
+        null,
+      ),
+    );
+
+    expect(row).toMatchObject({
+      role: 'Organisation',
+      badge: { kind: 'installable', label: null },
+      action: {
+        label: 'Request install',
+        href: 'https://github.com/apps/dash/installations/new/permissions?target_id=42',
+        primary: true,
+      },
+    });
+  });
+
+  it('shows a requested organisation as pending, with nothing to click', () => {
+    const row = GithubAccountRows.view(
+      Sample.entry(
+        { state: 'requested', requestedAt: '2026-11-26T12:00:00Z' },
+        null,
+      ),
+    );
+
+    expect(row).toMatchObject({
+      badge: { kind: 'requested', label: 'Install requested · pending' },
+      detail: expect.stringMatching(/once an owner approves/u),
+      action: null,
     });
   });
 });

@@ -4,6 +4,9 @@ import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
 import {
   type GithubAccounts,
   githubAccountsSchema,
+  type OrganizationLookup,
+  organizationLoginSchema,
+  organizationLookupSchema,
   returnToSchema,
 } from '#lib/api/github-account-contracts.ts';
 
@@ -28,6 +31,11 @@ export type HttpGithubAccountsProps = z.input<
 export interface GithubAccountReads {
   /** `returnTo` is the web path GitHub's redirects come back to. Rejects with a `MissionControlError`, code `SIGN_IN_REQUIRED` when signed out. */
   list(props: { returnTo: string }): Promise<GithubAccounts>;
+  /** Finds an organisation by login, with an install link that asks its owners. Rejects like `list`. */
+  lookUp(props: {
+    login: string;
+    returnTo: string;
+  }): Promise<OrganizationLookup>;
 }
 
 /** Calls Mission Control's `GET /integrations/github/accounts` with credentials. */
@@ -47,12 +55,32 @@ export class HttpGithubAccounts implements GithubAccountReads {
     const path = 'integrations/github/accounts';
     const url = this.endpoint.url(path);
     url.searchParams.set('returnTo', returnToSchema.parse(props.returnTo));
-    const response = await this.fetcher(url, {
+    const response = await this.get(url);
+    return this.endpoint.read({ path, response, schema: githubAccountsSchema });
+  }
+
+  async lookUp(props: {
+    login: string;
+    returnTo: string;
+  }): Promise<OrganizationLookup> {
+    const path = 'integrations/github/accounts/lookup';
+    const url = this.endpoint.url(path);
+    url.searchParams.set('login', organizationLoginSchema.parse(props.login));
+    url.searchParams.set('returnTo', returnToSchema.parse(props.returnTo));
+    const response = await this.get(url);
+    return this.endpoint.read({
+      path,
+      response,
+      schema: organizationLookupSchema,
+    });
+  }
+
+  private async get(url: URL): Promise<Response> {
+    return this.fetcher(url, {
       credentials: 'include',
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(this.timeoutMs),
     });
-    return this.endpoint.read({ path, response, schema: githubAccountsSchema });
   }
 
   /** For the page: global `fetch`, which sends the Mission Control session cookie. */

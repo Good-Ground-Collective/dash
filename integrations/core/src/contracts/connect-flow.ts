@@ -1,4 +1,5 @@
 import type {
+  AccountProfile,
   AuthorizedUser,
   Installation,
   UserAccounts,
@@ -30,6 +31,21 @@ export interface ConnectFlow {
   }): Promise<readonly string[]>;
   /** The person's own account and every installation of the app their token can see, with their role in each. An installation whose role or count fails to load is still listed, marked `incomplete`. Throws `GrantRevokedError` when the provider refuses the token. */
   listUserAccounts(props: { accessToken: string }): Promise<UserAccounts>;
+  /** An organisation by its login, read as the person. Null when no organisation has that login. A provider may not list organisations without the app, so the person names one. Throws `GrantRevokedError` when the provider refuses the token. */
+  findOrganization(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile | null>;
+  /** An account by its id, read as the person. Null when it no longer exists. Throws `GrantRevokedError` when the provider refuses the token. */
+  getAccount(props: {
+    accessToken: string;
+    externalId: string;
+  }): Promise<AccountProfile | null>;
+  /** The organisations where the person behind `login` made their membership public. Never the whole list of their organisations. Throws `GrantRevokedError` when the provider refuses the token. */
+  listPublicOrganizations(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile[]>;
   /** Reads one installation as the app: its account and the repositories it covers. */
   getInstallation(props: { installationId: string }): Promise<Installation>;
   /** Whether the installation is suspended now. Reads only its own record as the app, which works while it is suspended and its repositories can't be read. */

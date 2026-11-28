@@ -4,6 +4,10 @@ import type { OwnedConnection } from '#src/connections/contracts/connections.ts'
 import type { DispatchedDelivery } from '#src/connections/contracts/webhook-events.ts';
 import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
 import type {
+  InstallRequest,
+  InstallRequestRepository,
+} from '#src/connections/repositories/install-requests/install-request-repository.ts';
+import type {
   LinkedAccountRepository,
   StoredLinkedAccount,
 } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
@@ -245,5 +249,46 @@ export class InMemoryWebhookDeliveryRepository implements WebhookDeliveryReposit
       (stored) =>
         stored.provider === provider && stored.deliveryId === deliveryId,
     );
+  }
+}
+
+export class InMemoryInstallRequestRepository implements InstallRequestRepository {
+  /** Each person's requests, keyed by `<user id>:<provider>`. */
+  readonly requests = new Map<string, InstallRequest[]>();
+
+  async record(props: {
+    userId: string;
+    provider: string;
+    accountExternalId: string;
+  }): Promise<void> {
+    const others = (await this.list(props)).filter(
+      ({ accountExternalId }) => accountExternalId !== props.accountExternalId,
+    );
+    this.requests.set(`${props.userId}:${props.provider}`, [
+      ...others,
+      {
+        accountExternalId: props.accountExternalId,
+        requestedAt: new Date().toISOString(),
+      },
+    ]);
+  }
+
+  async list(props: {
+    userId: string;
+    provider: string;
+  }): Promise<InstallRequest[]> {
+    return this.requests.get(`${props.userId}:${props.provider}`) ?? [];
+  }
+
+  async clear(props: {
+    userId: string;
+    provider: string;
+    accountExternalIds: readonly string[];
+  }): Promise<void> {
+    const kept = (await this.list(props)).filter(
+      ({ accountExternalId }) =>
+        !props.accountExternalIds.includes(accountExternalId),
+    );
+    this.requests.set(`${props.userId}:${props.provider}`, kept);
   }
 }

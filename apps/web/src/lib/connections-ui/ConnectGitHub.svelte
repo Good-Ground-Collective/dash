@@ -1,6 +1,7 @@
 <script lang="ts">
   import '#lib/auth-ui/auth-form.css';
   import { onMount, tick } from 'svelte';
+  import type { ConnectableAccount } from '#lib/api/github-account-contracts.ts';
   import type { GithubAccountReads } from '#lib/api/github-accounts.ts';
   import {
     ConnectGithubFlow,
@@ -8,7 +9,12 @@
   } from '#lib/connections/connect-github-flow.ts';
   import type { ConnectResult } from '#lib/connections/connect-results.ts';
   import { GithubAccountRows } from '#lib/connections/github-account-rows.ts';
+  import {
+    type OrganizationLookupOutcome,
+    OrganizationRequestFlow,
+  } from '#lib/connections/organization-request-flow.ts';
   import GithubAccountRow from '#lib/connections-ui/GithubAccountRow.svelte';
+  import RequestOrganization from '#lib/connections-ui/RequestOrganization.svelte';
 
   let {
     accounts,
@@ -23,17 +29,44 @@
   } = $props();
 
   let flow = $derived(new ConnectGithubFlow({ accounts, returnTo }));
+  let requests = $derived(new OrganizationRequestFlow({ accounts, returnTo }));
 
   let current = $state<ConnectGithubState>(ConnectGithubFlow.start());
   let busy = $state(false);
   let summary = $state('');
   let region = $state<HTMLElement>();
 
-  let rows = $derived(
+  /** Organisations the person looked up, shown until the list itself has them. */
+  let lookedUp = $state<ConnectableAccount[]>([]);
+
+  let listed = $derived(
     current.state === 'linked'
-      ? current.accounts.map((entry) => GithubAccountRows.view(entry))
+      ? OrganizationRequestFlow.withLookedUp({
+          accounts: current.accounts,
+          lookedUp,
+        })
       : [],
   );
+  let rows = $derived(listed.map((entry) => GithubAccountRows.view(entry)));
+
+  const addLookedUp = (entry: ConnectableAccount) => {
+    lookedUp = [
+      ...lookedUp.filter(
+        ({ account }) => account.externalId !== entry.account.externalId,
+      ),
+      entry,
+    ];
+    summary = `${entry.account.login} added to the list.`;
+  };
+
+  const restart = (
+    outcome: Exclude<OrganizationLookupOutcome, { kind: 'found' | 'problem' }>,
+  ) => {
+    current =
+      outcome.kind === 'authorize'
+        ? { state: 'authorize', authorizeUrl: outcome.authorizeUrl }
+        : { state: 'signed-out' };
+  };
 
   /**
    * Loads the list. A quiet reload, as when the tab comes back into view, keeps what's shown
@@ -151,6 +184,16 @@
       </button>
     {/if}
   </section>
+
+  {#if current.state === 'linked'}
+    <RequestOrganization
+      flow={requests}
+      {listed}
+      suggestions={current.suggestions}
+      onfound={addLookedUp}
+      onrestart={restart}
+    />
+  {/if}
 </div>
 
 <style>

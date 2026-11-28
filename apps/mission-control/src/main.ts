@@ -6,6 +6,7 @@ import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.t
 import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import { ConnectionsModule } from '#src/connections/module.ts';
 import { DrizzleConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
+import { DrizzleInstallRequestRepository } from '#src/connections/repositories/install-requests/install-request-repository.ts';
 import { DrizzleLinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import { DrizzleWebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 import { InMemoryWebhookEventRegistry } from '#src/connections/services/webhook-event-registry/webhook-event-registry.ts';
@@ -75,6 +76,7 @@ const connections = new ConnectionsModule({
   identity: auth.identity,
   connections: connectionRepository,
   linkedAccounts,
+  installRequests: new DrizzleInstallRequestRepository({ database }),
   deliveries: new DrizzleWebhookDeliveryRepository({ database }),
   webhookEvents,
   secret: config.authSecret,
