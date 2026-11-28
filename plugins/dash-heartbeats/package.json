@@ -3,6 +3,6 @@
   "private": true,
   "description": "The dash-hooks version this plugin installs into its data directory",
   "dependencies": {
-    "@good-ground-collective/dash-hooks": "^1.0.0"
+    "@good-ground-collective/dash-hooks": "^1.1.0"
   }
 }

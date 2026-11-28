@@ -1,7 +1,7 @@
 {
   "name": "dash-heartbeats",
-  "version": "1.0.0",
-  "description": "Writes an agent.heartbeat line to the local Dash outbox on each Claude Code session event, so Dash can show what every session is doing",
+  "version": "1.1.0",
+  "description": "Writes an agent.heartbeat line to the local Dash outbox on each Claude Code session event and relays it to Mission Control, so Dash can show what every session is doing",
   "author": {
     "name": "Good Ground Collective"
   },

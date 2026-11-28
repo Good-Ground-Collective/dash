@@ -1,6 +1,6 @@
 # dash-heartbeats
 
-A Claude Code plugin that reports every session to Dash. On each session event it runs [`@good-ground-collective/dash-hooks`](../../packages/hooks/README.md), which appends an `agent.heartbeat` line to the local outbox under `~/.local/state/dash/`.
+A Claude Code plugin that reports every session to Dash. On each session event it runs [`@good-ground-collective/dash-hooks`](../../packages/hooks/README.md), which appends an `agent.heartbeat` line to the local outbox under `~/.local/state/dash/` and starts the relay that sends the outbox to Mission Control.
 
 ## Install
 

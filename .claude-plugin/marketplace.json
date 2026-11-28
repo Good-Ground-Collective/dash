@@ -8,7 +8,7 @@
     {
       "name": "dash-heartbeats",
       "source": "./plugins/dash-heartbeats",
-      "description": "Writes an agent.heartbeat line to the local Dash outbox on each session event"
+      "description": "Writes an agent.heartbeat line to the local Dash outbox on each session event and relays it to Mission Control"
     }
   ]
 }
