@@ -149,7 +149,7 @@ A major bump (`1.4` → `2.0`) is any change that can break an existing reader o
 
 ### How readers behave
 
-- Readers ignore fields they don't know. Wire schemas use `z.object`, which strips unknown keys, never `z.strictObject`. The one exception is `bench.command`, a `z.looseObject` that rejects `command`, `commandLine` and `args` by name; see the `bench.command` paragraph under [Agent heartbeats](#agent-heartbeats).
+- Readers ignore fields they don't know. Wire schemas use `z.object`, which strips unknown keys, never `z.strictObject`. The one exception is `bench.command`, a `z.looseObject` that rejects `command`, `commandLine` and `args` by name; see the `bench.command` paragraph under [Bench messages](#bench-messages).
 - Readers reject a message whose major version they don't know, and accept any minor version of a major they do. `MessageDefinition` builds this into `schemaVersion`: a `1.0` definition accepts `1.0` and `1.7` and rejects `2.0`.
 
 ### Keeping schemas portable
