@@ -4,6 +4,12 @@
   "tasks": {
     "build": {
       "outputs": ["build/**", ".svelte-kit/output/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["$TURBO_EXTENDS$", "build"]
+    },
+    "test": {
+      "dependsOn": ["$TURBO_EXTENDS$", "typecheck"]
     }
   }
 }

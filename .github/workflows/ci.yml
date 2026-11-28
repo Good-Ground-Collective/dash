@@ -86,6 +86,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: pnpm turbo run lint typecheck test build --affected
         env:
+          TURBO_SCM_BASE: origin/${{ github.base_ref }}
           DASH_TEST_DATABASE_URL: postgres://dash:dash@127.0.0.1:5432/postgres
 
       - name: Verify all packages
@@ -115,6 +116,8 @@ jobs:
       - name: End-to-end test affected packages
         if: github.event_name == 'pull_request'
         run: pnpm turbo run test:e2e --affected
+        env:
+          TURBO_SCM_BASE: origin/${{ github.base_ref }}
 
       - name: End-to-end test all packages
         if: github.event_name == 'push'
