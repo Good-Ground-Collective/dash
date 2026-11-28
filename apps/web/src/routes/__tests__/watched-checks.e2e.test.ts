@@ -139,6 +139,32 @@ test('overriding a check ignores it for that repo only and marks the repo custom
   await expect(Section.row('acme-labs/api')).not.toContainText('custom');
 });
 
+test('a refused save shows its error in that repo’s modal only', async () => {
+  await page.request.post(
+    `${missionControl}/integrations/github/__stub/watched-checks-refuse?repository=acme-labs/api`,
+  );
+
+  await Section.edit('acme-labs/api');
+  await Section.choice({ check: 'build', answer: 'Watch' }).check();
+  await Section.dialog().getByRole('button', { name: 'Save' }).click();
+  await expect(Section.dialog().getByRole('alert')).toContainText(
+    'didn’t save that',
+  );
+
+  await Section.dialog().getByRole('button', { name: 'Cancel' }).click();
+  await expect(Section.dialog()).toBeHidden();
+
+  await Section.edit('night-shift/ops');
+  await expect(Section.dialog().getByRole('alert')).toHaveCount(0);
+  await Section.dialog().getByRole('button', { name: 'Cancel' }).click();
+  await expect(Section.dialog()).toBeHidden();
+
+  await Section.edit('acme-labs/api');
+  await expect(Section.dialog().getByRole('alert')).toContainText(
+    'didn’t save that',
+  );
+});
+
 test('watching a check the rules skip turns the repo red, and cancel discards a change', async () => {
   await Section.edit('acme-labs/api');
   await Section.choice({ check: 'build', answer: 'Watch' }).check();

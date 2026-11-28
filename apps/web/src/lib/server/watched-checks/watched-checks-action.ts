@@ -19,9 +19,9 @@ export type WatchedChecksActionProps = z.input<
 
 export type WatchedChecksActionEvent = Pick<RequestEvent, 'fetch' | 'request'>;
 
-/** What a form action answers: which form it was, and why it didn't go through, or `null`. */
+/** What a form action answers: which form it was, and why it didn't go through, or `null`. A repository save also says which repository it was for. */
 export interface WatchedChecksResult {
-  watched: { form: string; message: string | null };
+  watched: { form: string; message: string | null; repository?: string };
 }
 
 type Reply = WatchedChecksResult | ActionFailure<WatchedChecksResult>;
@@ -107,6 +107,7 @@ export class MissionControlWatchedChecksAction implements WatchedChecksAction {
     const client = this.client(event);
     return this.run({
       form: 'saveRepository',
+      repository: form.repository,
       change: async () => {
         const changes = RepositoryCheckChoices.changes({
           repository: form.repository,
@@ -132,11 +133,14 @@ export class MissionControlWatchedChecksAction implements WatchedChecksAction {
 
   private async run(props: {
     form: string;
+    repository?: string;
     change: () => Promise<void>;
   }): Promise<Reply> {
+    const repository =
+      props.repository === undefined ? {} : { repository: props.repository };
     try {
       await props.change();
-      return { watched: { form: props.form, message: null } };
+      return { watched: { form: props.form, message: null, ...repository } };
     } catch (error) {
       const known =
         error instanceof MissionControlError
@@ -152,6 +156,7 @@ export class MissionControlWatchedChecksAction implements WatchedChecksAction {
         watched: {
           form: props.form,
           message: known ?? 'Mission Control didn’t save that. Try again.',
+          ...repository,
         },
       });
     }

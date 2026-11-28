@@ -36,6 +36,9 @@
     feed={data.watched.feed}
     chosen={data.watched.chosen}
     message={formName === 'saveRepository' ? message : null}
+    messageRepository={formName === 'saveRepository'
+      ? (form?.watched.repository ?? null)
+      : null}
   />
 {/if}
 

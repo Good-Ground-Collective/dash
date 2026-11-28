@@ -12,8 +12,13 @@
     feed,
     chosen,
     message,
-  }: { feed: GithubFeed; chosen: WatchedChecks; message: string | null } =
-    $props();
+    messageRepository,
+  }: {
+    feed: GithubFeed;
+    chosen: WatchedChecks;
+    message: string | null;
+    messageRepository: string | null;
+  } = $props();
 
   let search = $state('');
   let filter = $state<RepositoryFilter>('all');
@@ -117,7 +122,7 @@
     <RepositoryChecksDialog
       branch={editedBranch}
       {chosen}
-      {message}
+      message={editing === messageRepository ? message : null}
       onClose={() => (editing = null)}
     />
   {/key}

@@ -142,7 +142,11 @@ describe('MissionControlWatchedChecksAction saveRepository', () => {
     });
 
     await expect(action.saveRepository(post.event)).resolves.toEqual({
-      watched: { form: 'saveRepository', message: null },
+      watched: {
+        form: 'saveRepository',
+        message: null,
+        repository: 'acme/web',
+      },
     });
     expect(post.sent).toEqual([
       { url: base, method: 'GET' },
@@ -175,5 +179,49 @@ describe('MissionControlWatchedChecksAction saveRepository', () => {
 
     expect(result).toMatchObject({ status: 400 });
     expect(post.sent).toEqual([]);
+  });
+});
+
+describe('MissionControlWatchedChecksAction saveRepository for stale and refused saves', () => {
+  const chosen: WatchedChecks = {
+    rules: [],
+    overrides: [{ repository: 'acme/web', checkName: 'lint', mode: 'watch' }],
+  };
+
+  it('clears an answer for a check the latest run no longer has when it goes back to the rules', async () => {
+    const post = new Post({
+      chosen,
+      fields: {
+        repository: 'acme/web',
+        [WatchedChecksForms.choiceField('lint')]: 'rules',
+      },
+    });
+
+    await action.saveRepository(post.event);
+
+    expect(post.sent).toEqual([
+      { url: base, method: 'GET' },
+      {
+        url: `${base}/overrides?repository=acme%2Fweb&checkName=lint`,
+        method: 'DELETE',
+      },
+    ]);
+  });
+
+  it('says which repository a refused save was for', async () => {
+    const post = new Post({
+      status: 502,
+      fields: {
+        repository: 'acme/web',
+        [WatchedChecksForms.choiceField('build')]: 'watch',
+      },
+    });
+
+    const result = await action.saveRepository(post.event);
+
+    expect(result).toMatchObject({
+      status: 502,
+      data: { watched: { form: 'saveRepository', repository: 'acme/web' } },
+    });
   });
 });

@@ -54,6 +54,39 @@ describe('RepositoryCheckChoices.rows', () => {
   });
 });
 
+describe('RepositoryCheckChoices.rows for answers the latest run no longer has', () => {
+  it('lists them after the latest run’s checks, so choosing Rules can clear them', () => {
+    const rows = RepositoryCheckChoices.rows({
+      branch,
+      chosen: {
+        rules: [{ id: 'r1', pattern: 'Deploy*' }],
+        overrides: [
+          {
+            repository: 'acme-labs/api',
+            checkName: 'Deploy old',
+            mode: 'ignore',
+          },
+          { repository: 'acme-labs/web', checkName: 'gone', mode: 'watch' },
+        ],
+      },
+    });
+
+    expect(rows.map(({ name }) => name)).toEqual([
+      'build',
+      'Deploy to Staging',
+      'lint',
+      'Deploy old',
+    ]);
+    expect(rows[3]).toEqual({
+      name: 'Deploy old',
+      last: 'Not in the latest run',
+      failing: false,
+      choice: 'ignore',
+      rulesWatch: true,
+    });
+  });
+});
+
 describe('RepositoryCheckChoices.changes', () => {
   const submit = (answers: Record<string, CheckChoice>) =>
     RepositoryCheckChoices.changes({

@@ -41,23 +41,36 @@ export class RepositoryCheckChoices {
     chosen: WatchedChecks;
   }): CheckChoiceRow[] {
     const { branch, chosen } = props;
-    const said = new Map(
+    const said = new Map<string, CheckChoice>(
       chosen.overrides
         .filter(({ repository }) => repository === branch.repository.fullName)
         .map(({ checkName, mode }) => [checkName, mode]),
     );
-    return branch.checks.map((check) => ({
+    const rulesWatch = (checkName: string) =>
+      chosen.rules.some(({ pattern }) =>
+        WatchPattern.matches({ pattern, checkName }),
+      );
+    const latest = branch.checks.map((check) => ({
       name: check.name,
       last: lastLabels[check.state],
       failing: check.state === 'failure',
       choice: said.get(check.name) ?? 'rules',
-      rulesWatch: chosen.rules.some(({ pattern }) =>
-        WatchPattern.matches({ pattern, checkName: check.name }),
-      ),
+      rulesWatch: rulesWatch(check.name),
     }));
+    const inLatest = new Set(branch.checks.map(({ name }) => name));
+    const gone = [...said]
+      .filter(([checkName]) => !inLatest.has(checkName))
+      .map(([checkName, mode]) => ({
+        name: checkName,
+        last: 'Not in the latest run',
+        failing: false,
+        choice: mode,
+        rulesWatch: rulesWatch(checkName),
+      }));
+    return [...latest, ...gone];
   }
 
-  /** What differs from `chosen` for the checks in `submitted`. Checks not named, such as ones the latest run no longer has, keep what they have. */
+  /** What differs from `chosen` for the checks in `submitted`. Checks not named keep what they have. */
   static changes(props: {
     repository: string;
     chosen: WatchedChecks;

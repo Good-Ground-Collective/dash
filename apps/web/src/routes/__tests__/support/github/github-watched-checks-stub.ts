@@ -35,10 +35,17 @@ export class GithubWatchedChecksStub {
   private rules: { id: string; pattern: string }[] =
     GithubWatchedChecksStub.seedRules();
   private overrides: Override[] = GithubWatchedChecksStub.seedOverrides();
+  private readonly refusing = new Set<string>();
 
   reset(): void {
     this.rules = GithubWatchedChecksStub.seedRules();
     this.overrides = GithubWatchedChecksStub.seedOverrides();
+    this.refusing.clear();
+  }
+
+  /** From now on, changing this repository's exceptions answers 503, until the next reset. */
+  refuseChangesTo(repository: string): void {
+    this.refusing.add(repository);
   }
 
   /** Answers a request under `/watched-checks`, or `null` when the path isn't one. */
@@ -140,6 +147,9 @@ export class GithubWatchedChecksStub {
     if (!parsed.success) {
       return { status: 400, body: { code: 'FST_ERR_VALIDATION' } };
     }
+    if (this.refusing.has(parsed.data.repository)) {
+      return { status: 503, body: { code: 'UNAVAILABLE' } };
+    }
     this.overrides = [
       ...this.overrides.filter(
         (override) =>
@@ -152,6 +162,9 @@ export class GithubWatchedChecksStub {
   }
 
   private clearOverride(query: URLSearchParams): StubJson {
+    if (this.refusing.has(query.get('repository') ?? '')) {
+      return { status: 503, body: { code: 'UNAVAILABLE' } };
+    }
     this.overrides = this.overrides.filter(
       (override) =>
         override.repository !== query.get('repository') ||

@@ -105,6 +105,9 @@ export class GithubStub {
     } else if (page === '/__stub/request') {
       this.request(url.searchParams.get('login') ?? '');
       back('connect=requested');
+    } else if (page === '/__stub/watched-checks-refuse') {
+      this.watched.refuseChangesTo(url.searchParams.get('repository') ?? '');
+      response.writeHead(204).end();
     } else if (page === '/__stub/feed') {
       this.feed.choose(url.searchParams.get('name'));
       response.writeHead(204).end();
