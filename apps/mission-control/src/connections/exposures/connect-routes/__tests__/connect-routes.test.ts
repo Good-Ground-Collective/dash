@@ -194,6 +194,7 @@ describe('ConnectionsModule install requests', () => {
       provider: 'github',
     });
     expect(harness.connections.owned.size).toBe(0);
+    expect(harness.installRequests.requests.size).toBe(0);
   });
 });
 

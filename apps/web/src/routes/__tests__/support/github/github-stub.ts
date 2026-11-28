@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { GithubFeedStub } from './github-feed-stub.ts';
+import {
+  type StubAccount,
+  GithubStubAccounts,
+} from './github-stub-accounts.ts';
 
 const scenarioSchema = z.enum(['authorize', 'linked', 'failing']);
 const returnToSchema = z.string().regex(/^\/(?:[\w-]+(?:\/[\w-]+)*)?$/u);
@@ -12,35 +16,22 @@ interface StubJson {
   body: object;
 }
 
-interface StubAccount {
-  login: string;
-  kind: 'user' | 'organization';
-  role: 'personal' | 'owner' | 'member' | null;
-  avatar: boolean;
-  install:
-    | { state: 'installable' }
-    | {
-        state: 'installed';
-        repositorySelection: 'all' | 'selected';
-        repositoryCount: number | null;
-        suspended?: boolean;
-        incomplete?: boolean;
-      };
-}
-
-const avatarHues = ['#c2410c', '#0f766e', '#4338ca', '#be123c', '#a16207'];
+/** Organisations a lookup finds that the list doesn't show. `initech` is also a public membership, so it's suggested. */
+const findable = ['globex', 'initech'];
+const publicMemberships = ['initech'];
 
 /**
  * Mission Control's `GET /integrations/github/accounts` and stand-ins for GitHub's side of the
  * connect round trip. Authorizing, installing and the account picker each redirect straight back
  * to the web app with the `connect=` result Mission Control's callbacks send. Avatars are small
  * SVGs served here, so the page never calls GitHub. `POST /__stub/scenario?name=…` picks
- * whether the person has authorized yet, or whether listing fails. `/feed` is `GithubFeedStub`.
+ * whether the person has authorized yet, or whether listing fails. `/accounts/lookup` finds the
+ * `findable` organisations, and their install link records a request. `/feed` is `GithubFeedStub`.
  */
 export class GithubStub {
   private readonly webOrigin: () => string;
   private scenario: Scenario = 'authorize';
-  private accounts: StubAccount[] = GithubStub.sampleAccounts();
+  private accounts: StubAccount[] = GithubStubAccounts.sample();
   private readonly feed = new GithubFeedStub();
 
   constructor(props: {
@@ -52,7 +43,7 @@ export class GithubStub {
 
   reset(): void {
     this.scenario = 'authorize';
-    this.accounts = GithubStub.sampleAccounts();
+    this.accounts = GithubStubAccounts.sample();
     this.feed.reset();
   }
 
@@ -88,7 +79,9 @@ export class GithubStub {
 
     if (page.startsWith('/__stub/avatars/')) {
       response.writeHead(200, { 'content-type': 'image/svg+xml' });
-      response.end(GithubStub.avatar(page.slice('/__stub/avatars/'.length)));
+      response.end(
+        GithubStubAccounts.avatar(page.slice('/__stub/avatars/'.length)),
+      );
     } else if (page === '/__stub/scenario') {
       this.scenario = scenarioSchema.parse(url.searchParams.get('name'));
       response.writeHead(204).end();
@@ -100,6 +93,9 @@ export class GithubStub {
       back('connect=installed');
     } else if (page === '/__stub/pick') {
       back('connect=requested');
+    } else if (page === '/__stub/request') {
+      this.request(url.searchParams.get('login') ?? '');
+      back('connect=requested');
     } else if (page === '/__stub/feed') {
       this.feed.choose(url.searchParams.get('name'));
       response.writeHead(204).end();
@@ -109,6 +105,15 @@ export class GithubStub {
       response.end(JSON.stringify(reply.body));
     } else if (page === '/accounts') {
       const reply = this.list({ origin, signedIn: props.signedIn, returnTo });
+      response.writeHead(reply.status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(reply.body));
+    } else if (page === '/accounts/lookup') {
+      const reply = this.lookUp({
+        origin,
+        signedIn: props.signedIn,
+        returnTo,
+        login: url.searchParams.get('login') ?? '',
+      });
       response.writeHead(reply.status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(reply.body));
     } else {
@@ -149,10 +154,73 @@ export class GithubStub {
         status: 'linked',
         addAccountUrl: `${stub}/pick?${query}`,
         accounts: this.accounts.map((account, index) =>
-          GithubStub.toWire({ account, index, stub, query }),
+          GithubStubAccounts.toWire({ account, index, stub, query }),
         ),
+        suggestions: publicMemberships
+          .filter((login) => !this.accounts.some((a) => a.login === login))
+          .map((login) => ({
+            login,
+            avatarUrl: `${stub}/avatars/${login}.svg`,
+          })),
       },
     };
+  }
+
+  private lookUp(props: {
+    origin: string;
+    signedIn: boolean;
+    returnTo: string;
+    login: string;
+  }): StubJson {
+    if (!props.signedIn) {
+      return { status: 401, body: { code: 'SIGN_IN_REQUIRED' } };
+    }
+    const stub = `${props.origin}/integrations/github/__stub`;
+    const query = `returnTo=${encodeURIComponent(props.returnTo)}`;
+    const index = this.accounts.findIndex(({ login }) => login === props.login);
+    const listed = this.accounts[index];
+    if (listed !== undefined) {
+      const entry = GithubStubAccounts.toWire({
+        account: listed,
+        index,
+        stub,
+        query,
+      });
+      return { status: 200, body: { status: 'found', entry } };
+    }
+    if (!findable.includes(props.login)) {
+      return { status: 200, body: { status: 'missing' } };
+    }
+    const entry = GithubStubAccounts.toWire({
+      account: GithubStubAccounts.organisation(props.login),
+      index: this.accounts.length,
+      stub,
+      query,
+    });
+    return {
+      status: 200,
+      body: {
+        status: 'found',
+        entry: {
+          ...entry,
+          install: {
+            state: 'requestable',
+            installUrl: `${stub}/request?login=${props.login}&${query}`,
+          },
+        },
+      },
+    };
+  }
+
+  private request(login: string): void {
+    if (!findable.includes(login)) return;
+    this.accounts = [
+      ...this.accounts.filter((account) => account.login !== login),
+      {
+        ...GithubStubAccounts.organisation(login),
+        install: { state: 'requested' },
+      },
+    ];
   }
 
   private install(login: string): void {
@@ -168,110 +236,5 @@ export class GithubStub {
           }
         : account,
     );
-  }
-
-  private static toWire(props: {
-    account: StubAccount;
-    index: number;
-    stub: string;
-    query: string;
-  }) {
-    const { account, stub } = props;
-    const id = String(1000 + props.index);
-    const install =
-      account.install.state === 'installable'
-        ? {
-            state: 'installable',
-            installUrl: `${stub}/install?login=${account.login}&${props.query}`,
-          }
-        : {
-            state: 'installed',
-            installationId: id,
-            repositorySelection: account.install.repositorySelection,
-            repositoryCount: account.install.repositoryCount,
-            suspended: account.install.suspended ?? false,
-            incomplete: account.install.incomplete ?? false,
-            settingsUrl: `https://github.com/settings/installations/${id}`,
-            connectionId: null,
-          };
-    return {
-      account: {
-        provider: 'github',
-        externalId: id,
-        url: `https://github.com/${account.login}`,
-        login: account.login,
-        kind: account.kind,
-        avatarUrl: account.avatar
-          ? `${stub}/avatars/${account.login}.svg`
-          : null,
-        role: account.role,
-      },
-      install,
-    };
-  }
-
-  private static avatar(file: string): string {
-    const login = file.replace(/\.svg$/u, '');
-    const hue = avatarHues[login.length % avatarHues.length] ?? '#444444';
-    const letter = (login.at(0) ?? '?').toUpperCase();
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="${hue}"/><text x="16" y="21" font-family="sans-serif" font-size="14" fill="#ffffff" text-anchor="middle">${letter}</text></svg>`;
-  }
-
-  private static sampleAccounts(): StubAccount[] {
-    return [
-      {
-        login: 'ada',
-        kind: 'user',
-        role: 'personal',
-        avatar: true,
-        install: { state: 'installable' },
-      },
-      {
-        login: 'acme-labs',
-        kind: 'organization',
-        role: 'owner',
-        avatar: true,
-        install: {
-          state: 'installed',
-          repositorySelection: 'selected',
-          repositoryCount: 3,
-        },
-      },
-      {
-        login: 'night-shift',
-        kind: 'organization',
-        role: 'member',
-        avatar: true,
-        install: {
-          state: 'installed',
-          repositorySelection: 'all',
-          repositoryCount: null,
-        },
-      },
-      {
-        login: 'old-co',
-        kind: 'organization',
-        role: 'owner',
-        avatar: true,
-        install: {
-          state: 'installed',
-          repositorySelection: 'selected',
-          repositoryCount: null,
-          suspended: true,
-        },
-      },
-      {
-        login: 'rate-limited',
-        kind: 'organization',
-        role: null,
-        avatar: false,
-        install: {
-          state: 'installed',
-          repositorySelection: 'selected',
-          repositoryCount: null,
-          incomplete: true,
-        },
-      },
-    ];
   }
 }

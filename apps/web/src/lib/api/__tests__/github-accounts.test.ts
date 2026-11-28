@@ -141,3 +141,41 @@ describe('HttpGithubAccounts refusals', () => {
     expect(failure).toMatchObject({ status: 401, code: 'SIGN_IN_REQUIRED' });
   });
 });
+
+describe('HttpGithubAccounts lookUp', () => {
+  it('looks an organisation up by its trimmed login with the return path', async () => {
+    const recorder = new RecordingFetch({
+      response: () => Response.json({ status: 'missing' }),
+    });
+    const accounts = new HttpGithubAccounts({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    const answer = await accounts.lookUp({
+      login: ' acme ',
+      returnTo: '/setup/github',
+    });
+
+    expect(answer).toEqual({ status: 'missing' });
+    expect(recorder.calls[0]?.url).toBe(
+      'https://api.example.test/integrations/github/accounts/lookup?login=acme&returnTo=%2Fsetup%2Fgithub',
+    );
+    expect(recorder.calls[0]?.init?.credentials).toBe('include');
+  });
+
+  it('refuses a login no GitHub account could have before calling', async () => {
+    const recorder = new RecordingFetch({
+      response: () => Response.json({ status: 'missing' }),
+    });
+    const accounts = new HttpGithubAccounts({
+      baseUrl,
+      fetch: recorder.fetch,
+    });
+
+    await expect(
+      accounts.lookUp({ login: 'acme/app', returnTo: '/setup/github' }),
+    ).rejects.toThrow(/only letters, digits and dashes/u);
+    expect(recorder.calls).toEqual([]);
+  });
+});

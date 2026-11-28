@@ -98,26 +98,79 @@ const installableStateSchema = z.object({
     ),
 });
 
+const requestableStateSchema = z.object({
+  state: z.literal('requestable'),
+  installUrl: z
+    .url()
+    .describe(
+      'Opens the provider’s install page for this organisation, where a member asks its owners to install the app and an owner installs it. Valid for ten minutes.',
+    ),
+});
+
+const requestedStateSchema = z.object({
+  state: z.literal('requested'),
+  requestedAt: timestampSchema.describe(
+    'When you last asked its owners to install the app. The request clears once the installation appears to you.',
+  ),
+});
+
 /** One account the person can connect, and where its install stands. */
 export const connectableAccountSchema = z.object({
   account: userAccountSchema,
   install: z.discriminatedUnion('state', [
     installedStateSchema,
     installableStateSchema,
+    requestableStateSchema,
+    requestedStateSchema,
   ]),
 });
 
-export const accountsResponseSchema = z.discriminatedUnion('status', [
+/** An organisation where the person made their membership public. */
+export const organizationSuggestionSchema = z.object({
+  login: z.string().min(1),
+  avatarUrl: z.url().nullable(),
+});
+
+/** An account login as providers allow them: letters, digits, `-`, `_` and `.`. */
+export const accountLoginSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .regex(/^[\w.-]+$/u, 'Expected an account login, such as acme');
+
+export const organizationLookupQuerySchema = connectQuerySchema.extend({
+  login: accountLoginSchema.describe('The organisation’s login, such as acme.'),
+});
+
+const authorizeResponseSchema = z.object({
+  status: z
+    .literal('authorize')
+    .describe(
+      'You haven’t authorized the provider’s app, or it no longer accepts your grant.',
+    ),
+  authorizeUrl: z
+    .url()
+    .describe('Links the provider account. Valid for ten minutes.'),
+});
+
+export const organizationLookupResponseSchema = z.discriminatedUnion('status', [
+  authorizeResponseSchema,
+  z.object({
+    status: z.literal('found'),
+    entry: connectableAccountSchema.describe(
+      'The organisation, `requestable`, or `requested` when you already asked. The role is null: the provider says it only once the app is installed. An organisation that already has the app reads as `requestable` here; the account list shows it as installed.',
+    ),
+  }),
   z.object({
     status: z
-      .literal('authorize')
-      .describe(
-        'You haven’t authorized the provider’s app, or it no longer accepts your grant.',
-      ),
-    authorizeUrl: z
-      .url()
-      .describe('Links the provider account. Valid for ten minutes.'),
+      .literal('missing')
+      .describe('No organisation on the provider has that login.'),
   }),
+]);
+
+export const accountsResponseSchema = z.discriminatedUnion('status', [
+  authorizeResponseSchema,
   z.object({
     status: z.literal('linked'),
     addAccountUrl: z
@@ -125,12 +178,25 @@ export const accountsResponseSchema = z.discriminatedUnion('status', [
       .describe(
         'Opens the provider’s own account picker, which lists every account you can install the app on or request it for. A request made there isn’t listed: the provider doesn’t say which account it was for, so the account appears once an owner installs. Valid for ten minutes.',
       ),
-    accounts: z.array(connectableAccountSchema),
+    accounts: z
+      .array(connectableAccountSchema)
+      .describe(
+        'Your personal account, the installations you can see, and the organisations you asked to install the app through a link from Dash.',
+      ),
+    suggestions: z
+      .array(organizationSuggestionSchema)
+      .describe(
+        'Organisations where your membership is public and that aren’t listed, to look up by login. Never every organisation you belong to: the provider’s app can’t list those. Empty when the provider fails to give them.',
+      ),
   }),
 ]);
 
 export type InstalledState = z.infer<typeof installedStateSchema>;
+export type RequestedState = z.infer<typeof requestedStateSchema>;
 export type ConnectableAccount = z.infer<typeof connectableAccountSchema>;
+export type OrganizationSuggestion = z.infer<
+  typeof organizationSuggestionSchema
+>;
 
 export const setupQuerySchema = z
   .object({

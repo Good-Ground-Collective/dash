@@ -88,6 +88,15 @@ export const octocatProfile: AccountProfile = {
   avatarUrl: 'https://avatars.forge.test/u/583231',
 };
 
+export const globexProfile: AccountProfile = {
+  provider: 'github',
+  externalId: '7070',
+  url: 'https://github.com/globex',
+  login: 'globex',
+  kind: 'organization',
+  avatarUrl: 'https://avatars.forge.test/u/7070',
+};
+
 export const acmeUserInstallation: UserInstallation = {
   provider: 'github',
   externalId: '42',
@@ -111,6 +120,9 @@ export const acmeUserInstallation: UserInstallation = {
  * installation is the body's `installation.id`, read only after the signature checks out.
  * Installations in `suspendedInstallations` read as suspended, and the next `unavailableReads`
  * installation reads throw `ProviderUnavailableError`, as a provider outage would.
+ * `organizations` are the accounts its tokens can look up by login or id, and
+ * `publicOrganizations` the memberships octocat made public. Ids in `unreadableAccounts`
+ * fail to load, and `publicOrganizationsFail` makes the public list fail.
  */
 export class FakeConnectFlow implements ConnectFlow {
   readonly refreshed: string[] = [];
@@ -129,6 +141,13 @@ export class FakeConnectFlow implements ConnectFlow {
     refreshTokenExpiresAt: '2027-05-27T12:00:00.000Z',
   };
   visible: UserInstallation[] = [acmeUserInstallation];
+  organizations: AccountProfile[] = [
+    acmeUserInstallation.account,
+    globexProfile,
+  ];
+  publicOrganizations: AccountProfile[] = [];
+  publicOrganizationsFail = false;
+  readonly unreadableAccounts = new Set<string>();
   readonly suspendedInstallations = new Set<string>();
   unavailableReads = 0;
   readonly manageable = new Map<string, readonly string[]>([
@@ -189,6 +208,44 @@ export class FakeConnectFlow implements ConnectFlow {
     };
   }
 
+  async findOrganization(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile | null> {
+    this.refuseRevoked(props);
+    return (
+      this.organizations.find(
+        ({ login, kind }) => login === props.login && kind === 'organization',
+      ) ?? null
+    );
+  }
+
+  async getAccount(props: {
+    accessToken: string;
+    externalId: string;
+  }): Promise<AccountProfile | null> {
+    this.refuseRevoked(props);
+    if (this.unreadableAccounts.has(props.externalId)) {
+      throw new ProviderUnavailableError();
+    }
+    return (
+      this.organizations.find(
+        ({ externalId }) => externalId === props.externalId,
+      ) ?? null
+    );
+  }
+
+  async listPublicOrganizations(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile[]> {
+    this.refuseRevoked(props);
+    if (this.publicOrganizationsFail) {
+      throw new ProviderUnavailableError();
+    }
+    return props.login === octocatAccount.login ? this.publicOrganizations : [];
+  }
+
   async getInstallation(props: {
     installationId: string;
   }): Promise<Installation> {
@@ -244,6 +301,12 @@ export class FakeConnectFlow implements ConnectFlow {
         installationChanges.get(`${event}.${action ?? ''}`) ?? null,
       payload: body.success ? body.data : null,
     };
+  }
+
+  private refuseRevoked(props: { accessToken: string }): void {
+    if (this.revoked.has(props.accessToken)) {
+      throw new GrantRevokedError({ provider: 'github' });
+    }
   }
 
   private takeUnavailableRead(): boolean {

@@ -171,6 +171,65 @@ test('coming back to the tab refreshes the list quietly', async () => {
   );
 });
 
+test('naming an organisation offers Request install, then shows it pending until an owner installs', async () => {
+  await page.reload();
+  const field = page.getByLabel('Request the app for an organisation');
+  await expect(
+    page
+      .getByRole('list', { name: 'Suggested from your public memberships' })
+      .getByRole('button', { name: 'initech' }),
+  ).toBeVisible();
+
+  await field.fill('globex');
+  await page.getByRole('button', { name: 'Find' }).click();
+  await expect(ConnectStep.row('globex')).toContainText('Organisation');
+  await page.getByRole('link', { name: 'Request install globex' }).click();
+
+  await expect(page).toHaveURL('/setup/github');
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Request sent\./u }),
+  ).toBeVisible();
+  await expect(ConnectStep.row('globex')).toContainText(
+    'Install requested · pending',
+  );
+  await expect(ConnectStep.row('globex').getByRole('link')).toHaveCount(0);
+
+  await page.request.get(
+    `${missionControl}/integrations/github/__stub/install?login=globex`,
+    { maxRedirects: 0 },
+  );
+  await page.reload();
+  await expect(ConnectStep.row('globex')).toContainText('Installed');
+});
+
+test('a suggestion looks its organisation up', async () => {
+  await page
+    .getByRole('list', { name: 'Suggested from your public memberships' })
+    .getByRole('button', { name: 'initech' })
+    .click();
+
+  await expect(
+    page.getByRole('link', { name: 'Request install initech' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Suggested from your public memberships' }),
+  ).toHaveCount(0);
+});
+
+test('an organisation GitHub doesn’t have is explained beside the field', async () => {
+  await page.getByLabel('Request the app for an organisation').fill('nobody');
+  await page.getByRole('button', { name: 'Find' }).click();
+
+  await expect(
+    page
+      .getByRole('alert')
+      .filter({ hasText: 'GitHub has no organisation called nobody.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Request the app for an organisation'),
+  ).toHaveAttribute('aria-invalid', 'true');
+});
+
 test('the step fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   const overflow = await page.evaluate(

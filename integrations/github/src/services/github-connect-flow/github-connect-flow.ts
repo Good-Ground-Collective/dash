@@ -1,4 +1,5 @@
 import type {
+  AccountProfile,
   AuthorizedUser,
   ConnectFlow,
   Installation,
@@ -12,6 +13,7 @@ import { request as octokitRequest } from '@octokit/request';
 import { githubAppConfigSchema } from '#src/contracts/github-app-config.ts';
 import type { GithubAppConfig } from '#src/contracts/github-app-config.ts';
 import { GithubInstallations } from '#src/services/github-installations/github-installations.ts';
+import { GithubOrganizations } from '#src/services/github-organizations/github-organizations.ts';
 import { GithubUserAccounts } from '#src/services/github-user-accounts/github-user-accounts.ts';
 import { GithubUserAuth } from '#src/services/github-user-auth/github-user-auth.ts';
 import { GithubWebhooks } from '#src/services/github-webhooks/github-webhooks.ts';
@@ -21,6 +23,7 @@ export class GithubConnectFlow implements ConnectFlow {
   private readonly installations: GithubInstallations;
   private readonly users: GithubUserAuth;
   private readonly accounts: GithubUserAccounts;
+  private readonly organizations: GithubOrganizations;
   private readonly webhooks: GithubWebhooks;
 
   constructor(props: { config: GithubAppConfig }) {
@@ -43,6 +46,7 @@ export class GithubConnectFlow implements ConnectFlow {
       request,
       installations: this.installations,
     });
+    this.organizations = new GithubOrganizations({ request });
     this.webhooks = new GithubWebhooks({ secret: config.webhookSecret });
   }
 
@@ -75,6 +79,27 @@ export class GithubConnectFlow implements ConnectFlow {
     accessToken: string;
   }): Promise<UserAccounts> {
     return this.accounts.list(props);
+  }
+
+  async findOrganization(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile | null> {
+    return this.organizations.findByLogin(props);
+  }
+
+  async getAccount(props: {
+    accessToken: string;
+    externalId: string;
+  }): Promise<AccountProfile | null> {
+    return this.organizations.getAccount(props);
+  }
+
+  async listPublicOrganizations(props: {
+    accessToken: string;
+    login: string;
+  }): Promise<AccountProfile[]> {
+    return this.organizations.listPublic(props);
   }
 
   async getInstallation(props: {

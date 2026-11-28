@@ -19,6 +19,7 @@ const statePayloadSchema = z.object({
   expiresAt: z.number().int(),
   nonce: z.string().min(1),
   installationId: z.string().min(1).optional(),
+  targetAccountId: z.string().min(1).optional(),
 });
 
 const stateJsonSchema = z
@@ -42,6 +43,8 @@ export interface ConnectStateRequest {
   returnTo: string;
   /** An installation waiting for the person to authorize, so the callback can record it. */
   installationId?: string;
+  /** The account an install link was made for, so a request made through it can be recorded for that account. */
+  targetAccountId?: string;
 }
 
 /** The `state` a provider hands back to its callbacks, binding them to the person who started the flow. */
