@@ -74,6 +74,7 @@ describe('GET /briefings', () => {
       lastRun: null,
       history: [],
       budget: { month: '2026-11', spentUsd: 0, capUsd: 0, reached: false },
+      running: null,
     });
   });
 
@@ -86,6 +87,7 @@ describe('GET /briefings', () => {
       lastRun: null,
       history: [],
       budget: { month: '2026-11', spentUsd: 0, capUsd: 1, reached: false },
+      running: null,
     });
   });
 
@@ -104,6 +106,86 @@ describe('GET /briefings', () => {
     expect(body.lastRun).toEqual(failed);
     expect(body.lastRun?.error).toBe('OpenAI answered 500');
     expect(body.history.map(({ id }) => id)).toEqual([failed.id, good.id]);
+  });
+});
+
+describe('GET /briefings running', () => {
+  it('shows the signed-in person’s run in progress and nobody else’s', async () => {
+    const harness = Served.harness();
+    await harness.workflows.regenerate({ userId: adaId, trigger: 'manual' });
+
+    const own = await Served.briefings(harness);
+    const other = await Served.briefings(harness, '', graceId);
+
+    expect(own.running).toEqual({
+      runId: 'run-1',
+      startedAt: '2026-11-27T09:00:00.000Z',
+    });
+    expect(other.running).toBeNull();
+  });
+});
+
+describe('POST /briefing/regenerate', () => {
+  class Regenerated {
+    static async post(
+      harness: BriefingsHarness,
+      headers: Record<string, string> = {},
+    ) {
+      return (await harness.start()).inject({
+        method: 'POST',
+        url: '/briefing/regenerate',
+        headers,
+      });
+    }
+  }
+
+  it('needs a signed-in person', async () => {
+    const harness = Served.harness();
+
+    const response = await Regenerated.post(harness);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'SIGN_IN_REQUIRED' });
+    expect(harness.workflows.requests).toEqual([]);
+  });
+
+  it('answers 409 when the briefing is not configured', async () => {
+    const harness = Served.harness({ configured: false });
+
+    const response = await Regenerated.post(
+      harness,
+      BriefingsHarness.cookie(adaId),
+    );
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'BRIEFING_NOT_CONFIGURED' });
+    expect(harness.workflows.requests).toEqual([]);
+  });
+
+  it('accepts with the id of the run it started, as a manual run', async () => {
+    const harness = Served.harness();
+
+    const response = await Regenerated.post(
+      harness,
+      BriefingsHarness.cookie(adaId),
+    );
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ runId: 'run-1' });
+    expect(harness.workflows.requests).toEqual([
+      { userId: adaId, trigger: 'manual' },
+    ]);
+  });
+
+  it('answers with the same id while the person’s run is still in flight', async () => {
+    const harness = Served.harness();
+    const headers = BriefingsHarness.cookie(adaId);
+
+    const first = await Regenerated.post(harness, headers);
+    const second = await Regenerated.post(harness, headers);
+
+    expect(second.statusCode).toBe(202);
+    expect(second.json()).toEqual(first.json());
   });
 });
 

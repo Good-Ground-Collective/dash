@@ -129,6 +129,7 @@ export class DrizzleAgentHeartbeatRepository implements AgentHeartbeatRepository
           benchId: sql`excluded.bench_id`,
           harness: sql`excluded.harness`,
           status: sql`excluded.status`,
+          liveness: 'live',
           summary: sql`coalesce(excluded.summary, ${agentSessionTable.summary})`,
           question: sql`excluded.question`,
           error: sql`excluded.error`,

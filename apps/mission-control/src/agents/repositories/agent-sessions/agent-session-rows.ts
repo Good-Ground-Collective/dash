@@ -49,6 +49,7 @@ export class AgentSessionRows {
       benchId: row.benchId,
       harness: row.harness,
       status: row.status,
+      liveness: row.liveness,
       summary: row.summary,
       question: row.question,
       error: row.error,

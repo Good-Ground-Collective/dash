@@ -80,6 +80,28 @@ export class InMemoryAgentRecords
     );
   }
 
+  async markSilent(props: {
+    staleBefore: Date;
+    lostBefore: Date;
+  }): Promise<AgentSessionState[]> {
+    const changed: AgentSessionState[] = [];
+    for (const [key, state] of this.states) {
+      const updatedAt = Date.parse(state.updatedAt);
+      const liveness =
+        updatedAt <= props.lostBefore.getTime() ? 'lost' : 'stale';
+      if (
+        state.status === 'working' &&
+        updatedAt <= props.staleBefore.getTime() &&
+        state.liveness !== liveness
+      ) {
+        const marked = { ...state, liveness } as const;
+        this.states.set(key, marked);
+        changed.push(marked);
+      }
+    }
+    return changed;
+  }
+
   private advance(props: {
     reportedBy: string;
     heartbeat: StoredAgentHeartbeat;
@@ -99,6 +121,7 @@ export class InMemoryAgentRecords
       benchId: heartbeat.benchId,
       harness: heartbeat.harness,
       status: heartbeat.status,
+      liveness: 'live',
       summary: heartbeat.summary ?? current?.summary ?? null,
       question: heartbeat.question,
       error: heartbeat.error,
