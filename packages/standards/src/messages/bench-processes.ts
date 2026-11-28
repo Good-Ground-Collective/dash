@@ -17,7 +17,9 @@ export const benchProcesses = new MessageDefinition({
             .describe('The watched process name, as on the watch list.'),
           running: z
             .boolean()
-            .describe('Whether at least one instance is running.'),
+            .describe(
+              'Whether at least one instance is running: true exactly when `instances` is above 0. When the two disagree, `instances` is authoritative.',
+            ),
           instances: z.int().min(0).describe('How many instances are running.'),
           cpuPercent: z
             .number()

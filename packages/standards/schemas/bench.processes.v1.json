@@ -44,7 +44,7 @@
                 "type": "string"
               },
               "running": {
-                "description": "Whether at least one instance is running.",
+                "description": "Whether at least one instance is running: true exactly when `instances` is above 0. When the two disagree, `instances` is authoritative.",
                 "type": "boolean"
               }
             },

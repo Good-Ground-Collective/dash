@@ -35,7 +35,7 @@
           "type": "string"
         },
         "outputTail": {
-          "description": "The end of the command output, trimmed to fit.",
+          "description": "The end of the command output, trimmed to fit. The daemon must redact secrets before sending, and Dash treats the tail as untrusted text.",
           "maxLength": 4000,
           "type": "string"
         },

@@ -35,7 +35,8 @@ type BenchCommandResultV1Payload struct {
 	// The harness's id in the daemon's allowlist: a lowercase dotted or dashed name.
 	HarnessID string `json:"harnessId"`
 
-	// The end of the command output, trimmed to fit.
+	// The end of the command output, trimmed to fit. The daemon must redact secrets
+	// before sending, and Dash treats the tail as untrusted text.
 	OutputTail string `json:"outputTail"`
 
 	// The harness's installed version after the update, when the daemon could read

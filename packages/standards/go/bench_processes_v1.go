@@ -44,7 +44,8 @@ type BenchProcessesV1PayloadProcessesElem struct {
 	// The watched process name, as on the watch list.
 	Name string `json:"name"`
 
-	// Whether at least one instance is running.
+	// Whether at least one instance is running: true exactly when `instances` is
+	// above 0. When the two disagree, `instances` is authoritative.
 	Running bool `json:"running"`
 }
 

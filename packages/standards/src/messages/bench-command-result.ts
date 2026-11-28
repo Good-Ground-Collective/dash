@@ -18,7 +18,9 @@ export const benchCommandResult = new MessageDefinition({
     outputTail: z
       .string()
       .max(4000)
-      .describe('The end of the command output, trimmed to fit.'),
+      .describe(
+        'The end of the command output, trimmed to fit. The daemon must redact secrets before sending, and Dash treats the tail as untrusted text.',
+      ),
     versionAfter: z
       .string()
       .min(1)
