@@ -38,12 +38,26 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
     .date()
     .nullable()
     .describe('When the pull request was merged. Null while it is not merged.'),
+  createdAt: z.coerce.date(),
   number: z.number().int(),
   title: z.string(),
   author: z.string().nullable(),
   state: z.enum(['open', 'closed', 'merged']),
   draft: z.boolean(),
   mergeable: z.enum(['mergeable', 'conflicting', 'unknown']),
+  mergeState: z
+    .enum([
+      'clean',
+      'blocked',
+      'behind',
+      'unstable',
+      'dirty',
+      'draft',
+      'has_hooks',
+      'unknown',
+    ])
+    .nullable()
+    .describe('Null when GitHub has not computed the merge state yet.'),
   reviewDecision: z
     .enum(['approved', 'changes_requested', 'review_required'])
     .nullable(),

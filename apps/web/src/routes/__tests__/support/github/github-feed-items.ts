@@ -213,6 +213,7 @@ export class GithubFeedItems {
     draft?: boolean;
     review?: 'approved' | 'changes_requested' | 'review_required';
     mergeable?: 'mergeable' | 'conflicting';
+    mergeState?: 'clean' | 'blocked' | 'behind' | 'dirty' | null;
     checks?: object;
     state?: 'open' | 'merged';
     connection?: string;
@@ -221,12 +222,14 @@ export class GithubFeedItems {
       ...GithubFeedItems.base({ ...props, path: `pull/${props.number}` }),
       mergedAt:
         props.state === 'merged' ? GithubFeedItems.ago(props.minutes) : null,
+      createdAt: GithubFeedItems.ago(props.minutes + 120),
       number: props.number,
       title: props.title,
       author: props.author ?? 'ada',
       state: props.state ?? 'open',
       draft: props.draft ?? false,
       mergeable: props.mergeable ?? 'mergeable',
+      mergeState: props.mergeState ?? 'clean',
       reviewDecision: props.review ?? null,
       headSha: 'a1b2c3d',
       requestedReviewers: [{ kind: 'user', name: 'ada' }],

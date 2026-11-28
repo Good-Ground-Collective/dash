@@ -56,6 +56,18 @@ export const githubPullRequestTable = pgTable(
     mergeable: text('mergeable', {
       enum: ['mergeable', 'conflicting', 'unknown'],
     }).notNull(),
+    mergeState: text('merge_state_status', {
+      enum: [
+        'clean',
+        'blocked',
+        'behind',
+        'unstable',
+        'dirty',
+        'draft',
+        'has_hooks',
+        'unknown',
+      ],
+    }),
     reviewDecision: text('review_decision', {
       enum: ['approved', 'changes_requested', 'review_required'],
     }),
@@ -63,6 +75,7 @@ export const githubPullRequestTable = pgTable(
     headRef: text('head_ref').notNull(),
     headSha: text('head_sha').notNull(),
     mergedAt: timestamp('merged_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
   },

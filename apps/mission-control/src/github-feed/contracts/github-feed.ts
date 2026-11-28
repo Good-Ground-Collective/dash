@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   connectionKindSchema,
   mergeabilitySchema,
+  mergeStateSchema,
   pullRequestStateSchema,
   reviewDecisionSchema,
   runConclusionSchema,
@@ -46,12 +47,16 @@ export const githubFeedPullRequestSchema = feedItemSchema.extend({
   mergedAt: timestampSchema
     .nullable()
     .describe('When the pull request was merged. Null while it is not merged.'),
+  createdAt: timestampSchema,
   number: z.int().positive(),
   title: z.string(),
   author: z.string().min(1).nullable(),
   state: pullRequestStateSchema,
   draft: z.boolean(),
   mergeable: mergeabilitySchema,
+  mergeState: mergeStateSchema
+    .nullable()
+    .describe('Null when GitHub has not computed the merge state yet.'),
   reviewDecision: reviewDecisionSchema
     .nullable()
     .describe('Null when the repository requires no review.'),
