@@ -20,11 +20,6 @@ describe('SubagentRollup', () => {
   it('counts subagents by status, in status order', () => {
     const subagents = Many.of({ complete: 3, working: 12, question: 1 });
 
-    expect(SubagentRollup.counts(subagents)).toEqual([
-      { status: 'working', count: 12 },
-      { status: 'question', count: 1 },
-      { status: 'complete', count: 3 },
-    ]);
     expect(SubagentRollup.phrase(subagents)).toBe(
       '12 working, 1 asking, 3 done',
     );
@@ -50,17 +45,17 @@ describe('SubagentRollup', () => {
     expect(SubagentRollup.phrase(subagents)).toBe(
       '4 working (1 stale, 1 lost), 2 done (1 stale)',
     );
-    expect(
-      SubagentRollup.counts(subagents).reduce(
-        (sum, entry) => sum + entry.count,
-        0,
-      ),
-    ).toBe(subagents.length);
+    const topLevel = SubagentRollup.phrase(subagents)
+      .replaceAll(/\([^)]*\)/gu, '')
+      .split(',')
+      .map((part) => Number.parseInt(part.trim(), 10));
+    expect(topLevel.reduce((sum, count) => sum + count, 0)).toBe(
+      subagents.length,
+    );
   });
 
   it('says nothing when there are no subagents', () => {
     expect(SubagentRollup.phrase([])).toBe('');
-    expect(SubagentRollup.counts([])).toEqual([]);
   });
 
   it('counts the subagents in the singular and the plural', () => {

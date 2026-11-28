@@ -9,7 +9,7 @@ const { session, subagent, update, wire } = SampleAgentSessions;
 
 class Reads {
   calls = 0;
-  answers: (AgentSession[] | Error)[] = [];
+  answers: (AgentSession[] | Error | Promise<AgentSession[]>)[] = [];
   during: () => void = () => undefined;
 
   list = async (): Promise<AgentSession[]> => {
@@ -165,6 +165,83 @@ describe('LiveAgentSessions resync', () => {
     await Following.flush();
     expect(feed.loaded).toBe(true);
     expect(feed.sessions.list).toHaveLength(1);
+  });
+});
+
+describe('LiveAgentSessions overlapping and idle', () => {
+  it('holds no events once a resync has settled, and an idle frame does not cost a re-read', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    reads.answers = [[session('first')], [session('second')]];
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(reads.calls).toBe(1);
+
+    Frames.send(update({ sessionId: 'idle-1', agentId: null }));
+    Frames.send(update({ sessionId: 'idle-2', agentId: null }));
+    expect(feed.retainedEvents).toBe(0);
+    FakeEventSource.latest().dropAndRetry();
+    FakeEventSource.latest().open();
+    await Following.flush();
+
+    expect(reads.calls).toBe(2);
+    expect(feed.retainedEvents).toBe(0);
+    expect(feed.sessions.list.map((entry) => entry.sessionId)).toEqual([
+      'second',
+    ]);
+  });
+
+});
+
+describe('LiveAgentSessions overlapping reads', () => {
+  it('never lets an older read replace the answer of a newer one', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    let resolveOlder: (sessions: AgentSession[]) => void = () => undefined;
+    reads.answers = [
+      new Promise<AgentSession[]>((resolve) => {
+        resolveOlder = resolve;
+      }),
+      [session('fresh'), session('missed')],
+    ];
+    FakeEventSource.latest().open();
+    FakeEventSource.latest().dropAndRetry();
+    FakeEventSource.latest().open();
+    await Following.flush();
+
+    resolveOlder([session('fresh')]);
+    await Following.flush();
+
+    expect(
+      feed.sessions.list.map((entry) => entry.sessionId).toSorted(),
+    ).toEqual(['fresh', 'missed']);
+    expect(feed.retainedEvents).toBe(0);
+  });
+
+  it('adopts an older read when the newer one failed, so a failed first read does not leave it unloaded', async () => {
+    const { feed, reads } = Following.of({ initial: [], loaded: false });
+    feed.start();
+    let resolveOlder: (sessions: AgentSession[]) => void = () => undefined;
+    reads.answers = [
+      new Promise<AgentSession[]>((resolve) => {
+        resolveOlder = resolve;
+      }),
+      new Error('503'),
+    ];
+    FakeEventSource.latest().open();
+    FakeEventSource.latest().dropAndRetry();
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(feed.loaded).toBe(false);
+
+    resolveOlder([session('fresh')]);
+    await Following.flush();
+
+    expect(feed.loaded).toBe(true);
+    expect(feed.sessions.list.map((entry) => entry.sessionId)).toEqual([
+      'fresh',
+    ]);
+    expect(feed.retainedEvents).toBe(0);
   });
 });
 

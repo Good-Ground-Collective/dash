@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { API_BASE_URL } from '$app/env/public';
   import { page } from '$app/state';
+  import { AgentSessionActivity } from '#lib/agents/agent-session-activity.ts';
   import { AgentWording } from '#lib/agents/agent-wording.ts';
   import { AgentSessionLink } from '#lib/agents/agent-session-link.ts';
   import { HttpAgentSessions } from '#lib/agents/http-agent-sessions.ts';
@@ -28,6 +29,13 @@
   let sessions = $derived(feed.sessions);
   let groups = $derived(sessions.groups());
   let focusedKey = $derived(AgentSessionLink.focusedKey(page.url.searchParams));
+
+  let focusMissing = $derived(
+    focusedKey !== null &&
+      !sessions.list.some(
+        (session) => AgentSessionActivity.key(session) === focusedKey,
+      ),
+  );
 
   onMount(() => {
     const stopFollowing = feed.start();
@@ -67,6 +75,11 @@
       </p>
     </div>
   {:else}
+    {#if focusMissing}
+      <p class="missing" role="status">
+        That session hasn’t reported in the last 24 hours.
+      </p>
+    {/if}
     <AgentStatsStrip stats={sessions.stats()} />
     <HomeSection id="sessions-title" title="Sessions">
       {#snippet aside()}Last 24 h · grouped by bench{/snippet}
@@ -114,6 +127,14 @@
 
   .note {
     font-size: var(--font-size-xs);
+  }
+
+  .missing {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-control);
+    background: var(--warn-surface);
+    font-size: var(--font-size-sm);
+    color: var(--ink-muted);
   }
 
   .benches {

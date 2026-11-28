@@ -52,7 +52,9 @@ export class LiveAgentSessions implements AgentSessionFeed {
   });
   private held: AgentSessions;
   private read: boolean;
-  private arrived: AgentSessionState[] = [];
+  private readonly collectors = new Set<AgentSessionState[]>();
+  private latestResync = 0;
+  private adoptedResync = 0;
 
   constructor(props: LiveAgentSessionsProps) {
     const valid = liveAgentSessionsPropsSchema.parse(props);
@@ -72,11 +74,18 @@ export class LiveAgentSessions implements AgentSessionFeed {
     return this.read;
   }
 
+  /** How many live events are held for reads still in flight; zero whenever no read is. */
+  get retainedEvents(): number {
+    let total = 0;
+    for (const collector of this.collectors) total += collector.length;
+    return total;
+  }
+
   start(): () => void {
     return this.stream.subscribe({
       definition: AgentSessionLiveEvents.UPDATED,
       onEvent: (state) => {
-        this.arrived.push(state);
+        for (const collector of this.collectors) collector.push(state);
         this.held = this.held.applyUpdate(state);
         this.notify();
       },
@@ -88,26 +97,33 @@ export class LiveAgentSessions implements AgentSessionFeed {
     for (const update of this.changed) update();
   }
 
-  /** An event that lands while the read is in flight makes the read stale, so it goes again. When every read is interrupted, the last snapshot is adopted with the events that landed during it replayed on top. A read that fails leaves the sessions as they are. */
+  /** An event that lands while the read is in flight makes the read stale, so it goes again. When every read is interrupted, the last snapshot is adopted with the events that landed during it replayed on top. A read that fails leaves the sessions as they are. A read is dropped only once a newer resync has been adopted, so it can't replace fresher sessions. */
   private async resync(): Promise<void> {
-    for (let attempt = 0; attempt < maxResyncAttempts; attempt += 1) {
-      this.arrived = [];
-      try {
+    this.latestResync += 1;
+    const generation = this.latestResync;
+    const arrived: AgentSessionState[] = [];
+    this.collectors.add(arrived);
+    try {
+      for (let attempt = 0; attempt < maxResyncAttempts; attempt += 1) {
+        arrived.length = 0;
         const sessions = await this.reads.list();
-        const interrupted = this.arrived.length > 0;
+        const interrupted = arrived.length > 0;
+        if (generation < this.adoptedResync) return;
         if (interrupted && attempt < maxResyncAttempts - 1) continue;
-        this.held = this.arrived.reduce(
+
+        this.held = arrived.reduce(
           (held, state) => held.applyUpdate(state),
           AgentSessions.of(sessions),
         );
+        this.adoptedResync = generation;
         this.read = true;
         this.notify();
         return;
-      } catch {
-        return;
-      } finally {
-        this.arrived = [];
       }
+    } catch {
+      return;
+    } finally {
+      this.collectors.delete(arrived);
     }
   }
 }

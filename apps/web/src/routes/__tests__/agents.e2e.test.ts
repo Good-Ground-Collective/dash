@@ -27,6 +27,12 @@ class Sessions {
     });
   }
 
+  static missingNote(): ReturnType<Page['locator']> {
+    return page.getByRole('status').filter({
+      hasText: 'That session hasn’t reported in the last 24 hours.',
+    });
+  }
+
   static async scenario(name: string): Promise<void> {
     await page.request.post(
       `${missionControl}/api/agents/__stub/scenario?name=${name}`,
@@ -322,7 +328,17 @@ test('a Needs you item links to its session, which opens with its subagents', as
   await expect(
     session.locator('li.subagent[data-agent-id="hooks-builder"]'),
   ).toBeVisible();
+  await expect(Sessions.missingNote()).toHaveCount(0);
   await page.request.post(
     `${missionControl}/api/needs-you/__stub/resolve?item=outbox`,
   );
+});
+
+test('a link to a session that has not reported lately says so', async () => {
+  await Sessions.scenario('several');
+  await page.goto('/agents?reportedBy=nobody&session=missing');
+  await briefing.listening();
+
+  await expect(Sessions.missingNote()).toBeVisible();
+  await expect(page.locator('li.session')).toHaveCount(6);
 });
