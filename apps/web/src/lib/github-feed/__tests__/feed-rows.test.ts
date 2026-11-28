@@ -25,6 +25,28 @@ describe('FeedRows.reviewRequest', () => {
   });
 });
 
+describe('FeedRows.reviewRequestWithChecks', () => {
+  it('adds the checks state after the draft badge', () => {
+    const row = FeedRows.reviewRequestWithChecks(
+      SampleFeed.pull({
+        draft: true,
+        checks: { state: 'pending', success: 1, failure: 0, pending: 2 },
+      }),
+    );
+
+    expect(row.badges).toEqual([
+      { label: 'Draft', tone: 'neutral' },
+      { label: 'Checks running', tone: 'warn' },
+    ]);
+  });
+
+  it('leaves badges alone when the head has no checks', () => {
+    expect(FeedRows.reviewRequestWithChecks(SampleFeed.pull()).badges).toEqual(
+      [],
+    );
+  });
+});
+
 describe('FeedRows.myPullRequest', () => {
   it('shows review state, conflicts and checks in that order', () => {
     const row = FeedRows.myPullRequest(

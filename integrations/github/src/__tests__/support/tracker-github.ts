@@ -19,6 +19,38 @@ export class TrackerGithub {
       });
   }
 
+  /**
+   * One epic with one ticket, answered the way GitHub answers `assignees(first: N)`: the ticket
+   * lists at most as many of `assignees` as the query asked for, none when it doesn't ask.
+   */
+  static withTicketAssignees(assignees: string[]): FakeGithubGraphql {
+    const github = new FakeGithubGraphql().on({
+      operation: 'DashProjects',
+      reply: () => projects({ nodes: [project({ number: 1 })] }),
+    });
+    return github.on({
+      operation: 'DashProjectEpics',
+      reply: () => {
+        const asked = /assignees\(first: (?<limit>\d+)\)/u.exec(
+          github.documents.get('DashProjectEpics') ?? '',
+        )?.groups?.['limit'];
+        return epics({
+          nodes: [
+            epicItem({
+              number: 10,
+              tickets: [
+                ticket({
+                  number: 11,
+                  assignees: assignees.slice(0, Number(asked ?? 0)),
+                }),
+              ],
+            }),
+          ],
+        });
+      },
+    });
+  }
+
   /** One Project whose epics come one a page, for as many pages as GitHub is asked for. */
   static endlessEpics(): FakeGithubGraphql {
     return new FakeGithubGraphql()
