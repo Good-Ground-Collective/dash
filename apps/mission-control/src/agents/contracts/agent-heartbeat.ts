@@ -146,7 +146,7 @@ export const agentHeartbeatBatchResultSchema = z.discriminatedUnion('outcome', [
       heartbeat: storedAgentHeartbeatSchema,
     })
     .describe(
-      'This key already stored its `(sessionId, seq)`; this is that row.',
+      'This key already stored its `(sessionId, seq)` within the 30-day retention window; this is that row.',
     ),
   z
     .object({
