@@ -26,16 +26,32 @@ export class SampleBriefings {
         agents: 3,
         benches: 1,
       },
-      paragraphs: [
-        [
-          { text: 'Review ', href: null },
+      sections: {
+        opening: [
           {
-            text: 'the passkey PR',
-            href: 'https://github.com/acme/api/pull/9',
+            text: 'Two initiatives closed since the last briefing, and work continues on billing. ',
+            href: null,
           },
-          { text: ' first.', href: null },
+          { text: 'The console epic started.', href: null },
         ],
-      ],
+        actions: [
+          [
+            { text: 'Review ', href: null },
+            {
+              text: 'the passkey PR',
+              href: 'https://github.com/acme/api/pull/9',
+            },
+            { text: ' first.', href: null },
+          ],
+        ],
+        closing: [
+          {
+            text: 'At this rate the console epic should reach verification by the next update. The pace on billing is too thin to call.',
+            href: null,
+          },
+        ],
+      },
+      paragraphs: null,
       unknownRefs: 0,
       error: null,
       ...overrides,
@@ -59,5 +75,25 @@ export class SampleBriefings {
       running: null,
       ...overrides,
     };
+  }
+}
+
+/** A run written before briefings had sections. */
+export class LegacyBriefings {
+  static run(overrides: Partial<BriefingRecord> = {}): BriefingRecord {
+    return SampleBriefings.run({
+      sections: null,
+      paragraphs: [
+        [
+          { text: 'Review ', href: null },
+          {
+            text: 'the passkey PR',
+            href: 'https://github.com/acme/api/pull/9',
+          },
+          { text: ' first.', href: null },
+        ],
+      ],
+      ...overrides,
+    });
   }
 }

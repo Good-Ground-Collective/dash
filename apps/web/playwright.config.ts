@@ -67,6 +67,7 @@ export default defineConfig({
         '**/connect-github.e2e.test.ts',
         '**/second-passkey.e2e.test.ts',
         '**/home.e2e.test.ts',
+        '**/briefing-card.e2e.test.ts',
         '**/github-feed.e2e.test.ts',
         '**/objectives.e2e.test.ts',
         '**/time-zone.e2e.test.ts',
@@ -148,7 +149,7 @@ export default defineConfig({
     },
     {
       name: 'home',
-      testMatch: '**/home.e2e.test.ts',
+      testMatch: ['**/home.e2e.test.ts', '**/briefing-card.e2e.test.ts'],
       metadata: { missionControlUrl: `http://localhost:${homeStubPort}` },
       use: {
         ...devices['Desktop Chrome'],
