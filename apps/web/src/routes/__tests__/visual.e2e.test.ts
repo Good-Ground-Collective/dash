@@ -74,6 +74,7 @@ class Screens {
 
     await page.setViewportSize(phone);
     await page.goto('/settings/watched-checks');
+    await page.evaluate(() => window.scrollTo(0, 0));
     await Screens.capture({
       page,
       name: `settings-watched-checks-390-${suffix}.png`,
