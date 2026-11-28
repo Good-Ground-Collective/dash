@@ -61,6 +61,9 @@
             {#if row.error !== null}
               <span class="error">{row.error}</span>
             {/if}
+            {#if row.note !== null}
+              <span class="note">{row.note}</span>
+            {/if}
           </div>
           {#if row.manageUrl !== null}
             <a class="quiet-link" href={row.manageUrl}>
@@ -149,11 +152,13 @@
 
   .detail,
   .error,
+  .note,
   .small-print {
     font-size: var(--font-size-sm);
   }
 
-  .detail {
+  .detail,
+  .note {
     color: var(--ink-muted);
   }
 

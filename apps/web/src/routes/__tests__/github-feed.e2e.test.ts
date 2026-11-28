@@ -243,8 +243,14 @@ test('Settings › Connections lists owned installs with where to manage them', 
 
   const connections = page.getByRole('region', { name: 'Connections' });
   const installs = connections.getByRole('list', { name: 'GitHub installs' });
-  await expect(installs.getByRole('listitem')).toHaveCount(2);
+  await expect(installs.getByRole('listitem')).toHaveCount(3);
   await expect(installs).toContainText('Synced 4 minutes ago');
+  await expect(
+    installs.getByRole('listitem').filter({ hasText: 'ada' }),
+  ).toContainText('Initiatives come from organisation Projects.');
+  await expect(
+    installs.getByRole('listitem').filter({ hasText: 'acme-labs' }),
+  ).not.toContainText('Initiatives come from');
   await expect(installs).toContainText('rate-limited');
   await expect(
     connections.getByRole('link', { name: 'Manage on GitHub acme-labs' }),

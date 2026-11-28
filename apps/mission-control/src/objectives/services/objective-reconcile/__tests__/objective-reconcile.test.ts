@@ -1,4 +1,3 @@
-import { TrackerAccountUnsupportedError } from '@dash/integrations-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -68,18 +67,6 @@ describe('TrackedObjectiveReconcile', () => {
       lastSyncedAt: fixedNow,
     });
     expect(reconciling.stored()?.records.epics).toHaveLength(3);
-  });
-
-  it('explains that a personal account’s tracker can’t be read', async () => {
-    const reconciling = new Reconciling();
-    reconciling.tracker.failure = new TrackerAccountUnsupportedError({
-      provider: 'github',
-      accountKind: 'user',
-    });
-
-    await reconciling.sync();
-
-    expect(reconciling.stored()?.lastError).toMatch(/personal account/u);
   });
 
   it('records a suspended installation without reading it', async () => {

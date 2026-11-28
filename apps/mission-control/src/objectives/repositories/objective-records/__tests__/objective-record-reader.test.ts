@@ -14,6 +14,7 @@ import {
   fixedNow,
   graceId,
   ownedId,
+  personalId,
 } from '#src/objectives/__tests__/support/objectives-fixtures.ts';
 
 const databaseUrl = inject('databaseUrl');
@@ -83,3 +84,41 @@ describe.skipIf(databaseUrl === null)('DrizzleObjectiveRecordReader', () => {
     ]);
   });
 });
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleObjectiveRecordReader personal accounts',
+  () => {
+    it('never offers a personal account to read', async () => {
+      const database = ObjectiveRecordsDatabase.required(store);
+      await database.addPersonalConnection();
+
+      const targets = await database.reader.syncTargets({
+        providers: ['github'],
+        limit: 10,
+      });
+      const asked = await database.reader.syncTargets({
+        providers: ['github'],
+        connectionId: personalId,
+        limit: 10,
+      });
+
+      expect(targets.map(({ connectionId }) => connectionId)).toEqual([
+        ownedId,
+      ]);
+      expect(asked).toEqual([]);
+    });
+
+    it('lists no objectives for a personal account, even with an error stored', async () => {
+      const database = ObjectiveRecordsDatabase.required(store);
+      const { reader, writer } = database;
+      await database.addPersonalConnection();
+      await writer.recordFailure({
+        connectionId: personalId,
+        error: 'Dash reads initiatives from an organisation’s tracker.',
+        attemptedAt: fixedNow,
+      });
+
+      expect(await reader.recordsFor({ connectedBy: adaId })).toEqual([]);
+    });
+  },
+);

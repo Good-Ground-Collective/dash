@@ -13,6 +13,7 @@ import type { ObjectiveSyncTarget } from '#src/objectives/contracts/objective-re
 export const adaId = '00000000-0000-4000-8000-00000000000a';
 export const graceId = '00000000-0000-4000-8000-00000000000b';
 export const ownedId = '10000000-0000-4000-8000-000000000001';
+export const personalId = '10000000-0000-4000-8000-000000000002';
 export const fixedNow = new Date('2026-11-26T12:00:00.000Z');
 
 const recently = '2026-11-25T09:00:00.000Z';

@@ -16,6 +16,12 @@ import {
 import { ObjectiveRecordRows } from '#src/objectives/repositories/objective-records/objective-record-rows.ts';
 import type { Database } from '#src/platform/services/database/database.ts';
 
+/**
+ * The only kind of account Dash reads objectives from. Initiatives live in organisation
+ * Projects, and GitHub doesn't let its apps read Projects a personal account owns.
+ */
+const objectivesAccountKind = 'organization';
+
 /** A connection a person made whose tracker Dash has tried to read, how that went, and what the last good read found. */
 export interface ConnectionObjectives {
   connectionId: string;
@@ -27,7 +33,7 @@ export interface ConnectionObjectives {
 }
 
 export interface ObjectiveRecordReader {
-  /** Owned connections of `providers`, least recently tried first, so a capped run still reaches every one in turn. */
+  /** Owned organisation connections of `providers`, least recently tried first, so a capped run still reaches every one in turn. */
   syncTargets(props: {
     providers: readonly string[];
     connectionId?: string;
@@ -35,7 +41,7 @@ export interface ObjectiveRecordReader {
     connectedBy?: string;
     limit: number;
   }): Promise<ObjectiveSyncTarget[]>;
-  /** Every connection `connectedBy` made that has been read for objectives, with its stored records. */
+  /** Every organisation connection `connectedBy` made that has been read for objectives, with its stored records. */
   recordsFor(props: { connectedBy: string }): Promise<ConnectionObjectives[]>;
 }
 
@@ -58,6 +64,7 @@ export class DrizzleObjectiveRecordReader implements ObjectiveRecordReader {
     }
     const filters: SQL[] = [
       eq(connectionTable.kind, 'owned'),
+      eq(connectionTable.accountKind, objectivesAccountKind),
       inArray(connectionTable.provider, [...props.providers]),
     ];
     if (props.connectionId !== undefined) {
@@ -100,7 +107,12 @@ export class DrizzleObjectiveRecordReader implements ObjectiveRecordReader {
         objectiveSyncTable,
         eq(objectiveSyncTable.connectionId, connectionTable.id),
       )
-      .where(eq(connectionTable.connectedBy, props.connectedBy))
+      .where(
+        and(
+          eq(connectionTable.connectedBy, props.connectedBy),
+          eq(connectionTable.accountKind, objectivesAccountKind),
+        ),
+      )
       .orderBy(asc(connectionTable.accountLogin));
     if (connections.length === 0) {
       return [];

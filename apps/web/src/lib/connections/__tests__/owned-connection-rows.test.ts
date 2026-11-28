@@ -76,6 +76,31 @@ describe('OwnedConnectionRows.rows', () => {
   });
 });
 
+describe('OwnedConnectionRows.rows notes', () => {
+  it('notes that a personal account’s Projects never feed initiatives', () => {
+    const organisation = Sample.installed('acme-labs');
+    const personal = Sample.installed('ada');
+    const rows = OwnedConnectionRows.rows({
+      connections: [
+        SampleFeed.connection({ id: 'a', accountLogin: 'acme-labs' }),
+        SampleFeed.connection({ id: 'p', accountLogin: 'Ada' }),
+      ],
+      accounts: [
+        organisation,
+        { ...personal, account: { ...personal.account, kind: 'user' } },
+      ],
+    });
+
+    expect(rows.map((row) => [row.login, row.note])).toEqual([
+      ['acme-labs', null],
+      [
+        'Ada',
+        'Initiatives come from organisation Projects. GitHub doesn’t let apps read a personal account’s Projects.',
+      ],
+    ]);
+  });
+});
+
 describe('OwnedConnectionRows.addAccountHref', () => {
   it('uses GitHub’s picker when known, else the Connect GitHub step', () => {
     expect(OwnedConnectionRows.addAccountHref('https://github.com/pick')).toBe(
