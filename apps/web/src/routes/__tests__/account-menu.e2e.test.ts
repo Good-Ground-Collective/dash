@@ -61,6 +61,7 @@ const settingsSections = [
   { href: '/settings/passkeys', label: 'Passkeys' },
   { href: '/settings/recovery-codes', label: 'Recovery codes' },
   { href: '/settings/github', label: 'Connections' },
+  { href: '/settings/watched-checks', label: 'Watched checks' },
   { href: '/settings/service-accounts', label: 'Service accounts' },
   { href: '/settings/briefings', label: 'Spend' },
 ] as const;

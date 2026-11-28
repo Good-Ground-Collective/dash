@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   settingsGroups,
+  settingsSection,
   SettingsSections,
 } from '#lib/settings/settings-sections.ts';
 
@@ -16,7 +17,7 @@ describe('settingsGroups', () => {
         'Account',
         ['Profile and time zone', 'Appearance', 'Passkeys', 'Recovery codes'],
       ],
-      ['GitHub', ['Connections']],
+      ['GitHub', ['Connections', 'Watched checks']],
       ['Agents', ['Service accounts']],
       ['Briefings', ['Spend']],
     ]);
@@ -35,6 +36,25 @@ describe('settingsGroups', () => {
 describe('SettingsSections', () => {
   it('opens on the first section', () => {
     expect(SettingsSections.first().href).toBe('/settings/profile');
+  });
+
+  it('declares the Settings href the account menu links to', () => {
+    expect(settingsSection.href).toBe('/settings');
+  });
+
+  it('marks a section current on a page beneath it, as the nav does', () => {
+    expect(
+      SettingsSections.isCurrent({
+        pathname: '/settings/watched-checks/acme-labs/web',
+        href: '/settings/watched-checks',
+      }),
+    ).toBe(true);
+    expect(
+      SettingsSections.isCurrent({
+        pathname: '/settings/watched-checksum',
+        href: '/settings/watched-checks',
+      }),
+    ).toBe(false);
   });
 
   it('recognises a section by its URL, trailing slash aside', () => {

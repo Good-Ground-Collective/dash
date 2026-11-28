@@ -7,7 +7,10 @@
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import { Initials } from '#lib/shell/initials.ts';
-  import { serviceAccountsSection } from '#lib/settings/settings-sections.ts';
+  import {
+    serviceAccountsSection,
+    settingsSection,
+  } from '#lib/settings/settings-sections.ts';
   import { NavItems } from '#lib/shell/nav-items.ts';
 
   let { viewer, build }: { viewer: Viewer | null; build: BuildStamp } =
@@ -16,7 +19,7 @@
   const currentMenuHref = $derived(
     NavItems.mostSpecific({
       pathname: page.url.pathname,
-      hrefs: ['/settings', serviceAccountsSection.href],
+      hrefs: [settingsSection.href, serviceAccountsSection.href],
     }),
   );
 
@@ -62,12 +65,12 @@
                     <a
                       {...itemProps}
                       class="item"
-                      href="/settings"
-                      aria-current={currentMenuHref === '/settings'
+                      href={settingsSection.href}
+                      aria-current={currentMenuHref === settingsSection.href
                         ? 'page'
                         : undefined}
                     >
-                      Settings
+                      {settingsSection.label}
                     </a>
                   {/snippet}
                 </DropdownMenu.Item>

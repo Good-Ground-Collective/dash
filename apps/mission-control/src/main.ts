@@ -24,6 +24,7 @@ import { GithubFeedModule } from '#src/github-feed/module.ts';
 import { DrizzleGithubRecordReader } from '#src/github-feed/repositories/github-records/github-record-reader.ts';
 import { DrizzleGithubRecordWriter } from '#src/github-feed/repositories/github-records/github-record-writer.ts';
 import { DrizzleSyncRequestRepository } from '#src/github-feed/repositories/sync-requests/sync-request-repository.ts';
+import { DrizzleWatchedChecksRepository } from '#src/github-feed/repositories/watched-checks/watched-checks-repository.ts';
 import { HealthModule } from '#src/health/module.ts';
 import { LiveModule } from '#src/live/module.ts';
 import { IntegrationsModule } from '#src/integrations/module.ts';
@@ -80,6 +81,7 @@ const githubFeed = new GithubFeedModule({
   writer: new DrizzleGithubRecordWriter({ database }),
   connections: connectionRepository,
   syncRequests: new DrizzleSyncRequestRepository({ database }),
+  watchedChecks: new DrizzleWatchedChecksRepository({ database }),
   webhookEvents,
 });
 const objectiveRecords = new DrizzleObjectiveRecordReader({ database });

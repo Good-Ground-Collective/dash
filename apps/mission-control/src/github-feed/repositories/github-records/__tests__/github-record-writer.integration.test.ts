@@ -160,7 +160,7 @@ class Checks {
     return (await Stored.owned())?.records.checks ?? [];
   }
 
-  static withLint(state: 'failure' | 'success') {
+  static withLint(state: 'failure' | 'pending' | 'success') {
     return merged.checks.map((check) =>
       check.name === 'lint' ? { ...check, state } : check,
     );
@@ -241,17 +241,16 @@ describe.skipIf(databaseUrl === null)(
     const third = new Date(later.getTime() + 15 * 60_000);
 
     it('starts afresh when a check fails again after a pending read', async () => {
-      const withLintState = (state: 'failure' | 'pending') =>
-        merged.checks.map((check) =>
-          check.name === 'lint' ? { ...check, state } : check,
-        );
-      await Checks.write({ checks: withLintState('failure'), at: fixedNow });
+      await Checks.write({
+        checks: Checks.withLint('failure'),
+        at: fixedNow,
+      });
       const pending = await Checks.write({
-        checks: withLintState('pending'),
+        checks: Checks.withLint('pending'),
         at: later,
       });
       const failedAgain = await Checks.write({
-        checks: withLintState('failure'),
+        checks: Checks.withLint('failure'),
         at: third,
       });
 

@@ -16,6 +16,7 @@ const screens = [
   { name: 'settings-passkeys', path: '/settings/passkeys' },
   { name: 'settings-recovery-codes', path: '/settings/recovery-codes' },
   { name: 'settings-github', path: '/settings/github' },
+  { name: 'settings-watched-checks', path: '/settings/watched-checks' },
   { name: 'settings-briefings', path: '/settings/briefings' },
   { name: 'service-accounts', path: '/settings/service-accounts' },
 ] as const;
@@ -30,6 +31,9 @@ const sampleAccounts = [
 test.describe.configure({ mode: 'serial' });
 
 let missionControl = '';
+
+const phone = { width: 390, height: 844 };
+const desktop = { width: 1280, height: 720 };
 
 /** Captures each screen into the test report, for review across every theme and mode. Pixel baselines come later. */
 class Screens {
@@ -46,6 +50,44 @@ class Screens {
       }),
       contentType: 'image/png',
     });
+  }
+
+  /** The watched checks section's edit modal on a desktop, then the section and its modal at phone width. */
+  static async captureWatchedChecks(props: {
+    page: Page;
+    suffix: string;
+    testInfo: TestInfo;
+  }): Promise<void> {
+    const { page, suffix, testInfo } = props;
+    const edit = page.getByRole('button', { name: 'Edit acme-labs/web' });
+    const dialog = page.getByRole('dialog');
+
+    await page.goto('/settings/watched-checks');
+    await edit.click();
+    await expect(dialog).toBeVisible();
+    await Screens.capture({
+      page,
+      name: `settings-watched-checks-modal-${suffix}.png`,
+      testInfo,
+    });
+    await page.keyboard.press('Escape');
+
+    await page.setViewportSize(phone);
+    await page.goto('/settings/watched-checks');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await Screens.capture({
+      page,
+      name: `settings-watched-checks-390-${suffix}.png`,
+      testInfo,
+    });
+    await edit.click();
+    await expect(dialog).toBeVisible();
+    await Screens.capture({
+      page,
+      name: `settings-watched-checks-modal-390-${suffix}.png`,
+      testInfo,
+    });
+    await page.setViewportSize(desktop);
   }
 }
 
@@ -97,6 +139,11 @@ for (const theme of themes) {
           testInfo,
         });
       }
+      await Screens.captureWatchedChecks({
+        page,
+        suffix: `${theme}-${mode}`,
+        testInfo,
+      });
     });
 
     test(`${theme} ${mode}: sign-in`, async ({

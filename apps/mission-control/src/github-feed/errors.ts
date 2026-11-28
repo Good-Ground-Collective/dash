@@ -47,6 +47,28 @@ export class FeedSignInRequiredError extends Error {
   }
 }
 
+/** Fastify answers with `statusCode` and `code`. */
+export class WatchedChecksSignInRequiredError extends Error {
+  override name = 'WatchedChecksSignInRequiredError';
+  readonly statusCode = 401;
+  readonly code = 'SIGN_IN_REQUIRED';
+
+  constructor() {
+    super('Sign in to Dash as a person to choose which checks you watch.');
+  }
+}
+
+/** The id names no rule of the signed-in person. */
+export class WatchRuleNotFoundError extends Error {
+  override name = 'WatchRuleNotFoundError';
+  readonly statusCode = 404;
+  readonly code = 'WATCH_RULE_NOT_FOUND';
+
+  constructor(props: { id: string }) {
+    super(`You have no watch rule ${props.id}`);
+  }
+}
+
 export class ReconcileNotRegisteredError extends Error {
   override name = 'ReconcileNotRegisteredError';
 

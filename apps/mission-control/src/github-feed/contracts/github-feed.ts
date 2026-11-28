@@ -13,6 +13,10 @@ import {
   reviewDecisionSchema,
   runConclusionSchema,
 } from '#src/github-feed/contracts/github-records.ts';
+import {
+  watchedStateSchema,
+  watchSourceSchema,
+} from '#src/github-feed/contracts/watched-checks.ts';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -123,6 +127,16 @@ export const githubFeedCheckSchema = z.object({
     .describe(
       'When the check began failing, kept only across consecutive failing reads. A pending, success, neutral or skipped read clears it, so a later failure starts afresh. Null unless it is failing.',
     ),
+  watched: z
+    .boolean()
+    .describe(
+      'Whether the check counts toward `watchedState`: a repository says to watch it, or a rule matches its name and the repository doesn’t ignore it.',
+    ),
+  watchSource: watchSourceSchema
+    .nullable()
+    .describe(
+      'What made the check watched: a rule for every repository, or this repository’s own exception. Null when it isn’t watched.',
+    ),
 });
 
 export const githubFeedDefaultBranchSchema = z.object({
@@ -134,6 +148,9 @@ export const githubFeedDefaultBranchSchema = z.object({
     .describe(
       'How the head’s checks add up. Null when the head has no checks or GitHub refused to show them to Dash.',
     ),
+  watchedState: watchedStateSchema.describe(
+    'How the head’s watched checks add up, ignoring the rest. `none` when nothing on the head is watched, and then the repository is in no failure count.',
+  ),
   checksTruncated: z
     .boolean()
     .describe(

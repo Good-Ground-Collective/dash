@@ -1,11 +1,14 @@
 import { z } from 'zod';
+import { GithubFeedBranches } from './github-feed-branches.ts';
 import { acme, ada, GithubFeedItems, night } from './github-feed-items.ts';
+import type { GithubWatchedChecksStub } from './github-watched-checks-stub.ts';
 
 const feedScenarioSchema = z.enum([
   'not-connected',
   'first-sync',
   'empty',
   'populated',
+  'many-repos',
   'failing',
   'truncated',
 ]);
@@ -19,11 +22,17 @@ interface StubJson {
 
 /**
  * Mission Control's `GET /integrations/github/feed` for `GithubStub`. Times are worked out
- * from the moment of the request, so “5 minutes ago” reads the same on every run.
+ * from the moment of the request, so “5 minutes ago” reads the same on every run. Default
+ * branches carry the watched state the person's watched checks give them.
  * `POST /integrations/github/__stub/feed?name=…` picks the scenario.
  */
 export class GithubFeedStub {
   private scenario: FeedScenario = 'not-connected';
+  private readonly watched: GithubWatchedChecksStub;
+
+  constructor(props: { watched: GithubWatchedChecksStub }) {
+    this.watched = props.watched;
+  }
 
   reset(): void {
     this.scenario = 'not-connected';
@@ -78,7 +87,18 @@ export class GithubFeedStub {
     if (this.scenario === 'empty') {
       return { status: 200, body: { connections, ...empty } };
     }
-    return { status: 200, body: { connections, ...GithubFeedItems.all() } };
+    const branches =
+      this.scenario === 'many-repos'
+        ? GithubFeedBranches.many(110)
+        : GithubFeedBranches.all();
+    return {
+      status: 200,
+      body: {
+        connections,
+        ...GithubFeedItems.all(),
+        defaultBranches: this.watched.decorate(branches),
+      },
+    };
   }
 
   private static connection(

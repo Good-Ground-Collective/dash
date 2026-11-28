@@ -1,3 +1,5 @@
+import { NavItems } from '#lib/shell/nav-items.ts';
+
 export interface SettingsSection {
   label: string;
   href: string;
@@ -10,6 +12,12 @@ export interface SettingsGroup {
   label: string;
   sections: NonEmpty<SettingsSection>;
 }
+
+/** Settings itself, which the account menu links to. `/settings` opens the first section. */
+export const settingsSection: SettingsSection = {
+  label: 'Settings',
+  href: '/settings',
+};
 
 /** Service accounts, which the account menu also links to. */
 export const serviceAccountsSection: SettingsSection = {
@@ -29,7 +37,10 @@ export const settingsGroups: NonEmpty<SettingsGroup> = [
   },
   {
     label: 'GitHub',
-    sections: [{ label: 'Connections', href: '/settings/github' }],
+    sections: [
+      { label: 'Connections', href: '/settings/github' },
+      { label: 'Watched checks', href: '/settings/watched-checks' },
+    ],
   },
   {
     label: 'Agents',
@@ -48,8 +59,8 @@ export class SettingsSections {
     return settingsGroups[0].sections[0];
   }
 
-  /** Whether `pathname` is the section at `href`, trailing slash aside. */
+  /** Whether `pathname` is the section at `href` or a page under it, as `NavItems.isCurrent` reads it. */
   static isCurrent(props: { pathname: string; href: string }): boolean {
-    return props.pathname.replace(/\/+$/u, '') === props.href;
+    return NavItems.isCurrent(props);
   }
 }

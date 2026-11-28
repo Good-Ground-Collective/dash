@@ -91,7 +91,8 @@ export class MissionControlStub {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const signedIn = this.sessions.of(request) !== null;
     if (url.pathname.startsWith('/integrations/github/')) {
-      this.github.serve({ request, response, url, signedIn });
+      const body = await StubRequest.body(request);
+      this.github.serve({ request, response, url, body, signedIn });
       return;
     }
     if (url.pathname.startsWith('/objectives')) {
