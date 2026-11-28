@@ -1,31 +1,23 @@
 import {
   appendFile,
   readdir,
+  rm,
   stat,
   utimes,
   writeFile,
 } from 'node:fs/promises';
 
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  type MockInstance,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeIngest } from '#src/__tests__/support/fake-ingest.js';
 import { FakeTimers } from '#src/__tests__/support/fake-timers.js';
 import { RecordedPayloads } from '#src/__tests__/support/recorded-payloads.js';
 import { RetentionRace } from '#src/__tests__/support/retention-race.js';
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
+import { TestRelay } from '#src/__tests__/support/test-relay.js';
 import { RelayConfig } from '#src/config/relay-config.js';
-import {
-  OutboxHeartbeatRelay,
-  type RelayOutcome,
-} from '#src/services/heartbeat-relay/heartbeat-relay.js';
+import type { RelayOutcome } from '#src/services/heartbeat-relay/heartbeat-relay.js';
+import { OutboxDelivery } from '#src/services/outbox-delivery/outbox-delivery.js';
 import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
@@ -33,18 +25,17 @@ import { FileSessionLedger } from '#src/services/session-ledger/session-ledger.j
 
 let state: ScratchState;
 let ingest: FakeIngest;
-let runs: Promise<RelayOutcome>[];
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
   state = new ScratchState();
   ingest = await FakeIngest.start();
-  runs = [];
+  TestRelay.bind({ state, ingest });
 });
 
 afterEach(async () => {
   try {
-    await FakeTimers.runUntil(Promise.allSettled(runs));
+    await FakeTimers.runUntil(TestRelay.settled());
   } finally {
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -52,49 +43,6 @@ afterEach(async () => {
     await state.remove();
   }
 });
-
-/** Relays against the fake ingest, each tracked so teardown waits for it before removing the state. */
-class TestRelay {
-  static readonly POLL_MS = 7;
-  static readonly MIN_BACKOFF_MS = 10;
-  static readonly MAX_BACKOFF_MS = 40;
-
-  static start(): Promise<RelayOutcome> {
-    const running = new OutboxHeartbeatRelay({
-      config: state.config,
-      relayConfig: state.relayConfig(ingest.url),
-      pollMs: TestRelay.POLL_MS,
-      minBackoffMs: TestRelay.MIN_BACKOFF_MS,
-      maxBackoffMs: TestRelay.MAX_BACKOFF_MS,
-    }).run();
-    runs.push(running);
-    return running;
-  }
-
-  static spyOnBackoff(): MockInstance<(failures: number) => number> {
-    // SAFETY: `backoffMs` is a private method of the relay with exactly this signature.
-    // eslint-disable-next-line preflight/no-chained-type-assertions -- reaching a private method needs the cast through unknown
-    const relay = OutboxHeartbeatRelay.prototype as unknown as {
-      backoffMs: (failures: number) => number;
-    };
-    return vi.spyOn(relay, 'backoffMs');
-  }
-
-  static run(): Promise<RelayOutcome> {
-    return FakeTimers.runUntil(TestRelay.start());
-  }
-
-  static seqsUpTo(count: number): number[] {
-    return Array.from({ length: count }, (_, index) => index);
-  }
-
-  static async exists(file: string): Promise<boolean> {
-    return stat(file).then(
-      () => true,
-      () => false,
-    );
-  }
-}
 
 describe('FakeTimers.fire', () => {
   it('surfaces the relay rejection as the cause when it fails before the timers fire', async () => {
@@ -329,7 +277,7 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
 describe('OutboxHeartbeatRelay against retention', () => {
   let race: RetentionRace;
 
-  beforeEach(() => (race = new RetentionRace(state)));
+  beforeEach(() => (race = new RetentionRace({ state })));
 
   it('does not save a stale cursor over an outbox the resumed session recreated mid-send, and relays it in full', async () => {
     await state.writeTurns(1);
@@ -359,5 +307,47 @@ describe('OutboxHeartbeatRelay against retention', () => {
     await TestRelay.run();
 
     expect(await race.cursorExists()).toBe(false);
+  });
+
+  it('does not save a cursor read before retention removed it, which would skip the resumed session seqs it covers', async () => {
+    ingest.invalidSeqs.add(0).add(1);
+    await state.writeTurns(1);
+    await TestRelay.run();
+    expect(ingest.stored).toEqual([]);
+    ingest.invalidSeqs.clear();
+    await race.expireOutbox();
+    await race.expireSessionState();
+    race.beforeNextRead(() => race.pruneThenResume());
+
+    await TestRelay.run();
+    await TestRelay.run();
+
+    const { resumed, stored } = await race.seqs(ingest.stored);
+    expect(resumed).toEqual([0, 1]);
+    expect(stored).toEqual(expect.arrayContaining(resumed));
+  });
+
+  it('reports progress when the guarded save refuses after a batch was sent', async () => {
+    await state.writeTurns(1);
+    await race.expireOutbox();
+    const deliveries = vi.spyOn(OutboxDelivery.prototype, 'deliverAll');
+    race.afterNextSend(() => race.pruneThenResume());
+
+    await TestRelay.run();
+
+    expect(await deliveries.mock.results[0]?.value).toBe(true);
+    expect(await race.cursorFits(await stat(race.outboxPath()))).toBe(true);
+  });
+
+  it('saves the cursor when the sessions directory is missing, so the lines are not sent twice', async () => {
+    await state.writeTurns(1);
+    await rm(state.config.sessionsDirectory, { recursive: true, force: true });
+
+    expect(await TestRelay.run()).toBe('drained');
+    const requests = ingest.requests;
+    expect(await race.cursorExists()).toBe(true);
+
+    await TestRelay.run();
+    expect(ingest.requests).toBe(requests);
   });
 });

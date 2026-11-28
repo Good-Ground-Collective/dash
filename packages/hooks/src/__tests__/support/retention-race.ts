@@ -1,20 +1,31 @@
 import { link, stat, truncate, utimes } from 'node:fs/promises';
+import path from 'node:path';
 
 import { vi } from 'vitest';
+import { z } from 'zod';
 
 import { RecordedPayloads } from '#src/__tests__/support/recorded-payloads.js';
-import type { ScratchState } from '#src/__tests__/support/scratch-state.js';
+import { ScratchState } from '#src/__tests__/support/scratch-state.js';
 import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
+import { OutboxReader } from '#src/services/outbox-reader/outbox-reader.js';
 import { OutboxRetention } from '#src/services/outbox-retention/outbox-retention.js';
 import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 import { FileSessionLedger } from '#src/services/session-ledger/session-ledger.js';
+
+const retentionRacePropsSchema = z.object({
+  state: z.instanceof(ScratchState),
+});
+
+export type RetentionRaceProps = z.input<typeof retentionRacePropsSchema>;
 
 /** Arranges what happens to the outbox while a batch is in flight, between the send and the cursor save. */
 export class RetentionRace {
   private readonly state: ScratchState;
 
-  constructor(state: ScratchState) {
-    this.state = state;
+  constructor(props: RetentionRaceProps) {
+    const valid = retentionRacePropsSchema.parse(props);
+
+    this.state = valid.state;
   }
 
   outboxPath(): string {
@@ -33,6 +44,17 @@ export class RetentionRace {
         const results = await send.apply(this, args);
         await duringSend();
         return results;
+      },
+    );
+  }
+
+  /** Runs `beforeRead` as the next outbox read begins, after the relay has loaded its cursor and before it reads. */
+  beforeNextRead(beforeRead: () => Promise<void>): void {
+    const read = OutboxReader.read;
+    vi.spyOn(OutboxReader, 'read').mockImplementationOnce(
+      async (...args: Parameters<typeof OutboxReader.read>) => {
+        await beforeRead();
+        return read.apply(OutboxReader, args);
       },
     );
   }
@@ -84,6 +106,15 @@ export class RetentionRace {
   async expireOutbox(): Promise<number> {
     await utimes(this.outboxPath(), new Date(0), new Date(0));
     return this.keepInode();
+  }
+
+  /** Ages the session's state file past retention, so a resumed session's `seq` restarts at 0. */
+  async expireSessionState(): Promise<void> {
+    const statePath = path.join(
+      this.state.config.sessionsDirectory,
+      `${this.cursorStem()}.json`,
+    );
+    await utimes(statePath, new Date(0), new Date(0));
   }
 
   /** Retention prunes the outbox, then the resumed session writes a fresh one. */

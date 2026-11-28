@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { z } from 'zod';
@@ -93,11 +93,19 @@ export class OutboxDelivery {
       }
 
       await this.send(stem, batch);
+      progressed = true;
+      const readWith = cursor;
       cursor = OutboxDelivery.advance(cursor, batch);
-      if (!(await this.saveCursorIfOutboxUnchanged(stem, cursor, batch))) {
+      if (
+        !(await this.saveCursorIfOutboxUnchanged({
+          stem,
+          readWith,
+          cursor,
+          batch,
+        }))
+      ) {
         return progressed;
       }
-      progressed = true;
     }
 
     await this.removeIfFinished(stem, cursor);
@@ -106,19 +114,30 @@ export class OutboxDelivery {
 
   /**
    * Saves the cursor under the session's lock, only while the outbox still exists with the inode of
-   * the batch just sent and is at least as long as the batch. Retention deletes the outbox and its
-   * cursor under that lock, so a cursor for a deleted outbox is never written back to skip the lines
-   * of a resumed session. `false` when the outbox is gone, replaced or shorter than the batch.
+   * the batch just sent, is at least as long as the batch, and the stored cursor is still the one the
+   * batch was read with. Retention deletes the outbox and its cursor under that lock, so a cursor for a
+   * deleted outbox is never written back, and a batch read with a cursor retention has since removed
+   * (its `ackedSeq` would skip a resumed session's restarted seqs) is dropped to be read again.
+   * `false`, saving nothing, when any of those no longer holds.
    */
-  private async saveCursorIfOutboxUnchanged(
-    stem: string,
-    cursor: RelayCursor,
-    batch: OutboxBatch,
-  ): Promise<boolean> {
+  private async saveCursorIfOutboxUnchanged(props: {
+    stem: string;
+    readWith: RelayCursor;
+    cursor: RelayCursor;
+    batch: OutboxBatch;
+  }): Promise<boolean> {
+    const { stem, readWith, cursor, batch } = props;
+
+    await mkdir(this.config.sessionsDirectory, { recursive: true });
     return new FileLock({ lockPath: this.sessionLockPath(stem) }).hold(
       async () => {
         const outbox = await stat(this.outboxPath(stem)).catch(() => undefined);
         if (outbox?.ino !== batch.inode || outbox.size < batch.endOffset) {
+          return false;
+        }
+
+        const stored = await RelayCursorStore.load(this.cursorsDirectory, stem);
+        if (!OutboxDelivery.sameCursor(stored, readWith)) {
           return false;
         }
 
@@ -223,6 +242,14 @@ export class OutboxDelivery {
 
   private outboxPath(stem: string): string {
     return path.join(this.config.outboxDirectory, `${stem}.jsonl`);
+  }
+
+  private static sameCursor(left: RelayCursor, right: RelayCursor): boolean {
+    return (
+      left.inode === right.inode &&
+      left.offset === right.offset &&
+      left.ackedSeq === right.ackedSeq
+    );
   }
 
   private static advance(cursor: RelayCursor, batch: OutboxBatch): RelayCursor {
