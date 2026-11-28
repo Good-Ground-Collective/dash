@@ -25,6 +25,7 @@
     "@dash/integrations-github": "workspace:*",
     "@dbos-inc/dbos-sdk": "catalog:",
     "@fastify/cors": "catalog:",
+    "@good-ground-collective/agentic-communication-standards": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "fastify": "catalog:",

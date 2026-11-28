@@ -1,13 +1,41 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { ClockRefresh } from '#lib/home/clock-refresh.ts';
+  import { HomeFeed } from '#lib/home/home-feed.ts';
+  import { HomeGreeting } from '#lib/home/home-greeting.ts';
   import { SetupChecklist } from '#lib/onboarding/setup-checklist.ts';
   import SetupChecklistCard from '#lib/onboarding-ui/SetupChecklistCard.svelte';
-  import GithubHomePanel from '#lib/github-feed-ui/GithubHomePanel.svelte';
-  import ObjectivesPanel from '#lib/objectives-ui/ObjectivesPanel.svelte';
+  import ComingSoon from '#lib/home-ui/ComingSoon.svelte';
+  import NeedsYouSection from '#lib/home-ui/NeedsYouSection.svelte';
+  import SinceYesterdaySection from '#lib/home-ui/SinceYesterdaySection.svelte';
+  import TodaysFocus from '#lib/home-ui/TodaysFocus.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
 
+  let now = $state(new Date());
+
+  $effect(() => {
+    void data;
+    now = new Date();
+  });
+
+  onMount(() =>
+    new ClockRefresh({
+      refresh: () => {
+        now = new Date();
+      },
+      visibility: document,
+    }).start(),
+  );
+
   let checklist = $derived(SetupChecklist.from(data.checklist));
+  let greeting = $derived(
+    new HomeGreeting({ now, name: data.viewer?.name ?? null }),
+  );
+  let feed = $derived(
+    data.github === null ? null : new HomeFeed({ state: data.github, now }),
+  );
 </script>
 
 <svelte:head>
@@ -15,17 +43,41 @@
 </svelte:head>
 
 <section class="home" aria-labelledby="home-title">
-  <h1 id="home-title">Home</h1>
+  <header class="greeting">
+    <h1 id="home-title">{greeting.salutation}</h1>
+    <p class="date">{greeting.date}</p>
+  </header>
   {#if checklist}
     <SetupChecklistCard {checklist} />
   {/if}
-  {#if data.objectives !== null}
-    <ObjectivesPanel objectives={data.objectives} />
-  {/if}
-  {#if data.github !== null}
-    <GithubHomePanel github={data.github} />
-  {/if}
-  {#if !checklist && data.github === null}
+  {#if feed !== null}
+    <ComingSoon
+      id="briefing-title"
+      title="Briefing"
+      message="Coming soon: a short read on what changed and where to go next."
+    />
+    <div class="columns">
+      <div class="column main">
+        <NeedsYouSection {feed} />
+        {#if data.objectives !== null}
+          <TodaysFocus objectives={data.objectives} />
+        {/if}
+      </div>
+      <div class="column side">
+        <ComingSoon
+          id="agents-title"
+          title="Agents now"
+          message="Coming soon: agents at work and what they’re doing."
+        />
+        <ComingSoon
+          id="benches-title"
+          title="Benches"
+          message="Coming soon: each bench’s health and its agents."
+        />
+        <SinceYesterdaySection {feed} />
+      </div>
+    </div>
+  {:else if !checklist}
     <div class="panel">
       <p class="empty-title">Nothing here yet</p>
       <p class="empty-body">
@@ -38,7 +90,15 @@
 <style>
   .home {
     display: grid;
-    gap: var(--space-4);
+    gap: var(--space-5);
+  }
+
+  .greeting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
   }
 
   h1 {
@@ -47,6 +107,31 @@
     font-weight: var(--font-weight-semibold);
     letter-spacing: -0.015em;
     line-height: var(--line-height-tight);
+  }
+
+  .date {
+    color: var(--ink-muted);
+  }
+
+  .columns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-5);
+  }
+
+  .column {
+    display: grid;
+    gap: var(--space-5);
+    min-width: 0;
+  }
+
+  .main {
+    flex: 3 1 32rem;
+  }
+
+  .side {
+    flex: 2 1 21rem;
   }
 
   .panel {

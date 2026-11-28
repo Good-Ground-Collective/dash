@@ -11,10 +11,32 @@ export class AgentMismatchError extends Error {
   }
 }
 
+/** Fastify answers with `statusCode` and `code`. */
+export class AgentSessionsSignInRequiredError extends Error {
+  override name = 'AgentSessionsSignInRequiredError';
+  readonly statusCode = 401;
+  readonly code = 'SIGN_IN_REQUIRED';
+
+  constructor() {
+    super('Sign in to Dash as a person to see agent sessions.');
+  }
+}
+
+/** The insert neither stored the heartbeat nor found the one already stored under its `(sessionId, seq)`. */
 export class AgentHeartbeatNotRecordedError extends Error {
   override name = 'AgentHeartbeatNotRecordedError';
 
+  constructor(props: { sessionId: string; seq: number }) {
+    super(
+      `agent_heartbeat holds no row for session ${props.sessionId} seq ${props.seq}`,
+    );
+  }
+}
+
+export class AgentHeartbeatRetentionNotRegisteredError extends Error {
+  override name = 'AgentHeartbeatRetentionNotRegisteredError';
+
   constructor() {
-    super('Insert into agent_heartbeat returned no row');
+    super('Register the heartbeat retention workflow before activating it');
   }
 }
