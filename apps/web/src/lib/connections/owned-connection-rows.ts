@@ -9,7 +9,12 @@ import {
 export interface OwnedConnectionRow extends ConnectionStatus {
   /** The installation's settings on GitHub, once the account list has loaded. */
   manageUrl: string | null;
+  /** Why a personal account's install never feeds Today's focus, or null for an organisation. */
+  note: string | null;
 }
+
+const personalAccountNote =
+  'Initiatives come from organisation Projects. GitHub doesn’t let apps read a personal account’s Projects.';
 
 /** Settings › Connections: the owned installs Dash reads, with how fresh each read is and where to manage it. */
 export class OwnedConnectionRows {
@@ -25,13 +30,22 @@ export class OwnedConnectionRows {
           : [],
       ),
     );
+    const personal = new Set(
+      props.accounts
+        .filter((entry) => entry.account.kind === 'user')
+        .map((entry) => entry.account.login.toLowerCase()),
+    );
     return props.connections
       .filter((connection) => connection.kind === 'owned')
       .toSorted((a, b) => a.accountLogin.localeCompare(b.accountLogin))
-      .map((connection) => ({
-        ...GithubFeedView.statusOf(connection),
-        manageUrl: manage.get(connection.accountLogin.toLowerCase()) ?? null,
-      }));
+      .map((connection) => {
+        const login = connection.accountLogin.toLowerCase();
+        return {
+          ...GithubFeedView.statusOf(connection),
+          manageUrl: manage.get(login) ?? null,
+          note: personal.has(login) ? personalAccountNote : null,
+        };
+      });
   }
 
   /** GitHub's own account picker when the list has it, otherwise the Connect GitHub step. */

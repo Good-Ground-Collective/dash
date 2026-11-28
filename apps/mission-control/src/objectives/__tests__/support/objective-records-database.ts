@@ -9,6 +9,7 @@ import {
   adaId,
   graceId,
   ownedId,
+  personalId,
 } from '#src/objectives/__tests__/support/objectives-fixtures.ts';
 import { DrizzleObjectiveOverlayRepository } from '#src/objectives/repositories/objective-overlays/objective-overlay-repository.ts';
 import { DrizzleObjectiveRecordReader } from '#src/objectives/repositories/objective-records/objective-record-reader.ts';
@@ -60,6 +61,23 @@ export class ObjectiveRecordsDatabase {
       settingsUrl:
         'https://github.com/organizations/acme/settings/installations/42',
       repositorySelection: 'selected',
+      connectedBy: adaId,
+    });
+  }
+
+  /** Installs the app on Ada's personal account, which Dash never reads objectives from. */
+  async addPersonalConnection(): Promise<void> {
+    await this.database.orm.insert(connectionTable).values({
+      id: personalId,
+      provider: 'github',
+      kind: 'owned',
+      installationId: '43',
+      accountExternalId: '9920',
+      accountLogin: 'ada',
+      accountKind: 'user',
+      accountUrl: 'https://github.com/ada',
+      settingsUrl: 'https://github.com/settings/installations/43',
+      repositorySelection: 'all',
       connectedBy: adaId,
     });
   }

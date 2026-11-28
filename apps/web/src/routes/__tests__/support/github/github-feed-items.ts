@@ -1,5 +1,6 @@
 export const acme = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0001';
 export const night = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0002';
+export const ada = '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0003';
 
 /** The populated feed's items for `GithubFeedStub`, timed from the moment of the request. */
 export class GithubFeedItems {

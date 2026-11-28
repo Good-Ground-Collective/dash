@@ -21,7 +21,7 @@ interface StoredSync {
   records: ObjectiveRecords;
 }
 
-/** Connections and their objective rows in memory, replaced whole on each read the way the tables are upserted and pruned. */
+/** Organisation connections and their objective rows in memory, replaced whole on each read the way the tables are upserted and pruned. */
 export class InMemoryObjectiveRecords
   implements ObjectiveRecordReader, ObjectiveRecordWriter
 {
@@ -46,6 +46,7 @@ export class InMemoryObjectiveRecords
       .filter(
         (target) =>
           props.providers.includes(target.provider) &&
+          target.account.kind === 'organization' &&
           (props.connectionId === undefined ||
             target.connectionId === props.connectionId) &&
           (props.installationId === undefined ||
@@ -62,7 +63,9 @@ export class InMemoryObjectiveRecords
   }): Promise<ConnectionObjectives[]> {
     return this.targets.flatMap((target) => {
       const sync = this.syncs.get(target.connectionId);
-      return target.connectedBy !== props.connectedBy || sync === undefined
+      return target.connectedBy !== props.connectedBy ||
+        target.account.kind !== 'organization' ||
+        sync === undefined
         ? []
         : [
             {

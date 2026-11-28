@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { acme, GithubFeedItems, night } from './github-feed-items.ts';
+import { acme, ada, GithubFeedItems, night } from './github-feed-items.ts';
 
 const feedScenarioSchema = z.enum([
   'not-connected',
@@ -70,6 +70,7 @@ export class GithubFeedStub {
         ...GithubFeedStub.connection(night, 'night-shift', 190),
         lastError: 'GitHub rate-limited the read. Dash will try again soon.',
       },
+      GithubFeedStub.connection(ada, 'ada', 4),
     ];
     if (this.scenario === 'empty') {
       return { status: 200, body: { connections, ...empty } };

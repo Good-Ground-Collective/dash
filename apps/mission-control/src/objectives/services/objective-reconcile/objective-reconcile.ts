@@ -1,7 +1,4 @@
-import {
-  type TaskTracker,
-  TrackerAccountUnsupportedError,
-} from '@dash/integrations-core';
+import type { TaskTracker } from '@dash/integrations-core';
 import { z } from 'zod';
 
 import {
@@ -149,9 +146,6 @@ export class TrackedObjectiveReconcile implements ObjectiveReconcile {
   private static describe(error: Error): string {
     if (error instanceof ObjectiveInstallationSuspendedError) {
       return error.message;
-    }
-    if (error instanceof TrackerAccountUnsupportedError) {
-      return 'Dash reads initiatives from an organisation’s tracker. The provider doesn’t let its app read ones a personal account owns.';
     }
     if (error instanceof ObjectiveConnectionUnreadableError) {
       return 'This connection can’t be read until it is reconnected.';
