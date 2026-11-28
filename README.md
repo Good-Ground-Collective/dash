@@ -278,7 +278,7 @@ Mission Control's workflow runtime never takes the "latest" application version 
 
 1. Add `DASH_CLAIM_LATEST_VERSION: force` under `env.clear` in `deploy/mission-control.yml`.
 2. Deploy the older version the same way, for example `--version v1.1.0`. After a deploy that failed its health check, deploy the version still running, which restarts it.
-3. Remove the line again.
+3. Once the rollback is healthy, remove the line and deploy the same version again. Kamal applies `env.clear` only when it creates a container, so removing the line does nothing to the running one: until a deploy replaces it, that container keeps `force` and claims "latest" on every restart, including one during the next deploy's overlap.
 
 The switch is needed after a failed deploy too: the new container claims "latest" at launch, before it listens, so when Kamal keeps the old container because the new one failed its health check, the old one no longer holds the marker and a plain restart will not reclaim it. With the switch set the container claims "latest" at launch regardless; without it, the container logs that it left the marker alone.
 
