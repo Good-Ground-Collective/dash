@@ -20,7 +20,11 @@ import {
 } from '#src/connections/errors.ts';
 import type { InstallRequestRepository } from '#src/connections/repositories/install-requests/install-request-repository.ts';
 import type { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
-import type { ConnectState } from '#src/connections/services/connect-state/connect-state.ts';
+import { ConnectReturn } from '#src/connections/services/connect-return/connect-return.ts';
+import type {
+  ConnectState,
+  ConnectStatePayload,
+} from '#src/connections/services/connect-state/connect-state.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
 import { SignedInPerson } from '#src/auth/services/signed-in-person/signed-in-person.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
@@ -28,7 +32,7 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 /**
  * A provider's connect flow under `/integrations/<provider>`:
  * - `GET /connect`: the install and authorize URLs for the web's “Connect” button, the linked account and the owned connections. Needs a session.
- * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request). The provider doesn't say which account a request was for, so one is recorded only when the state names the account, as an install link Dash made for an organisation does. A request from the provider's own picker isn't recorded; the account shows up once an owner installs.
+ * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request). The provider doesn't say which account a request was for, so one is recorded only when the state names the account, as an install link Dash made for an organisation does. A request from the provider's own picker isn't recorded; the account shows up once an owner installs. A request whose state has expired isn't recorded either, and the person hears so.
  * - `GET /callback`: the OAuth callback, which links the account and finishes an install that was waiting for it.
  *
  * Both callbacks end with a redirect to the web app's `returnTo` path, carrying `connect=<outcome>` and, on failure, `reason`.
@@ -39,7 +43,7 @@ export class ConnectRoutes {
   private readonly person: SignedInPerson;
   private readonly state: ConnectState;
   private readonly paths: ConnectPaths;
-  private readonly webOrigin: string;
+  private readonly back: ConnectReturn;
   private readonly listeners: readonly ConnectListener[];
   private readonly requests: InstallRequestRepository;
 
@@ -58,7 +62,11 @@ export class ConnectRoutes {
     this.person = new SignedInPerson({ identity: props.identity });
     this.state = props.state;
     this.paths = props.paths;
-    this.webOrigin = props.webOrigin;
+    this.back = new ConnectReturn({
+      provider: props.connections.provider,
+      webOrigin: props.webOrigin,
+      defaultReturnTo: props.paths.defaultReturnTo,
+    });
     this.listeners = props.listeners;
     this.requests = props.requests;
   }
@@ -114,25 +122,15 @@ export class ConnectRoutes {
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
-    const state =
-      query.state === undefined
-        ? null
-        : this.state.read({
-            token: query.state,
-            userId,
-            provider: this.connections.provider,
-          });
+    const state = this.state.read({
+      token: query.state,
+      userId,
+      provider: this.connections.provider,
+    });
     const returnTo = state?.returnTo ?? this.paths.defaultReturnTo;
 
     if (query.setupAction === 'request') {
-      if (state?.targetAccountId !== undefined) {
-        await this.requests.record({
-          userId,
-          provider: this.connections.provider,
-          accountExternalId: state.targetAccountId,
-        });
-      }
-      return this.finish({ reply, returnTo, outcome: 'requested' });
+      return this.request({ reply, userId, state });
     }
     if (query.installationId === undefined) {
       return this.finish({
@@ -151,6 +149,36 @@ export class ConnectRoutes {
     });
   }
 
+  /**
+   * The provider has already sent the request to the organisation's owners. Without a valid
+   * state, as when the link expired, Dash can't tell which account it was for, so the person
+   * hears that it wasn't recorded rather than that it was.
+   */
+  private async request(props: {
+    reply: FastifyReply;
+    userId: string;
+    state: ConnectStatePayload | null;
+  }): Promise<FastifyReply> {
+    const { reply, userId, state } = props;
+    if (state === null) {
+      return this.finish({
+        reply,
+        outcome: 'error',
+        reason: 'request-unrecorded',
+      });
+    }
+
+    const { returnTo, targetAccountId } = state;
+    if (targetAccountId !== undefined) {
+      await this.requests.record({
+        userId,
+        provider: this.connections.provider,
+        accountExternalId: targetAccountId,
+      });
+    }
+    return this.finish({ reply, returnTo, outcome: 'requested' });
+  }
+
   private async callback(props: {
     request: FastifyRequest<{
       Querystring: z.output<typeof callbackQuerySchema>;
@@ -163,14 +191,11 @@ export class ConnectRoutes {
     if (userId === null) {
       return this.finish({ reply, outcome: 'error', reason: 'signed-out' });
     }
-    const state =
-      query.state === undefined
-        ? null
-        : this.state.read({
-            token: query.state,
-            userId,
-            provider: this.connections.provider,
-          });
+    const state = this.state.read({
+      token: query.state,
+      userId,
+      provider: this.connections.provider,
+    });
     if (state === null) {
       return this.finish({ reply, outcome: 'error', reason: 'state' });
     }
@@ -267,21 +292,14 @@ export class ConnectRoutes {
     error: unknown;
   }): FastifyReply {
     const { request, reply, returnTo, error } = props;
-    if (error instanceof InstallationNotYoursError) {
-      return this.finish({
-        reply,
-        returnTo,
-        outcome: 'error',
-        reason: 'not-yours',
-      });
-    }
-    if (error instanceof AccountLinkedElsewhereError) {
-      return this.finish({
-        reply,
-        returnTo,
-        outcome: 'error',
-        reason: 'linked-elsewhere',
-      });
+    const reason =
+      error instanceof InstallationNotYoursError
+        ? 'not-yours'
+        : error instanceof AccountLinkedElsewhereError
+          ? 'linked-elsewhere'
+          : null;
+    if (reason !== null) {
+      return this.finish({ reply, returnTo, outcome: 'error', reason });
     }
     request.log.error(
       {
@@ -307,15 +325,6 @@ export class ConnectRoutes {
     outcome: ConnectOutcome;
     reason?: ConnectErrorReason;
   }): FastifyReply {
-    const url = new URL(
-      props.returnTo ?? this.paths.defaultReturnTo,
-      this.webOrigin,
-    );
-    url.searchParams.set('connect', props.outcome);
-    url.searchParams.set('provider', this.connections.provider);
-    if (props.reason !== undefined) {
-      url.searchParams.set('reason', props.reason);
-    }
-    return props.reply.redirect(url.toString());
+    return props.reply.redirect(this.back.url(props));
   }
 }

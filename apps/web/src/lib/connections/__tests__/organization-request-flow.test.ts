@@ -23,19 +23,18 @@ class Sample {
   }
 }
 
-/** A flow over a Mission Control that answers every lookup with `answer`. */
+/** A flow over a Mission Control that answers every lookup with `answer`, given the login. */
 class Harness {
   readonly logins: string[] = [];
   readonly flow: OrganizationRequestFlow;
 
-  constructor(props: { answer: () => Response }) {
+  constructor(props: { answer: (login: string) => Response }) {
     const accounts = new HttpGithubAccounts({
       baseUrl: 'https://api.example.test',
       fetch: async (input) => {
-        this.logins.push(
-          new URL(String(input)).searchParams.get('login') ?? '',
-        );
-        return props.answer();
+        const login = new URL(String(input)).searchParams.get('login') ?? '';
+        this.logins.push(login);
+        return props.answer(login);
       },
     });
     this.flow = new OrganizationRequestFlow({
@@ -102,6 +101,28 @@ describe('OrganizationRequestFlow.lookUp', () => {
   });
 });
 
+describe('OrganizationRequestFlow.lookUp logins', () => {
+  it.each(['.', '..', 'a_b', '-a', 'a-', 'a--b', 'a'.repeat(40)])(
+    'explains why %s can’t be a GitHub login without calling',
+    async (login) => {
+      const harness = new Harness({
+        answer: () => Response.json({ status: 'missing' }),
+      });
+
+      const outcome = await harness.flow.lookUp({ login, listed: [] });
+
+      expect(outcome).toEqual({
+        kind: 'problem',
+        message:
+          login.length > 39
+            ? 'That’s longer than any GitHub login.'
+            : 'A GitHub login has only letters, digits and single dashes, and doesn’t start or end with a dash.',
+      });
+      expect(harness.logins).toEqual([]);
+    },
+  );
+});
+
 describe('OrganizationRequestFlow.lookUp refusals', () => {
   it('starts the list over when GitHub needs authorizing again', async () => {
     const harness = new Harness({
@@ -160,5 +181,61 @@ describe('OrganizationRequestFlow.withLookedUp', () => {
         lookedUp: [globex],
       }),
     ).toEqual([acme, installedGlobex]);
+  });
+});
+
+describe('OrganizationRequestFlow.refresh', () => {
+  it('gives each row a freshly signed link and drops one GitHub no longer has', async () => {
+    const globex = Sample.organisation('globex', '7070');
+    const initech = Sample.organisation('initech', '8080');
+    const fresh: ConnectableAccount = {
+      ...globex,
+      install: {
+        state: 'requestable',
+        installUrl:
+          'https://github.com/apps/dash/installations/new/permissions?target_id=7070&state=fresh',
+      },
+    };
+    const harness = new Harness({
+      answer: (login) =>
+        login === 'globex'
+          ? Response.json({ status: 'found', entry: fresh })
+          : Response.json({ status: 'missing' }),
+    });
+
+    await expect(harness.flow.refresh([globex, initech])).resolves.toEqual([
+      fresh,
+    ]);
+    expect(harness.logins).toEqual(['globex', 'initech']);
+  });
+
+  it('keeps a row as it was when it can’t be looked up again', async () => {
+    const globex = Sample.organisation('globex', '7070');
+    const harness = new Harness({
+      answer: () =>
+        Response.json({ code: 'PROVIDER_UNAVAILABLE' }, { status: 502 }),
+    });
+
+    await expect(harness.flow.refresh([globex])).resolves.toEqual([globex]);
+  });
+});
+
+describe('OrganizationRequestFlow.withRefreshed', () => {
+  it('keeps a row looked up during the refresh over its refreshed copy', () => {
+    const globex = Sample.organisation('globex', '7070');
+    const refreshedGlobex = Sample.organisation('globex', '7070');
+    const initech = Sample.organisation('initech', '8080');
+    const refreshedInitech = Sample.organisation('initech', '8080');
+    const lookedUpAgain = Sample.organisation('initech', '8080');
+
+    const rows = OrganizationRequestFlow.withRefreshed({
+      before: [globex, initech],
+      refreshed: [refreshedGlobex, refreshedInitech],
+      current: [globex, lookedUpAgain],
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toBe(refreshedGlobex);
+    expect(rows[1]).toBe(lookedUpAgain);
   });
 });

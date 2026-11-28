@@ -37,7 +37,7 @@
   let region = $state<HTMLElement>();
 
   /** Organisations the person looked up, shown until the list itself has them. */
-  let lookedUp = $state<ConnectableAccount[]>([]);
+  let lookedUp = $state.raw<ConnectableAccount[]>([]);
 
   let listed = $derived(
     current.state === 'linked'
@@ -69,16 +69,26 @@
   };
 
   /**
-   * Loads the list. A quiet reload, as when the tab comes back into view, keeps what's shown
-   * until the answer arrives. After Try again, focus moves to the list so it's announced.
+   * Loads the list, and looks the looked-up organisations up again so their install links are
+   * fresh. A quiet reload, as when the tab comes back into view, keeps what's shown until the
+   * answer arrives. After Try again, focus moves to the list so it's announced.
    */
   const load = async (props: { quiet: boolean; refocus: boolean }) => {
     if (busy) return;
     busy = true;
     if (!props.quiet) current = ConnectGithubFlow.start();
 
-    const next = await flow.load();
+    const before = lookedUp;
+    const [next, refreshed] = await Promise.all([
+      flow.load(),
+      requests.refresh(before),
+    ]);
     if (!(props.quiet && next.state === 'failed')) current = next;
+    lookedUp = OrganizationRequestFlow.withRefreshed({
+      before,
+      refreshed,
+      current: lookedUp,
+    });
     busy = false;
 
     summary = ConnectGithubFlow.summary(current);

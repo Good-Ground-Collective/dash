@@ -34,6 +34,7 @@ describe('ConnectResults.fromUrl', () => {
     const reasons = [
       'signed-out',
       'state',
+      'request-unrecorded',
       'denied',
       'not-yours',
       'linked-elsewhere',
@@ -47,7 +48,7 @@ describe('ConnectResults.fromUrl', () => {
         )?.message,
     );
 
-    expect(new Set(messages).size).toBe(6);
+    expect(new Set(messages).size).toBe(7);
     expect(messages.at(-1)).toBe('GitHub didn’t finish connecting. Try again.');
     expect(messages.at(-2)).toBe(messages.at(-1));
     expect(

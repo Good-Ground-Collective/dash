@@ -88,3 +88,18 @@ describe('RequestedAccounts', () => {
     ).resolves.toEqual([]);
   });
 });
+
+describe('RequestedAccounts through an expired link', () => {
+  it('says a request through a link that expired wasn’t recorded, and lists nothing', async () => {
+    const harness = await reads.linked();
+
+    const response = await InstallRequestReads.requestGlobex(harness, {
+      lateByMs: 11 * 60 * 1000,
+    });
+
+    expect(response.headers.location).toBe(
+      `${webOrigin}/setup/github?connect=error&provider=github&reason=request-unrecorded`,
+    );
+    expect(harness.installRequests.requests.size).toBe(0);
+  });
+});

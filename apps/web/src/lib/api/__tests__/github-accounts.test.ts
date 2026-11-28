@@ -175,7 +175,7 @@ describe('HttpGithubAccounts lookUp', () => {
 
     await expect(
       accounts.lookUp({ login: 'acme/app', returnTo: '/setup/github' }),
-    ).rejects.toThrow(/only letters, digits and dashes/u);
+    ).rejects.toThrow(/only letters, digits and single dashes/u);
     expect(recorder.calls).toEqual([]);
   });
 });

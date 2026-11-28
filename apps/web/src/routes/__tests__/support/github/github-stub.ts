@@ -26,12 +26,14 @@ const publicMemberships = ['initech'];
  * to the web app with the `connect=` result Mission Control's callbacks send. Avatars are small
  * SVGs served here, so the page never calls GitHub. `POST /__stub/scenario?name=…` picks
  * whether the person has authorized yet, or whether listing fails. `/accounts/lookup` finds the
- * `findable` organisations, and their install link records a request. `/feed` is `GithubFeedStub`.
+ * `findable` organisations, and their install link, numbered afresh by each lookup, records a request. `/feed` is `GithubFeedStub`.
  */
 export class GithubStub {
   private readonly webOrigin: () => string;
   private scenario: Scenario = 'authorize';
   private accounts: StubAccount[] = GithubStubAccounts.sample();
+  /** Numbers each lookup's install link, standing in for the fresh signed state Mission Control gives it. */
+  private lookups = 0;
   private readonly feed = new GithubFeedStub();
 
   constructor(props: {
@@ -44,6 +46,7 @@ export class GithubStub {
   reset(): void {
     this.scenario = 'authorize';
     this.accounts = GithubStubAccounts.sample();
+    this.lookups = 0;
     this.feed.reset();
   }
 
@@ -205,7 +208,7 @@ export class GithubStub {
           ...entry,
           install: {
             state: 'requestable',
-            installUrl: `${stub}/request?login=${props.login}&${query}`,
+            installUrl: `${stub}/request?login=${props.login}&link=${String(++this.lookups)}&${query}`,
           },
         },
       },
