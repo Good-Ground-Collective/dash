@@ -49,7 +49,13 @@ export class SampleBriefings {
       latest,
       lastRun: latest,
       history: [latest],
-      budget: { month: '2026-11', spentUsd: 12.4, capUsd: 100, reached: false },
+      budget: {
+        month: '2026-11',
+        spentUsd: 12.4,
+        capUsd: 100,
+        runs: 37,
+        reached: false,
+      },
       running: null,
       ...overrides,
     };

@@ -9,6 +9,7 @@
   import PasskeyNameForm from '#lib/auth-ui/PasskeyNameForm.svelte';
   import RecoveryCodesPanel from '#lib/auth-ui/RecoveryCodesPanel.svelte';
   import RemovePasskeyDialog from '#lib/auth-ui/RemovePasskeyDialog.svelte';
+  import BriefingSpendPanel from '#lib/briefing-ui/BriefingSpendPanel.svelte';
   import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
   import AccountPanels from '#lib/auth-ui/AccountPanels.svelte';
   import GithubConnectionsPanel from '#lib/connections-ui/GithubConnectionsPanel.svelte';
@@ -189,6 +190,8 @@
   <TimeZonePanel timeZone={data.viewer.timeZone} />
 
   <GithubConnectionsPanel github={data.github} />
+
+  <BriefingSpendPanel briefing={data.briefing} />
 
   <AccountPanels viewer={data.viewer} onSignOut={signOut} />
 </section>

@@ -39,7 +39,7 @@ const stageSentences = {
   saving: 'Saving the briefing…',
 } satisfies Record<BriefingStage, string>;
 
-/** The sentences the Briefing card shows for its times, sources, spend, stages and refusals. */
+/** The sentences the Briefing card and the Settings spend readout show for times, sources, stages, refusals and spend. */
 export class BriefingWording {
   static generated(when: Date): string {
     return `Generated ${RelativeTime.since(when)}`;
@@ -58,8 +58,22 @@ export class BriefingWording {
       });
   }
 
-  static spend(budget: BriefingBudget): string {
-    return `${cents.format(budget.spentUsd)} of ${wholeOrCents.format(budget.capUsd)} this month`;
+  /** This month's estimated spend, cap and run count, for Settings. */
+  static spendReadout(budget: BriefingBudget): string {
+    const spent =
+      budget.spentUsd > 0 && budget.spentUsd < 0.01
+        ? 'under $0.01'
+        : cents.format(budget.spentUsd);
+    const runs = `${budget.runs} ${budget.runs === 1 ? 'run' : 'runs'}`;
+    return `AI briefing: ${spent} of ${wholeOrCents.format(budget.capUsd)} this month · ${runs}`;
+  }
+
+  static spendEstimateNote(): string {
+    return 'Dash’s own estimate from token usage and the configured prices, not the amount billed.';
+  }
+
+  static spendUnavailable(): string {
+    return 'Mission Control didn’t send the briefing spend. Reload to try again.';
   }
 
   static requested(): string {

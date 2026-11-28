@@ -27,7 +27,7 @@ const briefingRoutesPropsSchema = z.object({
     z.custom<
       Pick<
         BriefingRepository,
-        'latestSucceeded' | 'latestRun' | 'history' | 'spentSince'
+        'latestSucceeded' | 'latestRun' | 'history' | 'spentSince' | 'runsSince'
       >
     >(),
   ownerTimeZone: z.custom<OwnerTimeZoneReader>(),
@@ -44,7 +44,7 @@ const briefingRoutesPropsSchema = z.object({
 export class BriefingRoutes {
   private readonly briefings: Pick<
     BriefingRepository,
-    'latestSucceeded' | 'latestRun' | 'history' | 'spentSince'
+    'latestSucceeded' | 'latestRun' | 'history' | 'spentSince' | 'runsSince'
   >;
   private readonly ownerTimeZone: OwnerTimeZoneReader;
   private readonly workflows: Pick<BriefingWorkflows, 'regenerate' | 'running'>;
@@ -107,17 +107,24 @@ export class BriefingRoutes {
         latest: null,
         lastRun: null,
         history: [],
-        budget: { month: month.label, spentUsd: 0, capUsd: 0, reached: false },
+        budget: {
+          month: month.label,
+          spentUsd: 0,
+          capUsd: 0,
+          runs: 0,
+          reached: false,
+        },
         running: null,
       };
     }
 
-    const [latest, lastRun, history, spentMicroUsd, running] =
+    const [latest, lastRun, history, spentMicroUsd, runs, running] =
       await Promise.all([
         this.briefings.latestSucceeded({ userId: props.userId }),
         this.briefings.latestRun({ userId: props.userId }),
         this.briefings.history(props),
         this.briefings.spentSince({ since: month.startsAt }),
+        this.briefings.runsSince({ since: month.startsAt }),
         this.workflows.running({ userId: props.userId }),
       ]);
     const spentUsd = spentMicroUsd / microUsdPerUsd;
@@ -132,6 +139,7 @@ export class BriefingRoutes {
         month: month.label,
         spentUsd,
         capUsd,
+        runs,
         reached: spentUsd >= capUsd,
       },
       running,

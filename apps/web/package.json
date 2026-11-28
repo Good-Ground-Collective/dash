@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@dash/config": "workspace:*",
+    "@good-ground-collective/agentic-communication-standards": "workspace:*",
     "@playwright/test": "catalog:",
     "@sveltejs/adapter-node": "catalog:",
     "@sveltejs/kit": "catalog:",

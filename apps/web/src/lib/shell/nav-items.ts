@@ -7,7 +7,7 @@ export interface NavItem {
 export const navItems: readonly NavItem[] = [
   { label: 'Home', href: '/', available: true },
   { label: 'Objectives', href: '/objectives', available: false },
-  { label: 'Agents', href: '/agents', available: false },
+  { label: 'Agents', href: '/agents', available: true },
   { label: 'GitHub', href: '/github', available: true },
   { label: 'Benches', href: '/benches', available: false },
 ];

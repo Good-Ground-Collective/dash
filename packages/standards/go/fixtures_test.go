@@ -13,8 +13,15 @@ import (
 // that reads it. A schema without an entry here fails TestEverySchemaHasFixtures.
 func decoders() map[string]func([]byte) (any, error) {
 	return map[string]func([]byte) (any, error){
-		"agent.heartbeat.v1": decode[AgentHeartbeatV1],
-		"example.ping.v1":    decode[ExamplePingV1],
+		"agent.heartbeat.v1":      decode[AgentHeartbeatV1],
+		"bench.command-result.v1": decode[BenchCommandResultV1],
+		"bench.command.v1":        decode[BenchCommandV1],
+		"bench.config.v1":         decode[BenchConfigV1],
+		"bench.harnesses.v1":      decode[BenchHarnessesV1],
+		"bench.info.v1":           decode[BenchInfoV1],
+		"bench.metrics.v1":        decode[BenchMetricsV1],
+		"bench.processes.v1":      decode[BenchProcessesV1],
+		"example.ping.v1":         decode[ExamplePingV1],
 	}
 }
 

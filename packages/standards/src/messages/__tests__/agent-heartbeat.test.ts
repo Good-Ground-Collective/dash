@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { MessageContract } from '#src/messages/__tests__/support/message-contract.js';
 import { SharedFixtures } from '#src/messages/__tests__/support/shared-fixtures.js';
 import {
   agentHeartbeat,
   agentHeartbeatStatuses,
 } from '#src/messages/agent-heartbeat.js';
-import { messageRegistry } from '#src/registry.js';
+
+await MessageContract.describe(agentHeartbeat);
 
 const heartbeat = {
   schemaVersion: '1.0',
@@ -21,11 +23,6 @@ const heartbeat = {
 };
 
 describe('agentHeartbeat', () => {
-  it('is listed in the registry at 1.0', () => {
-    expect(messageRegistry).toContain(agentHeartbeat);
-    expect(agentHeartbeat.version).toBe('1.0');
-  });
-
   it.each(agentHeartbeatStatuses)('parses a %s heartbeat', (status) => {
     const message = { ...heartbeat, payload: { ...heartbeat.payload, status } };
 
@@ -170,7 +167,6 @@ describe('agentHeartbeat seq', () => {
 });
 
 const fixtures = await SharedFixtures.load(agentHeartbeat);
-const validateFixture = await SharedFixtures.compileJsonSchema(agentHeartbeat);
 
 describe('the shared agent.heartbeat fixtures', () => {
   it('include a valid heartbeat for every status', () => {
@@ -185,16 +181,4 @@ describe('the shared agent.heartbeat fixtures', () => {
 
     expect([...statuses].sort()).toEqual([...agentHeartbeatStatuses].sort());
   });
-
-  it('include invalid messages', () => {
-    expect(fixtures.some((fixture) => !fixture.valid)).toBe(true);
-  });
-
-  it.each(fixtures)(
-    '$file gets the same verdict from Zod and the JSON Schema',
-    ({ valid, message }) => {
-      expect(agentHeartbeat.schema.safeParse(message).success).toBe(valid);
-      expect(validateFixture(message)).toBe(valid);
-    },
-  );
 });

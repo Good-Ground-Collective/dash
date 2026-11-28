@@ -49,7 +49,7 @@ describe('BriefingView, a good briefing', () => {
     });
   });
 
-  it('lists the sources that held something, and the spend against the cap', () => {
+  it('lists the sources that held something', () => {
     expect(view.sources).toEqual([
       '4 objectives',
       '1 review request',
@@ -57,7 +57,6 @@ describe('BriefingView, a good briefing', () => {
       '3 agents',
       '1 bench',
     ]);
-    expect(view.spend).toBe('$12.40 of $100 this month');
   });
 
   it('allows Regenerate with no note', () => {
@@ -109,7 +108,13 @@ describe('BriefingView, a run that did not produce a briefing', () => {
     const view = Sample.loaded({
       latest,
       lastRun: skipped,
-      budget: { month: '2026-11', spentUsd: 100, capUsd: 100, reached: true },
+      budget: {
+        month: '2026-11',
+        spentUsd: 100,
+        capUsd: 100,
+        runs: 37,
+        reached: true,
+      },
     });
 
     expect(view.note).toContain('skipped 10 minutes ago');
@@ -153,7 +158,6 @@ describe('BriefingView, without a briefing', () => {
     expect(view.status).toBe('failed');
     expect(view.message).toContain('isn’t available');
     expect(view.canRegenerate).toBe(false);
-    expect(view.spend).toBeNull();
   });
 });
 

@@ -128,6 +128,7 @@ export class BriefingsItems {
       month: '2026-11',
       spentUsd: props.spentUsd,
       capUsd: 100,
+      runs: 37,
       reached: props.reached,
     };
   }

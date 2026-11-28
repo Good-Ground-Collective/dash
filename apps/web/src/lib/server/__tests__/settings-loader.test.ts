@@ -22,6 +22,21 @@ const feed = {
   assignedIssues: [],
 };
 
+const briefings = {
+  configured: true,
+  latest: null,
+  lastRun: null,
+  history: [],
+  budget: {
+    month: '2026-11',
+    spentUsd: 1.5,
+    capUsd: 100,
+    runs: 3,
+    reached: false,
+  },
+  running: null,
+};
+
 class Visit {
   static of(answers: Record<string, () => Response>): AuthPageLoadEvent {
     return {
@@ -49,13 +64,47 @@ describe('MissionControlSettingsLoader', () => {
     const event = Visit.of({
       '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
       '/integrations/github/feed': () => Response.json(feed),
+      '/briefings': () => Response.json(briefings),
     });
 
     await expect(loader.load(event)).resolves.toEqual({
       viewer: ada,
       passkeys: [],
       github: { status: 'loaded', feed },
+      briefing: { status: 'loaded', briefings },
     });
+  });
+
+  it('keeps the rest of settings when the briefing fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const event = Visit.of({
+      '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
+      '/integrations/github/feed': () => Response.json(feed),
+    });
+
+    await expect(loader.load(event)).resolves.toEqual({
+      viewer: ada,
+      passkeys: [],
+      github: { status: 'loaded', feed },
+      briefing: { status: 'failed' },
+    });
+  });
+
+  it('redirects a signed-out visitor without reading the briefing', async () => {
+    const fetched: string[] = [];
+    const event: AuthPageLoadEvent = {
+      parent: async () => ({ viewer: null, recoveryCodes: null }),
+      fetch: async (input) => {
+        fetched.push(new URL(String(input)).pathname);
+        return Response.json([]);
+      },
+    };
+
+    await expect(loader.load(event)).rejects.toMatchObject({
+      status: 303,
+      location: '/sign-in',
+    });
+    expect(fetched).not.toContain('/briefings');
   });
 
   it('keeps the rest of settings when the feed fails', async () => {
