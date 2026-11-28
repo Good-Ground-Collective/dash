@@ -232,9 +232,7 @@ describe.skipIf(databaseUrl === null)(
       await expect(
         briefings.history({ userId: adaId, limit: 10 }),
       ).resolves.toEqual([]);
-      await expect(
-        briefings.latestRun({ userId: adaId }),
-      ).resolves.toBeNull();
+      await expect(briefings.latestRun({ userId: adaId })).resolves.toBeNull();
       await expect(
         briefings.latestSucceeded({ userId: adaId }),
       ).resolves.toBeNull();
