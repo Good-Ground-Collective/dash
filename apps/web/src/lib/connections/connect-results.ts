@@ -45,6 +45,10 @@ const errorReasons = new Map<string, string>([
     'state',
     'That GitHub link expired or belonged to another session. Try again.',
   ],
+  [
+    'request-unrecorded',
+    'GitHub sent your request, but its link had expired, so Dash didn’t record it. Find the organisation again to request it here.',
+  ],
   ['denied', 'GitHub access wasn’t granted. Connect again when you’re ready.'],
   [
     'not-yours',

@@ -77,13 +77,16 @@ export const organizationSuggestionSchema = z.object({
   avatarUrl: linkSchema.nullable(),
 });
 
-/** An organisation login as the person types it: letters, digits, `-`, `_` and `.`. */
+/** An organisation login as GitHub allows them: up to 39 letters and digits, with single dashes between them. */
 export const organizationLoginSchema = z
   .string()
   .trim()
   .min(1, 'Enter an organisation’s login, such as acme.')
-  .max(100, 'That’s longer than any GitHub login.')
-  .regex(/^[\w.-]+$/u, 'A GitHub login has only letters, digits and dashes.');
+  .max(39, 'That’s longer than any GitHub login.')
+  .regex(
+    /^[a-z\d](?:-?[a-z\d])*$/iu,
+    'A GitHub login has only letters, digits and single dashes, and doesn’t start or end with a dash.',
+  );
 
 /** `GET /integrations/github/accounts`. The links carry signed state that expires after ten minutes. */
 export const githubAccountsSchema = z.discriminatedUnion('status', [
