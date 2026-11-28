@@ -1,8 +1,9 @@
-import { readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { HooksConfig } from '#src/config/hooks-config.js';
 import { OutboxRetentionError } from '#src/errors.js';
+import { FileLock } from '#src/services/file-lock/file-lock.js';
 import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 
 type PruneFailure = { file: string; cause: unknown };
@@ -11,7 +12,8 @@ type PruneResult = { removed: string[]; failures: PruneFailure[] };
 /**
  * Deletes outbox and session files nobody has written to for longer than the configured retention.
  * An outbox's relay cursor goes first, so a session resumed later, whose new outbox may reuse the old
- * file's inode, is relayed from its start.
+ * file's inode, is relayed from its start. Both go under the session's own lock, the one the hooks and
+ * the relay write under, and only if the outbox is still unwritten-to once the lock is held.
  */
 export class OutboxRetention {
   static readonly DAY_MS = 24 * 60 * 60 * 1000;
@@ -28,6 +30,8 @@ export class OutboxRetention {
         now.getTime() - config.outboxRetentionDays * OutboxRetention.DAY_MS,
       beforeRemove: (stem) =>
         RelayCursorStore.remove(config.relayCursorsDirectory, stem),
+      lockPathFor: (stem) =>
+        path.join(config.sessionsDirectory, `${stem}.json.lock`),
     });
     const sessions = await OutboxRetention.pruneDirectory({
       directory: config.sessionsDirectory,
@@ -49,22 +53,41 @@ export class OutboxRetention {
     extension: string;
     cutoffMs: number;
     beforeRemove?: (stem: string) => Promise<void>;
+    lockPathFor?: (stem: string) => string;
   }): Promise<PruneResult> {
-    const { directory, extension, cutoffMs, beforeRemove } = props;
+    const { directory, extension, cutoffMs, beforeRemove, lockPathFor } = props;
     const names = await readdir(directory).catch(() => []);
     const result: PruneResult = { removed: [], failures: [] };
 
     for (const name of names.filter((entry) => entry.endsWith(extension))) {
       const file = path.join(directory, name);
-      const modified = await stat(file).then(
-        (stats) => stats.mtimeMs,
-        () => Number.POSITIVE_INFINITY,
-      );
-      if (modified < cutoffMs) {
+      const stem = name.slice(0, -extension.length);
+      const isExpired = async (): Promise<boolean> => {
+        const modified = await stat(file).then(
+          (stats) => stats.mtimeMs,
+          () => Number.POSITIVE_INFINITY,
+        );
+        return modified < cutoffMs;
+      };
+
+      if (await isExpired()) {
         try {
-          await beforeRemove?.(name.slice(0, -extension.length));
-          await rm(file, { force: true });
-          result.removed.push(file);
+          const remove = async (): Promise<boolean> => {
+            if (!(await isExpired())) {
+              return false;
+            }
+            await beforeRemove?.(stem);
+            await rm(file, { force: true });
+            return true;
+          };
+
+          const removed =
+            lockPathFor === undefined
+              ? await remove()
+              : await OutboxRetention.holdLock(lockPathFor(stem), remove);
+          if (removed) {
+            result.removed.push(file);
+          }
         } catch (cause) {
           result.failures.push({ file, cause });
         }
@@ -72,5 +95,14 @@ export class OutboxRetention {
     }
 
     return result;
+  }
+
+  /** Creates the sessions directory first: `FileLock` doesn't, and it may be missing, for example removed externally. */
+  private static async holdLock<T>(
+    lockPath: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    return new FileLock({ lockPath }).hold(work);
   }
 }
