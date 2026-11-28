@@ -15,7 +15,6 @@
     },
     "kind": { "const": "bench.command", "type": "string" },
     "payload": {
-      "additionalProperties": false,
       "properties": {
         "commandId": {
           "description": "Ties the result to this request.",
@@ -29,6 +28,9 @@
           "pattern": "^[a-z][a-z0-9]*([.-][a-z0-9]+)*$",
           "type": "string"
         }
+      },
+      "propertyNames": {
+        "not": { "enum": ["command", "commandLine", "args"] }
       },
       "required": ["commandId", "harnessId"],
       "type": "object"
