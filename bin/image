@@ -70,7 +70,7 @@ docker buildx build --platform linux/amd64 --load ${cache[@]+"${cache[@]}"} \
 # Load every secret in infra.env, not only the app's, so the scan proves none of them leaked.
 load_infra_env '^[A-Za-z_][A-Za-z0-9_]*$'
 secrets=(NODE_AUTH_TOKEN)
-for name in KAMAL_REGISTRY_PASSWORD GHCR_PUSH_TOKEN DASH_BETTER_AUTH_SECRET DASH_DATABASE_URL DASH_GITHUB_APP_CLIENT_SECRET DASH_GITHUB_APP_PRIVATE_KEY DASH_GITHUB_WEBHOOK_SECRET ${infra_env_names[@]+"${infra_env_names[@]}"}; do
+for name in KAMAL_REGISTRY_PASSWORD GHCR_PUSH_TOKEN DASH_BETTER_AUTH_SECRET DASH_DATABASE_URL DASH_GITHUB_APP_CLIENT_SECRET DASH_GITHUB_APP_PRIVATE_KEY DASH_GITHUB_WEBHOOK_SECRET DASH_OPENAI_API_KEY ${infra_env_names[@]+"${infra_env_names[@]}"}; do
   if [[ -n ${!name:-} ]]; then
     secrets+=("$name")
   fi
