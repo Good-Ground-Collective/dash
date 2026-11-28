@@ -47,10 +47,7 @@ afterEach(async () => {
 class FakeTimers {
   private static readonly MAX_STEPS = 10_000;
 
-  static async runUntil<T>(
-    work: Promise<T>,
-    maxSteps = FakeTimers.MAX_STEPS,
-  ): Promise<T> {
+  static async runUntil<T>(work: Promise<T>): Promise<T> {
     let settled = false;
     const watched = work.finally(() => {
       settled = true;
@@ -58,9 +55,9 @@ class FakeTimers {
     watched.catch(() => undefined);
 
     for (let step = 0; !settled; step += 1) {
-      if (step >= maxSteps) {
+      if (step >= FakeTimers.MAX_STEPS) {
         throw new Error(
-          `Relay still running after ${maxSteps} fake-timer steps; it looks hung.`,
+          `Relay still running after ${FakeTimers.MAX_STEPS} fake-timer steps; it looks hung.`,
         );
       }
       await nextTurn();
@@ -107,18 +104,27 @@ class FakeTimers {
 
 /** Relays against the fake ingest, each tracked so teardown waits for it before removing the state. */
 class TestRelay {
+  static readonly POLL_MS = 7;
+  static readonly MIN_BACKOFF_MS = 10;
   static readonly MAX_BACKOFF_MS = 40;
 
   static start(): Promise<RelayOutcome> {
     const running = new OutboxHeartbeatRelay({
       config: state.config,
       relayConfig: state.relayConfig(ingest.url),
-      pollMs: 10,
-      minBackoffMs: 10,
+      pollMs: TestRelay.POLL_MS,
+      minBackoffMs: TestRelay.MIN_BACKOFF_MS,
       maxBackoffMs: TestRelay.MAX_BACKOFF_MS,
     }).run();
     runs.push(running);
     return running;
+  }
+
+  /** A relay sleep that is a backoff: not the poll interval, and no longer than the backoff cap. */
+  static isBackoff(ms: number | undefined): boolean {
+    return (
+      ms !== TestRelay.POLL_MS && (ms ?? Infinity) <= TestRelay.MAX_BACKOFF_MS
+    );
   }
 
   static run(): Promise<RelayOutcome> {
@@ -164,7 +170,7 @@ describe('OutboxHeartbeatRelay', () => {
     await FakeTimers.fire(running, 2);
     const backoffs = timeouts.mock.calls
       .map(([, ms]) => ms)
-      .filter((ms) => (ms ?? Infinity) <= TestRelay.MAX_BACKOFF_MS);
+      .filter((ms) => TestRelay.isBackoff(ms));
     await state.writeTurns(2);
     expect(ingest.stored).toEqual([]);
     await ingest.restart();
