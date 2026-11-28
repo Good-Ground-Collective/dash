@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import type { z } from 'zod';
 
 import {
@@ -70,9 +71,13 @@ export class InstallRequestReads {
     return (await InstallRequestReads.read(harness)).accounts;
   }
 
-  /** Looks globex up, then comes back from the provider's install page with a request. */
-  static async requestGlobex(harness: ConnectionsHarness) {
+  /** Looks globex up, then comes back from the provider's install page with a request, `lateByMs` after the lookup. */
+  static async requestGlobex(
+    harness: ConnectionsHarness,
+    props: { lateByMs?: number } = {},
+  ) {
     const lookedUp = await InstallRequestReads.lookUp(harness, 'globex');
+    vi.setSystemTime(Date.now() + (props.lateByMs ?? 0));
     const installUrl =
       lookedUp.status === 'found' &&
       lookedUp.entry.install.state === 'requestable'

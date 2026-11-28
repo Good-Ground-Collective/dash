@@ -131,13 +131,16 @@ export const organizationSuggestionSchema = z.object({
   avatarUrl: z.url().nullable(),
 });
 
-/** An account login as providers allow them: letters, digits, `-`, `_` and `.`. */
+/** An account login as GitHub allows them: up to 39 letters and digits, with single dashes between them. */
 export const accountLoginSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(100)
-  .regex(/^[\w.-]+$/u, 'Expected an account login, such as acme');
+  .min(1, 'Enter an organisation’s login, such as acme.')
+  .max(39, 'That’s longer than any GitHub login.')
+  .regex(
+    /^[a-z\d](?:-?[a-z\d])*$/iu,
+    'A GitHub login has only letters, digits and single dashes, and doesn’t start or end with a dash.',
+  );
 
 export const organizationLookupQuerySchema = connectQuerySchema.extend({
   login: accountLoginSchema.describe('The organisation’s login, such as acme.'),
@@ -245,6 +248,7 @@ export const connectOutcomeSchema = z.enum([
 export const connectErrorReasonSchema = z.enum([
   'signed-out',
   'state',
+  'request-unrecorded',
   'denied',
   'not-yours',
   'linked-elsewhere',

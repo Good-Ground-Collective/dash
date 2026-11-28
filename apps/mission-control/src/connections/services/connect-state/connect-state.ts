@@ -50,9 +50,9 @@ export interface ConnectStateRequest {
 /** The `state` a provider hands back to its callbacks, binding them to the person who started the flow. */
 export interface ConnectState {
   issue(request: ConnectStateRequest): string;
-  /** The payload when the state is authentic, unexpired and issued to `userId` for `provider`, otherwise null. */
+  /** The payload when the state is present, authentic, unexpired and issued to `userId` for `provider`, otherwise null. */
   read(props: {
-    token: string;
+    token: string | undefined;
     userId: string;
     provider: string;
   }): ConnectStatePayload | null;
@@ -85,11 +85,11 @@ export class SignedConnectState implements ConnectState {
   }
 
   read(props: {
-    token: string;
+    token: string | undefined;
     userId: string;
     provider: string;
   }): ConnectStatePayload | null {
-    const [body, signature, ...rest] = props.token.split('.');
+    const [body, signature, ...rest] = (props.token ?? '').split('.');
     if (body === undefined || signature === undefined || rest.length > 0) {
       return null;
     }

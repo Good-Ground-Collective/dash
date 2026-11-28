@@ -230,6 +230,37 @@ test('an organisation GitHub doesn’t have is explained beside the field', asyn
   ).toHaveAttribute('aria-invalid', 'true');
 });
 
+test('coming back to the tab gives a looked-up organisation a fresh install link', async () => {
+  const link = page.getByRole('link', { name: 'Request install initech' });
+  const before = (await link.getAttribute('href')) ?? '';
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes('/accounts/lookup') &&
+      response.url().includes('login=initech'),
+  );
+
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await answered;
+
+  await expect(link).toHaveAttribute('href', /link=\d+/u);
+  await expect(link).not.toHaveAttribute('href', before);
+});
+
+test('a request through a link that expired says Dash didn’t record it', async () => {
+  await page.goto(
+    '/setup/github?connect=error&provider=github&reason=request-unrecorded',
+  );
+
+  await expect(
+    page.getByRole('alert').filter({
+      hasText: 'GitHub sent your request, but its link had expired',
+    }),
+  ).toBeVisible();
+  await expect(page.getByText('Request sent.')).toHaveCount(0);
+});
+
 test('the step fits a phone without scrolling sideways', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   const overflow = await page.evaluate(

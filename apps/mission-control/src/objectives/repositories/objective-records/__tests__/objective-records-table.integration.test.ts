@@ -21,7 +21,7 @@ import { objectiveSyncTable } from '#src/objectives/repositories/objective-recor
 
 const databaseUrl = inject('databaseUrl');
 const migration = new URL(
-  '../../../../../drizzle/0013_personal_objectives_cleared.sql',
+  '../../../../../drizzle/0014_personal_objectives_cleared.sql',
   import.meta.url,
 );
 let store: ObjectiveRecordsDatabase | undefined;
@@ -56,7 +56,7 @@ class PersonalObjectivesCleared {
 }
 
 describe.skipIf(databaseUrl === null)(
-  '0013_personal_objectives_cleared',
+  '0014_personal_objectives_cleared',
   () => {
     it('clears a personal account’s stored error and keeps an organisation’s', async () => {
       const database = ObjectiveRecordsDatabase.required(store);

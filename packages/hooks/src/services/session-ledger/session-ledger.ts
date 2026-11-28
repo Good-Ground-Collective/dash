@@ -189,6 +189,7 @@ export class FileSessionLedger implements SessionLedger {
         ? { ...awaitingAnswer, [key]: plan.toolUseId ?? '' }
         : awaitingAnswer,
       model: plan.sessionModel ?? state.model,
+      ended: plan.endsSession === true,
     };
   }
 

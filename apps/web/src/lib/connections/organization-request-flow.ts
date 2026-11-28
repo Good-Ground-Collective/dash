@@ -64,6 +64,20 @@ export class OrganizationRequestFlow {
     return this.ask(login.data);
   }
 
+  /**
+   * Looks each row up again, so its install link carries signed state that hasn't expired.
+   * A row GitHub no longer has is dropped. A row that can't be looked up keeps its old link:
+   * if that has expired, the setup callback says the request wasn't recorded.
+   */
+  async refresh(
+    lookedUp: readonly ConnectableAccount[],
+  ): Promise<ConnectableAccount[]> {
+    const refreshed = await Promise.all(
+      lookedUp.map(async (entry) => this.again(entry)),
+    );
+    return refreshed.filter((entry) => entry !== null);
+  }
+
   private async ask(login: string): Promise<OrganizationLookupOutcome> {
     try {
       const answer = await this.accounts.lookUp({
@@ -88,6 +102,40 @@ export class OrganizationRequestFlow {
         message: 'Dash couldn’t look that organisation up. Try again.',
       };
     }
+  }
+
+  private async again(
+    entry: ConnectableAccount,
+  ): Promise<ConnectableAccount | null> {
+    try {
+      const answer = await this.accounts.lookUp({
+        login: entry.account.login,
+        returnTo: this.returnTo,
+      });
+      if (answer.status === 'found') return answer.entry;
+      return answer.status === 'missing' ? null : entry;
+    } catch {
+      return entry;
+    }
+  }
+
+  /**
+   * The looked-up rows after a refresh of `before`: refreshed rows, then any looked up while
+   * the refresh was running, which are newer.
+   */
+  static withRefreshed(props: {
+    before: readonly ConnectableAccount[];
+    refreshed: readonly ConnectableAccount[];
+    current: readonly ConnectableAccount[];
+  }): ConnectableAccount[] {
+    const added = props.current.filter(
+      (entry) => !props.before.includes(entry),
+    );
+    const ids = new Set(added.map(({ account }) => account.externalId));
+    return [
+      ...props.refreshed.filter(({ account }) => !ids.has(account.externalId)),
+      ...added,
+    ];
   }
 
   /** The list with looked-up rows added after it, leaving out any the list now has itself. */

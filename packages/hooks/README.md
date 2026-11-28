@@ -2,7 +2,7 @@
 
 Claude Code hooks that turn session events into [`agent.heartbeat`](../standards/README.md#agent-heartbeats) messages and append them to a local outbox. A relay sends the outbox to Mission Control later, so a heartbeat survives Mission Control restarting or the laptop going offline.
 
-The package has one command, `dash-hooks <event>`, which reads the hook payload Claude Code writes to stdin. It never fails the session: whatever goes wrong, it prints nothing, exits 0 and writes the error to a log file.
+The package has two commands. `dash-hooks <event>` reads the hook payload Claude Code writes to stdin. It never fails the session: whatever goes wrong, it prints nothing, exits 0 and writes the error to a log file. `dash-hooks relay` sends the outbox to Mission Control; the hooks start it in the background (see [Sending the outbox to Mission Control](#sending-the-outbox-to-mission-control)).
 
 ## Install
 
@@ -44,7 +44,7 @@ Everything lives under `$XDG_STATE_HOME/dash/`, falling back to `~/.local/state/
 | Path                        | What it holds                                                                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `outbox/<sessionId>.jsonl`  | One heartbeat per line, each under 4 KB and checked against the standards schema before it is written. The relay reads these files. |
-| `sessions/<sessionId>.json` | The session's next `seq`, its agents' last statuses and its model                                                                   |
+| `sessions/<sessionId>.json` | The session's next `seq`, its agents' last statuses, its model and whether it has ended                                             |
 | `hooks.log`                 | Anything that went wrong, moved to `hooks.log.1` once it passes 1 MB                                                                |
 
 A parent agent and its subagents run hooks as separate processes at the same moment, and they share one `seq` counter. Each heartbeat takes a per-session lock file, reads the counter, appends its line and writes the counter back before releasing it, so no two heartbeats share a `seq` and lines land in `seq` order. A resumed session keeps its session ID and continues from its counter. If the counter file is lost, the next heartbeat continues after the highest `seq` in the outbox file.
@@ -53,6 +53,42 @@ A heartbeat that would pass 4 KB once encoded loses detail step by step until it
 
 On `SessionStart` the hooks delete outbox files nobody has written to for 7 days (`DASH_OUTBOX_RETENTION_DAYS` changes it) and counter files after 180 days.
 
+## Sending the outbox to Mission Control
+
+`dash-hooks relay` sends the outbox to Mission Control's batch ingest route (`POST /api/agents/<reporterName>/heartbeats/batch`), up to 100 heartbeats a request, in `seq` order within each session. There is nothing to install for it: after a hook writes a heartbeat, it starts a detached relay if none is running. The relay exits once every outbox is delivered and nothing new has arrived for 30 seconds (`DASH_RELAY_IDLE_MS` changes it), and the next hook starts another.
+
+It needs Dash's API URL, a service account key with `heartbeat:write`, and the agent name that key reports as. Put them in `$XDG_CONFIG_HOME/dash/hooks.json` (by default `~/.config/dash/hooks.json`), readable only by you:
+
+```json
+{
+  "apiUrl": "https://dash.example.com",
+  "apiKey": "dash_live_…",
+  "reporterName": "seth-laptop"
+}
+```
+
+```sh
+chmod 600 ~/.config/dash/hooks.json
+```
+
+`DASH_API_URL`, `DASH_API_KEY` and `DASH_REPORTER_NAME` override the file field by field. With neither, the hooks start no relay. The relay refuses a file that group or others can read, and it never writes the key to its log.
+
+How it behaves:
+
+- **Acknowledged means answered.** After each batch, the relay moves the session's cursor in `relay/<sessionId>.json` past every line Mission Control answered for, whether `created`, `duplicate` or `invalid`. A line it rejects as `invalid`, or one that isn't JSON, is written to `relay.log` and passed over so it can't hold up the rest. A line still being written is left for the next read.
+- **Resending is safe.** A relay killed between sending a batch and saving its cursor sends that batch again, and Mission Control answers `duplicate` for anything it already stored under `(sessionId, seq)`.
+- **Outages.** While Mission Control is unreachable or answering 5xx, the relay keeps the heartbeats in the outbox and retries, waiting twice as long after each failure, up to 5 minutes. It logs the first failure in a row, not every retry. It never drops a heartbeat itself; the outbox retention above is the only thing that does.
+- **A refused key stops it.** On a 401 or 403 it logs why, writes `relay-halted.json`, and exits. Hooks start no relay for that key, URL and reporter name again until one of them changes, or until you delete `relay-halted.json` after fixing the key's account in Dash.
+- **One at a time.** `relay.pid` holds the running relay's process ID. A relay that finds a live one exits at once, and one that finds a dead one takes over.
+- **Housekeeping.** Once a session has ended (its last heartbeat came from `SessionEnd`) and its outbox is fully delivered, the relay deletes the outbox and its cursor. A session resumed later starts a new outbox file and carries on from its `seq` counter.
+
+| Path                     | What it holds                                                    |
+| ------------------------ | ---------------------------------------------------------------- |
+| `relay/<sessionId>.json` | How far Mission Control has acknowledged the session's outbox    |
+| `relay.pid`              | The running relay's process ID                                   |
+| `relay-halted.json`      | A fingerprint of the configuration Mission Control refused       |
+| `relay.log`              | What went wrong while relaying, moved to `relay.log.1` past 1 MB |
+
 ## Using it as a library
 
 The package's job is the `dash-hooks` command. Its only export is `HooksConfig`, for a reader such as the relay that needs the same state directory layout: `HooksConfig.fromEnvironment()` resolves the directory as the hooks do, and `outboxDirectory`, `sessionsDirectory` and `logPath` name what is inside it. Everything else is internal and can change in any release.
@@ -60,3 +96,5 @@ The package's job is the `dash-hooks` command. Its only export is `HooksConfig`,
 ## Cost per hook
 
 Each hook is a short-lived Node process. On an Apple-silicon Mac it takes about 50 ms, of which about 19 ms is starting Node and about 30 ms is loading Zod and the standards schemas; the lock, the counter and the append take about 1 ms. `PostToolUse` runs as an async hook, so it adds nothing to a tool call's wait; the other hooks run inline so their heartbeats keep their order.
+
+Checking whether a relay is running, which every hook that writes a heartbeat does, takes under 0.1 ms. When none is, the hook starts one as a detached process and doesn't wait for it.

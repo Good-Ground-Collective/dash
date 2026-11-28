@@ -61,19 +61,6 @@ describe('OrganizationLookup', () => {
     });
   });
 
-  it('rejects a login with characters no account has', async () => {
-    const harness = await reads.linked();
-
-    const response = await (
-      await harness.start()
-    ).inject({
-      url: '/integrations/github/accounts/lookup?login=a%2Fb',
-      headers: ConnectionsHarness.cookie(adaId),
-    });
-
-    expect(response.statusCode).toBe(400);
-  });
-
   it('asks to authorize again when the provider refuses the token', async () => {
     const harness = await reads.linked();
     harness.flow.revoked.add('access-1');
@@ -83,5 +70,31 @@ describe('OrganizationLookup', () => {
     ).resolves.toMatchObject({
       status: 'authorize',
     });
+  });
+});
+
+describe('OrganizationLookup logins', () => {
+  it.each(['a%2Fb', '.', '..', 'a_b', '-a', 'a-', 'a--b', 'a'.repeat(40)])(
+    'rejects %s, which no GitHub login can be, before asking the provider',
+    async (login) => {
+      const harness = await reads.linked();
+
+      const response = await (
+        await harness.start()
+      ).inject({
+        url: `/integrations/github/accounts/lookup?login=${login}`,
+        headers: ConnectionsHarness.cookie(adaId),
+      });
+
+      expect(response.statusCode).toBe(400);
+    },
+  );
+
+  it('accepts a 39-character login with single dashes', async () => {
+    const harness = await reads.linked();
+
+    await expect(
+      InstallRequestReads.lookUp(harness, `a-${'b'.repeat(37)}`),
+    ).resolves.toEqual({ status: 'missing' });
   });
 });

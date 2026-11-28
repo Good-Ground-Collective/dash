@@ -24,4 +24,6 @@ export interface HeartbeatPlan {
   awaitsAnswer?: boolean | undefined;
   /** The AskUserQuestion tool call this heartbeat asks or answers. */
   toolUseId?: string | undefined;
+  /** The session's last heartbeat, after which the relay may delete its outbox once it is delivered. */
+  endsSession?: boolean | undefined;
 }
