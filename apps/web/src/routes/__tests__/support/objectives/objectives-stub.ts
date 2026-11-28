@@ -120,6 +120,7 @@ export class ObjectivesStub {
         epics: (item.epics ?? [])
           .map((epic) => ({
             ...this.wire(epic),
+            tasks: ObjectivesItems.tasks(epic),
             dueAfterInitiative: epic.dueAfterInitiative ?? false,
           }))
           .filter(shown),

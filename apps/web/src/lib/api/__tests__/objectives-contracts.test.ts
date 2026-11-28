@@ -27,6 +27,18 @@ const epic = {
     url: 'https://github.com/acme/app/issues/13',
     priority: null,
   },
+  tasks: {
+    total: 2,
+    items: [
+      {
+        id: 'I_13',
+        title: 'Password rules',
+        url: 'https://github.com/acme/app/issues/13',
+        state: 'open',
+        assignees: ['grace'],
+      },
+    ],
+  },
   hints: [],
   dueAfterInitiative: false,
 };
@@ -58,6 +70,7 @@ describe('objectivesSchema', () => {
     expect(objectives.initiatives[0]?.epics[0]?.lastActivityAt).toEqual(
       new Date('2026-11-25T09:00:00.000Z'),
     );
+    expect(objectives.initiatives[0]?.epics[0]?.tasks).toEqual(epic.tasks);
     expect(objectives.initiatives[0]?.progress).toEqual({
       source: 'manual',
       percent: 40,

@@ -23,6 +23,7 @@ describe('ObjectiveRows.of', () => {
       progress: { label: '3 of 5 done', percent: 60, fromDash: false },
       update: null,
       next: null,
+      tasks: { items: [], hiddenCount: 0 },
       hints: [],
       dueAfterInitiative: false,
     });
@@ -80,6 +81,62 @@ describe('ObjectiveRows.of flags and links', () => {
     expect(row.next).toEqual({
       title: 'Store credentials',
       href: 'https://github.com/acme-labs/api/issues/13',
+    });
+  });
+});
+
+describe('ObjectiveRows tasks', () => {
+  const epic = SampleObjectives.epic({
+    tasks: {
+      total: 4,
+      items: [
+        {
+          id: 'I_1',
+          title: 'Rate-limit sign-in attempts',
+          url: 'https://github.com/acme-labs/api/issues/11',
+          state: 'open',
+          assignees: ['grace', 'ada'],
+        },
+        {
+          id: 'I_2',
+          title: 'Hash recovery codes',
+          url: 'https://github.com/acme-labs/api/issues/12',
+          state: 'closed',
+          assignees: [],
+        },
+      ],
+    },
+  });
+
+  it('shows each task with its state, assignees and link', () => {
+    expect(ObjectiveRows.of(epic).tasks.items).toEqual([
+      {
+        id: 'I_1',
+        title: 'Rate-limit sign-in attempts',
+        href: 'https://github.com/acme-labs/api/issues/11',
+        done: false,
+        stateLabel: 'To do',
+        assignee: 'grace, ada',
+      },
+      {
+        id: 'I_2',
+        title: 'Hash recovery codes',
+        href: 'https://github.com/acme-labs/api/issues/12',
+        done: true,
+        stateLabel: 'Done',
+        assignee: null,
+      },
+    ]);
+  });
+
+  it('counts the tasks left on GitHub when the list is capped', () => {
+    expect(ObjectiveRows.of(epic).tasks.hiddenCount).toBe(2);
+  });
+
+  it('gives an initiative no tasks', () => {
+    expect(ObjectiveRows.of(SampleObjectives.initiative()).tasks).toEqual({
+      items: [],
+      hiddenCount: 0,
     });
   });
 });

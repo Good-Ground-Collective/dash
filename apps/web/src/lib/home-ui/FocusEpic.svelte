@@ -2,6 +2,7 @@
   import type { ObjectiveEntry } from '#lib/objectives/objectives-view.ts';
   import { ChipTones } from '#lib/objectives/chip-tones.ts';
   import Chip from '#lib/objectives-ui/Chip.svelte';
+  import EpicTasks from '#lib/objectives-ui/EpicTasks.svelte';
   import DashFieldLabel from '#lib/objectives-ui/DashFieldLabel.svelte';
   import OverlayMenu from '#lib/objectives-ui/OverlayMenu.svelte';
   import ProgressMeter from '#lib/objectives-ui/ProgressMeter.svelte';
@@ -68,6 +69,7 @@
           {row.update.text}
         </a>
       {/if}
+      <EpicTasks {row} />
       <a class="line open" href={row.href} target="_blank" rel="noreferrer">
         Open on GitHub<span class="visually-hidden">: {row.title}</span>
       </a>

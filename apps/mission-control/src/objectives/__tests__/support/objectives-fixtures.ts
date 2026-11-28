@@ -91,6 +91,7 @@ export class ObjectivesFixtures {
       provider: 'github',
       url: `https://github.com/acme/app/issues/${props.externalId}`,
       level: 'ticket',
+      assignees: [],
       title: `Ticket ${props.externalId}`,
       state: 'open',
       priority: null,
@@ -134,7 +135,13 @@ export class ObjectivesFixtures {
           position: 0,
           state: 'closed',
         }),
-        ticket({ externalId: 'T2', epicId: 'E1', position: 1, priority: 'P3' }),
+        ticket({
+          externalId: 'T2',
+          epicId: 'E1',
+          position: 1,
+          priority: 'P3',
+          assignees: ['grace'],
+        }),
         ticket({ externalId: 'T3', epicId: 'E1', position: 2, priority: 'P1' }),
         ticket({
           externalId: 'T4',

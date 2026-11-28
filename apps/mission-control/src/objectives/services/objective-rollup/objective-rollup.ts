@@ -6,6 +6,7 @@ import type {
 } from '#src/objectives/contracts/objective-records.ts';
 import type {
   EpicObjective,
+  EpicTasks,
   InitiativeObjective,
   NextTicket,
   ObjectiveHint,
@@ -16,6 +17,7 @@ import type {
 import type { ConnectionObjectives } from '#src/objectives/repositories/objective-records/objective-record-reader.ts';
 
 const quietAfterMilliseconds = 14 * 24 * 60 * 60 * 1000;
+const maxTasksPerEpic = 25;
 const priorityRank = { P1: 0, P2: 1, P3: 2 } as const;
 
 type Tracked = InitiativeRecord | EpicRecord;
@@ -137,6 +139,7 @@ export class ObjectiveRollup {
         ),
       ),
       nextTicket: ObjectiveRollup.nextTicket(tickets),
+      tasks: ObjectiveRollup.tasks(tickets),
       hints: ObjectiveRollup.hints({
         rollup,
         record: epic,
@@ -218,6 +221,25 @@ export class ObjectiveRollup {
       hints.push('no_recent_activity');
     }
     return hints;
+  }
+
+  /** Open tasks first, then closed ones, each group in the epic's order, capped so an epic never sends its whole backlog. */
+  private static tasks(tickets: readonly TicketRecord[]): EpicTasks {
+    const items = tickets
+      .toSorted(
+        (left, right) =>
+          Number(left.state === 'closed') - Number(right.state === 'closed') ||
+          left.position - right.position,
+      )
+      .slice(0, maxTasksPerEpic)
+      .map((ticket) => ({
+        id: ticket.nodeId,
+        title: ticket.title,
+        url: ticket.url,
+        state: ticket.state,
+        assignees: ticket.assignees,
+      }));
+    return { items, total: tickets.length };
   }
 
   private static nextTicket(

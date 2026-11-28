@@ -1,5 +1,6 @@
 import type {
   EpicObjective,
+  EpicTask,
   InitiativeObjective,
   ObjectiveHint,
   ObjectiveProgress,
@@ -23,6 +24,24 @@ export interface ObjectiveProgressView {
   fromDash: boolean;
 }
 
+/** One of an epic's tasks as its list shows it. */
+export interface ObjectiveTaskRow {
+  id: string;
+  title: string;
+  href: string;
+  done: boolean;
+  /** “To do” or “Done”. */
+  stateLabel: string;
+  /** The people it is assigned to, or null when nobody has it. */
+  assignee: string | null;
+}
+
+/** An epic's task list: open tasks first, and how many more the epic has on GitHub than are listed. */
+export interface ObjectiveTaskList {
+  items: ObjectiveTaskRow[];
+  hiddenCount: number;
+}
+
 /** An initiative or epic as its row shows it. Every row links to the tracker. */
 export interface ObjectiveRow {
   id: string;
@@ -35,6 +54,7 @@ export interface ObjectiveRow {
   progress: ObjectiveProgressView | null;
   update: { text: string; href: string } | null;
   next: { title: string; href: string } | null;
+  tasks: ObjectiveTaskList;
   hints: string[];
   dueAfterInitiative: boolean;
 }
@@ -81,9 +101,19 @@ export class ObjectiveRows {
               title: objective.nextTicket.title,
               href: objective.nextTicket.url,
             },
+      tasks: ObjectiveRows.tasks(objective),
       hints: objective.hints.map((hint) => hintLabels[hint]),
       dueAfterInitiative:
         'dueAfterInitiative' in objective && objective.dueAfterInitiative,
+    };
+  }
+
+  static tasks(objective: Objective): ObjectiveTaskList {
+    if (!('tasks' in objective)) return { items: [], hiddenCount: 0 };
+    const { items, total } = objective.tasks;
+    return {
+      items: items.map((task) => ObjectiveRows.task(task)),
+      hiddenCount: Math.max(total - items.length, 0),
     };
   }
 
@@ -128,5 +158,17 @@ export class ObjectiveRows {
     };
     if (!sameYear) options.year = 'numeric';
     return new Intl.DateTimeFormat('en-GB', options).format(date);
+  }
+
+  private static task(task: EpicTask): ObjectiveTaskRow {
+    const done = task.state === 'closed';
+    return {
+      id: task.id,
+      title: task.title,
+      href: task.url,
+      done,
+      stateLabel: done ? 'Done' : 'To do',
+      assignee: task.assignees.length === 0 ? null : task.assignees.join(', '),
+    };
   }
 }

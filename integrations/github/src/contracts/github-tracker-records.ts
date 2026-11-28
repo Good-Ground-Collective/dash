@@ -77,6 +77,7 @@ export class GithubTrackerRecords {
       lastActivityAt: node.updatedAt,
       epicId: props.epicId,
       position: props.position,
+      assignees: node.assignees,
     };
   }
 

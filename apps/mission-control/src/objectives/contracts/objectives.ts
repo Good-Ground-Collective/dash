@@ -1,6 +1,7 @@
 import {
   prioritySchema,
   ticketActivityKindSchema,
+  workItemStateSchema,
 } from '@dash/integrations-core';
 import { z } from 'zod';
 
@@ -59,6 +60,27 @@ export const nextTicketSchema = z
     'The open ticket with the highest priority, then the lowest sub-issue order.',
   );
 
+export const epicTaskSchema = z.object({
+  id: nodeIdSchema,
+  title: z.string().min(1),
+  url: z.url(),
+  state: workItemStateSchema,
+  assignees: z
+    .array(z.string().min(1))
+    .describe('Handles of the people it is assigned to, none when unassigned.'),
+});
+
+export const epicTasksSchema = z
+  .object({
+    items: z
+      .array(epicTaskSchema)
+      .describe(
+        'Open tasks first, then closed, each in the epic’s order, at most 25. The epic’s URL lists the rest.',
+      ),
+    total: z.int().nonnegative().describe('How many tasks the epic has.'),
+  })
+  .describe('The epic’s tasks, so a person sees who has what.');
+
 const objectiveSchema = z.object({
   id: nodeIdSchema.describe('The tracker’s id. Overlays are keyed on it.'),
   connectionId: z.uuid(),
@@ -81,6 +103,7 @@ const objectiveSchema = z.object({
 });
 
 export const epicObjectiveSchema = objectiveSchema.extend({
+  tasks: epicTasksSchema,
   dueAfterInitiative: z
     .boolean()
     .describe(
@@ -147,6 +170,8 @@ export type ObjectiveStatus = z.infer<typeof objectiveStatusSchema>;
 export type ObjectiveHint = z.infer<typeof objectiveHintSchema>;
 export type ObjectiveProgress = z.infer<typeof objectiveProgressSchema>;
 export type ObjectiveUpdate = z.infer<typeof objectiveUpdateSchema>;
+export type EpicTask = z.infer<typeof epicTaskSchema>;
+export type EpicTasks = z.infer<typeof epicTasksSchema>;
 export type NextTicket = z.infer<typeof nextTicketSchema>;
 export type EpicObjective = z.infer<typeof epicObjectiveSchema>;
 export type InitiativeObjective = z.infer<typeof initiativeObjectiveSchema>;
