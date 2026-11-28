@@ -8,14 +8,6 @@
   }: { viewer: Viewer; onSignOut: () => Promise<void> } = $props();
 </script>
 
-<section class="panel" aria-labelledby="service-accounts-title">
-  <div>
-    <h2 id="service-accounts-title">Service accounts</h2>
-    <p class="muted">API keys your benches and agents report with.</p>
-  </div>
-  <a class="auth-button quiet" href="/settings/service-accounts">Manage</a>
-</section>
-
 <section class="panel" aria-labelledby="account-title">
   <div>
     <h2 id="account-title">Account</h2>
@@ -45,9 +37,5 @@
 
   .muted {
     color: var(--ink-muted);
-  }
-
-  a {
-    text-decoration: none;
   }
 </style>

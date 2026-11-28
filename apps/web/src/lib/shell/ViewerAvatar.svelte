@@ -1,11 +1,13 @@
 <script lang="ts">
   import { DropdownMenu } from 'bits-ui';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { API_BASE_URL } from '$app/env/public';
   import type { Viewer } from '#lib/api/mission-control.ts';
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import { Initials } from '#lib/shell/initials.ts';
+  import { NavItems } from '#lib/shell/nav-items.ts';
 
   let { viewer, build }: { viewer: Viewer | null; build: BuildStamp } =
     $props();
@@ -49,7 +51,17 @@
                 <DropdownMenu.Separator class="separator" />
                 <DropdownMenu.Item>
                   {#snippet child({ props: itemProps })}
-                    <a {...itemProps} class="item" href="/settings">
+                    <a
+                      {...itemProps}
+                      class="item"
+                      href="/settings"
+                      aria-current={NavItems.isCurrent({
+                        pathname: page.url.pathname,
+                        href: '/settings',
+                      })
+                        ? 'page'
+                        : undefined}
+                    >
                       Settings
                     </a>
                   {/snippet}

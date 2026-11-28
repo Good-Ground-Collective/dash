@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { navItems } from '#lib/shell/nav-items.ts';
+  import { NavItems, navItems } from '#lib/shell/nav-items.ts';
 </script>
 
 <nav class="primary-nav" aria-label="Primary">
@@ -11,7 +11,12 @@
           <a
             class="nav-link"
             href={item.href}
-            aria-current={page.url.pathname === item.href ? 'page' : undefined}
+            aria-current={NavItems.isCurrent({
+              pathname: page.url.pathname,
+              href: item.href,
+            })
+              ? 'page'
+              : undefined}
           >
             {item.label}
           </a>

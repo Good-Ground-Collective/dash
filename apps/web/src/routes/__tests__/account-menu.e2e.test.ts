@@ -52,7 +52,47 @@ test('the keyboard reaches settings from the menu', async () => {
   await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeFocused();
   await page.keyboard.press('Enter');
 
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL('/settings/profile');
+});
+
+const settingsSections = [
+  { href: '/settings/profile', label: 'Profile and time zone' },
+  { href: '/settings/appearance', label: 'Appearance' },
+  { href: '/settings/passkeys', label: 'Passkeys' },
+  { href: '/settings/recovery-codes', label: 'Recovery codes' },
+  { href: '/settings/github', label: 'Connections' },
+  { href: '/settings/service-accounts', label: 'Service accounts' },
+  { href: '/settings/briefings', label: 'Spend' },
+] as const;
+
+test('the settings sidebar groups the sections and marks the current one', async () => {
+  await page.goto('/settings');
+  await expect(page).toHaveURL('/settings/profile');
+  const sidebar = page.getByRole('navigation', { name: 'Settings sections' });
+  for (const group of ['Account', 'GitHub', 'Agents', 'Briefings']) {
+    await expect(sidebar.getByText(group, { exact: true })).toBeVisible();
+  }
+
+  for (const section of settingsSections) {
+    await page.goto(section.href);
+    await expect(
+      sidebar.getByRole('link', { name: section.label, exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveCount(1);
+  }
+});
+
+test('the account menu keeps Settings current on every settings page', async () => {
+  for (const section of settingsSections) {
+    await page.goto(section.href);
+    await page
+      .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
+      .click();
+    await expect(
+      page.getByRole('menuitem', { name: 'Settings' }),
+    ).toHaveAttribute('aria-current', 'page');
+    await page.keyboard.press('Escape');
+  }
 });
 
 const phone = { width: 390, height: 844 } as const;
@@ -95,9 +135,45 @@ class PhoneLayout {
 
 test('main pages fit a phone without scrolling sideways', async () => {
   await page.setViewportSize(phone);
-  for (const path of ['/', '/settings', '/settings/service-accounts']) {
+  const paths = ['/', ...settingsSections.map((section) => section.href)];
+  for (const path of paths) {
     await page.goto(path);
     expect(await PhoneLayout.scrollsSideways(), path).toBe(false);
+  }
+});
+
+test('on a phone the settings sidebar stacks above the section', async () => {
+  await page.setViewportSize(phone);
+  await page.goto('/settings/passkeys');
+
+  const sidebar = await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .boundingBox();
+  const heading = await page
+    .getByRole('heading', { name: 'Passkeys', level: 1 })
+    .boundingBox();
+
+  expect(sidebar).not.toBeNull();
+  expect(heading).not.toBeNull();
+  expect((sidebar?.y ?? 0) + (sidebar?.height ?? 0)).toBeLessThanOrEqual(
+    heading?.y ?? 0,
+  );
+});
+
+test('on a phone every settings sidebar link is a 44px tap target', async () => {
+  await page.setViewportSize(phone);
+  await page.goto('/settings/passkeys');
+
+  const links = page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('link');
+  expect(await links.count()).toBe(settingsSections.length);
+  for (const link of await links.all()) {
+    const box = await link.boundingBox();
+    expect(box, await link.innerText()).not.toBeNull();
+    expect(box?.height ?? 0, await link.innerText()).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0, await link.innerText()).toBeGreaterThanOrEqual(120);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(phone.width);
   }
 });
 

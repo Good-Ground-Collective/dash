@@ -41,7 +41,7 @@ test.describe('a browser in London', () => {
   }) => {
     await TimeZone.signIn(page);
 
-    await page.goto('/settings');
+    await page.goto('/settings/profile');
 
     await expect(TimeZone.panel(page)).toContainText('Europe/London');
     await expect(TimeZone.panel(page)).toContainText('Follows your browser');
@@ -56,10 +56,12 @@ test.describe('a browser in London', () => {
     await TimeZone.signIn(page);
     await page.route('**/api/people/me/time-zone', () => undefined);
 
-    await page.goto('/settings');
+    await page.goto('/settings/profile');
 
     await expect(TimeZone.panel(page)).toContainText('Eastern Time');
-    await expect(page.getByRole('heading', { name: 'Passkeys' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Profile and time zone', level: 1 }),
+    ).toBeVisible();
   });
 });
 
@@ -69,7 +71,7 @@ test.describe('a browser in New York', () => {
   test('sends nothing when the zone already matches', async ({ page }) => {
     await TimeZone.signIn(page);
 
-    await page.goto('/settings');
+    await page.goto('/settings/profile');
     await page.waitForLoadState('networkidle');
 
     await expect(TimeZone.panel(page)).toContainText('America/New_York');
