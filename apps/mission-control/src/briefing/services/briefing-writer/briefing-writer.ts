@@ -123,8 +123,15 @@ export class OpenAiBriefingWriter implements BriefingWriter {
     }
   }
 
-  private static promptFor(snapshot: BriefingSnapshotDigest): string {
-    return `<snapshot>\n${JSON.stringify(snapshot)}\n</snapshot>`;
+  /**
+   * Escapes `<` and `>` as JSON unicode escapes, so text from GitHub such as a title holding
+   * `</snapshot>` can't close the data block early. The JSON still parses to the same snapshot.
+   */
+  static promptFor(snapshot: BriefingSnapshotDigest): string {
+    const json = JSON.stringify(snapshot)
+      .replaceAll('<', '\\u003c')
+      .replaceAll('>', '\\u003e');
+    return `<snapshot>\n${json}\n</snapshot>`;
   }
 
   private static tokensOf(response: Response): BriefingTokens {
