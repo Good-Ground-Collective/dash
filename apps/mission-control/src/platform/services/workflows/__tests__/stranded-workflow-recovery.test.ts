@@ -284,17 +284,24 @@ describe('the DBOS registration lookup that unregistered-work detection depends 
   });
 
   it('does not swallow a lookup failure for a free-function workflow', async () => {
+    const lookedUp: string[] = [];
     const recovery = new DbosStrandedWorkflowRecovery({
-      findRegistration: (className, workflowName) => {
-        if (className === '') {
-          throw new LookupChangedError('lookup changed');
-        }
-        return getFunctionRegistrationByName(className, workflowName);
+      findRegistration: (className) => {
+        lookedUp.push(className);
+        throw new LookupChangedError('lookup changed');
       },
     });
     spies.list.mockResolvedValue([Queued.workflow()]);
     Sweep.openGate();
 
     await expect(recovery.count()).rejects.toThrow('lookup changed');
+    await expect(recovery.countUnregistered()).rejects.toThrow(
+      'lookup changed',
+    );
+    await expect(recovery.recover()).rejects.toThrow('lookup changed');
+
+    expect(lookedUp).toContain('');
+    expect(spies.cancel).not.toHaveBeenCalled();
+    expect(spies.rewind).not.toHaveBeenCalled();
   });
 });

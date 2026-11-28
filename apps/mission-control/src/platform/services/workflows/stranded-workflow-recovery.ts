@@ -29,7 +29,7 @@ const strandedWorkflowRecoveryPropsSchema = z.object({
     .custom<typeof getFunctionRegistrationByName>()
     .default(() => getFunctionRegistrationByName)
     .describe(
-      'Looks up the workflow function this process registered under a class and workflow name.',
+      'Looks up the workflow function this process registered under a class and workflow name. Defaults to the DBOS lookup; it is a prop so tests can simulate a changed DBOS lookup.',
     ),
 });
 
