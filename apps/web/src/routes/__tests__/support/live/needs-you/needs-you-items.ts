@@ -19,7 +19,7 @@ export interface StubSession {
   reporterName: string;
   benchId: string | null;
   harness: string;
-  parent: { machine: string | null } | null;
+  machine: string | null;
 }
 
 /** The items the Needs you stub can hold, by the name tests open them with. */
@@ -41,7 +41,7 @@ export class NeedsYouItems {
         reporterName: 'studio-hooks',
         benchId: 'studio-mini',
         harness: 'claude-code',
-        parent: { machine: 'studio-mini' },
+        machine: 'studio-mini',
       };
     }
     if (item.sessionId === 'session-options-2') {
@@ -50,7 +50,7 @@ export class NeedsYouItems {
         reporterName: 'cloud-1',
         benchId: 'cloud-1',
         harness: 'codex',
-        parent: { machine: null },
+        machine: null,
       };
     }
     return null;

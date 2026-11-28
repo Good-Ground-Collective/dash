@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Popover } from 'bits-ui';
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
   import { ClockRefresh } from '#lib/home/clock-refresh.ts';
   import { getNeedsYouFeed } from '#lib/needs-you/needs-you-feed-context.ts';
   import NeedsYouItemRow from '#lib/needs-you-ui/NeedsYouItemRow.svelte';
@@ -11,6 +12,11 @@
   let now = $state(new Date());
   let announcement = $state('');
   let announcedCount = feed.count;
+  let open = $state(false);
+
+  afterNavigate(() => {
+    open = false;
+  });
 
   $effect(() => {
     if (count === announcedCount) return;
@@ -30,7 +36,7 @@
 
 <div class="needs-you">
   <p class="visually-hidden" aria-live="polite">{announcement}</p>
-  <Popover.Root>
+  <Popover.Root bind:open>
     <Popover.Trigger>
       {#snippet child({ props })}
         <button

@@ -14,7 +14,7 @@ test.describe('app shell', () => {
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
-    for (const label of ['Objectives', 'Agents', 'Benches']) {
+    for (const label of ['Objectives', 'Benches']) {
       await expect(nav.locator('li', { hasText: label })).toHaveText(
         `${label} (not built yet)`,
       );

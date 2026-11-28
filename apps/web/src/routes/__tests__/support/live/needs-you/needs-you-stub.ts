@@ -27,7 +27,7 @@ interface StubJson {
 const itemNameSchema = z.enum(NeedsYouItems.NAMES);
 
 /**
- * Mission Control's `GET /api/needs-you` and `GET /api/agents/sessions` (of the open items that have one) for `MissionControlStub`, with `needs-you.opened` and
+ * Mission Control's `GET /api/needs-you` for `MissionControlStub`, with `needs-you.opened` and
  * `needs-you.resolved` on the shared event stream. `POST /api/needs-you/__stub/scenario?name=`
  * sets the open items to `empty`, `one` or `several` without any event, `POST
  * /api/needs-you/__stub/open?item=` opens a named item as a heartbeat would, `POST
@@ -46,6 +46,14 @@ export class NeedsYouStub {
   reset(): void {
     this.open = new Map();
     this.failNext = false;
+  }
+
+  /** The sessions behind the open items that have one, for the Agents stub to list. */
+  reportedSessions(): StubSession[] {
+    return [...this.open.values()].flatMap((item) => {
+      const session = NeedsYouItems.sessionOf(item);
+      return session === null ? [] : [session];
+    });
   }
 
   serve(props: {
@@ -78,11 +86,6 @@ export class NeedsYouStub {
     if (pathname === '/api/needs-you/__stub/resolve') {
       return { status: 200, body: { resolved: this.resolves(searchParams) } };
     }
-    if (pathname === '/api/agents/sessions') {
-      return props.signedIn
-        ? { status: 200, body: { sessions: this.sessions() } }
-        : { status: 401, body: { code: 'SIGN_IN_REQUIRED' } };
-    }
     if (pathname === '/api/needs-you/__stub/fail') {
       this.failNext = true;
       return { status: 200, body: { failing: true } };
@@ -98,13 +101,6 @@ export class NeedsYouStub {
       right.openedAt.localeCompare(left.openedAt),
     );
     return { status: 200, body: { items } };
-  }
-
-  private sessions(): StubSession[] {
-    return [...this.open.values()].flatMap((item) => {
-      const session = NeedsYouItems.sessionOf(item);
-      return session === null ? [] : [session];
-    });
   }
 
   private opens(searchParams: URLSearchParams): string {

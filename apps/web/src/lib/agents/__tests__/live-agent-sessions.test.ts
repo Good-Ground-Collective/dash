@@ -1,0 +1,184 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SampleAgentSessions } from '#lib/agents/__tests__/support/sample-agent-sessions.ts';
+import type { AgentSession } from '#lib/agents/agent-session-contracts.ts';
+import { LiveAgentSessions } from '#lib/agents/live-agent-sessions.ts';
+import { FakeEventSource } from '#lib/live/__tests__/support/fake-event-source.ts';
+import { BrowserLiveEventStream } from '#lib/live/browser-live-event-stream.ts';
+
+const { session, subagent, update, wire } = SampleAgentSessions;
+
+class Reads {
+  calls = 0;
+  answers: (AgentSession[] | Error)[] = [];
+
+  list = async (): Promise<AgentSession[]> => {
+    this.calls += 1;
+    const answer = this.answers.shift() ?? [];
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+}
+
+class Following {
+  static async flush(): Promise<void> {
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  static of(props: { initial: AgentSession[]; loaded?: boolean }) {
+    const reads = new Reads();
+    const feed = new LiveAgentSessions({
+      initial: props.initial,
+      loaded: props.loaded ?? true,
+      stream: new BrowserLiveEventStream({
+        baseUrl: 'https://api.example.test',
+      }),
+      reads,
+    });
+    return { feed, reads };
+  }
+}
+
+class Frames {
+  static send(state: Parameters<typeof wire>[0]): void {
+    FakeEventSource.latest().send({
+      type: 'agent.session.updated',
+      data: wire(state),
+    });
+  }
+}
+
+beforeEach(() => {
+  FakeEventSource.INSTANCES = [];
+  vi.stubGlobal('EventSource', FakeEventSource);
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('LiveAgentSessions events', () => {
+  it('starts with what the page rendered', () => {
+    const { feed } = Following.of({ initial: [session('one')] });
+
+    expect(feed.sessions.list.map((entry) => entry.sessionId)).toEqual(['one']);
+    expect(feed.loaded).toBe(true);
+  });
+
+  it('adds a session, a subagent and a liveness change from agent.session.updated', () => {
+    const { feed } = Following.of({ initial: [] });
+    feed.start();
+
+    Frames.send(update({ sessionId: 'one', agentId: null }));
+    Frames.send(update({ sessionId: 'one', agentId: 'worker' }));
+    Frames.send(
+      update({
+        sessionId: 'one',
+        agentId: 'worker',
+        activity: { status: 'complete', highestSeq: 2 },
+      }),
+    );
+    Frames.send(
+      update({
+        sessionId: 'one',
+        agentId: null,
+        activity: { liveness: 'stale' },
+      }),
+    );
+
+    const [held] = feed.sessions.list;
+    expect(feed.sessions.list).toHaveLength(1);
+    expect(held?.subagents.map((entry) => entry.status)).toEqual(['complete']);
+    expect(held?.parent?.liveness).toBe('stale');
+  });
+
+  it('ignores an event that is not session state', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { feed } = Following.of({ initial: [session('one')] });
+    feed.start();
+
+    FakeEventSource.latest().send({
+      type: 'agent.session.updated',
+      data: '{"sessionId":"x"}',
+    });
+
+    expect(feed.sessions.list).toHaveLength(1);
+  });
+});
+
+describe('LiveAgentSessions resync', () => {
+  it('reads the sessions again when the connection opens and when it comes back', async () => {
+    const { feed, reads } = Following.of({ initial: [session('stale-one')] });
+    feed.start();
+    reads.answers = [[session('fresh')], [session('fresh'), session('missed')]];
+
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(feed.sessions.list.map((entry) => entry.sessionId)).toEqual([
+      'fresh',
+    ]);
+
+    FakeEventSource.latest().dropAndRetry();
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(feed.sessions.list.map((entry) => entry.sessionId)).toEqual([
+      'fresh',
+      'missed',
+    ]);
+    expect(reads.calls).toBe(2);
+  });
+
+  it('reads again when an event lands while the read is in flight', async () => {
+    const { feed, reads } = Following.of({ initial: [] });
+    feed.start();
+    reads.answers = [
+      [session('before')],
+      [
+        session('before'),
+        session('sub-only', { parent: null, subagents: [subagent('a')] }),
+      ],
+    ];
+    FakeEventSource.latest().open();
+    Frames.send(update({ sessionId: 'during', agentId: null }));
+
+    await Following.flush();
+
+    expect(reads.calls).toBe(2);
+    expect(feed.sessions.list).toHaveLength(2);
+  });
+
+  it('keeps what it has when a read fails, and is loaded once one succeeds', async () => {
+    const { feed, reads } = Following.of({ initial: [], loaded: false });
+    feed.start();
+    reads.answers = [new Error('503'), [session('one')]];
+
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(feed.loaded).toBe(false);
+    expect(feed.sessions.list).toEqual([]);
+
+    FakeEventSource.latest().dropAndRetry();
+    FakeEventSource.latest().open();
+    await Following.flush();
+    expect(feed.loaded).toBe(true);
+    expect(feed.sessions.list).toHaveLength(1);
+  });
+});
+
+describe('LiveAgentSessions stopping', () => {
+  it('stops following when stopped', () => {
+    const { feed } = Following.of({ initial: [] });
+    const stop = feed.start();
+    const open = FakeEventSource.latest();
+
+    stop();
+    open.send({
+      type: 'agent.session.updated',
+      data: wire(update({ sessionId: 'one', agentId: null })),
+    });
+
+    expect(feed.sessions.list).toEqual([]);
+    expect(open.readyState).toBe(FakeEventSource.CLOSED);
+  });
+});

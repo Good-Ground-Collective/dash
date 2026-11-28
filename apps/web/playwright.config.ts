@@ -41,6 +41,8 @@ const timeZonePort = 4332;
 const timeZoneStubPort = 59986;
 const needsYouPort = 4333;
 const needsYouStubPort = 59985;
+const agentsPort = 4334;
+const agentsStubPort = 59984;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -69,6 +71,7 @@ export default defineConfig({
         '**/objectives.e2e.test.ts',
         '**/time-zone.e2e.test.ts',
         '**/needs-you.e2e.test.ts',
+        '**/agents.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -188,6 +191,15 @@ export default defineConfig({
         baseURL: `http://localhost:${needsYouPort}`,
       },
     },
+    {
+      name: 'agents',
+      testMatch: '**/agents.e2e.test.ts',
+      metadata: { missionControlUrl: `http://localhost:${agentsStubPort}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${agentsPort}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -254,6 +266,7 @@ export default defineConfig({
       { port: objectivesPort, stubPort: objectivesStubPort },
       { port: timeZonePort, stubPort: timeZoneStubPort },
       { port: needsYouPort, stubPort: needsYouStubPort },
+      { port: agentsPort, stubPort: agentsStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',
