@@ -18,7 +18,7 @@ const batchSchema = z.object({
 
 const addressSchema = z.looseObject({ port: z.int().positive() });
 
-/** `up` answers normally; `refuse` answers 401; `store-then-hang` stores the batch and never answers, like a crash after the commit. */
+/** `up` answers normally; `refuse` answers `refusalStatus`; `store-then-hang` stores the batch and never answers, like a crash after the commit. */
 export type FakeIngestMode = 'up' | 'refuse' | 'store-then-hang';
 
 /**
@@ -29,6 +29,7 @@ export class FakeIngest {
   readonly stored: { sessionId: string; seq: number }[] = [];
   readonly invalidSeqs = new Set<number>();
   mode: FakeIngestMode = 'up';
+  refusalStatus: 401 | 403 = 401;
   requests = 0;
   sent = 0;
 
@@ -95,7 +96,11 @@ export class FakeIngest {
       response.writeHead(404).end();
       return;
     }
-    if (this.mode === 'refuse' || !authorized) {
+    if (this.mode === 'refuse') {
+      response.writeHead(this.refusalStatus).end();
+      return;
+    }
+    if (!authorized) {
       response.writeHead(401).end();
       return;
     }

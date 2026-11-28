@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { jsonLineSchema } from '#src/contracts/json-line.js';
 import type { OutboxBatch } from '#src/services/outbox-reader/outbox-batch.js';
-import type { RelayCursor } from '#src/services/relay-cursors/relay-cursor.js';
+import type { RelayCursor } from '#src/services/relay-cursor-store/relay-cursor.js';
 
 const seqSchema = z.looseObject({
   payload: z.looseObject({ seq: z.int().nonnegative() }),

@@ -1,38 +1,92 @@
-import { appendFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { appendFile, readdir, stat, utimes, writeFile } from 'node:fs/promises';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeIngest } from '#src/__tests__/support/fake-ingest.js';
 import { RecordedPayloads } from '#src/__tests__/support/recorded-payloads.js';
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
 import { RelayConfig } from '#src/config/relay-config.js';
-import { OutboxHeartbeatRelay } from '#src/services/heartbeat-relay/heartbeat-relay.js';
-import { RelayHalt } from '#src/services/relay-halt/relay-halt.js';
+import {
+  OutboxHeartbeatRelay,
+  type RelayOutcome,
+} from '#src/services/heartbeat-relay/heartbeat-relay.js';
+import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
+import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
+import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
+import { FileSessionLedger } from '#src/services/session-ledger/session-ledger.js';
 
 let state: ScratchState;
 let ingest: FakeIngest;
+let runs: Promise<RelayOutcome>[];
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
   state = new ScratchState();
   ingest = await FakeIngest.start();
+  runs = [];
 });
 
 afterEach(async () => {
+  await FakeTimers.runUntil(Promise.allSettled(runs), 10_000);
+  vi.restoreAllMocks();
+  vi.useRealTimers();
   await ingest.stop();
   await state.remove();
 });
 
-/** A relay against the fake ingest, with timings short enough for tests. */
+/**
+ * Moves fake time forward one timer at a time, with a real turn of the event loop before each step
+ * so the relay's file and network I/O finishes before its next poll or backoff fires.
+ */
+class FakeTimers {
+  static async runUntil<T>(work: Promise<T>, maxSteps = Infinity): Promise<T> {
+    let settled = false;
+    const watched = work.finally(() => {
+      settled = true;
+    });
+    for (let step = 0; !settled && step < maxSteps; step += 1) {
+      await nextTurn();
+      if (vi.getTimerCount() > 0) {
+        await vi.advanceTimersToNextTimerAsync();
+      }
+    }
+    return watched;
+  }
+
+  /** Fires `count` timers, then returns once the next one is pending, leaving it unfired. */
+  static async fire(count: number): Promise<void> {
+    let fired = 0;
+    for (;;) {
+      await nextTurn();
+      if (vi.getTimerCount() === 0) {
+        continue;
+      }
+      if (fired === count) {
+        return;
+      }
+      await vi.advanceTimersToNextTimerAsync();
+      fired += 1;
+    }
+  }
+}
+
+/** Relays against the fake ingest, each tracked so teardown waits for it before removing the state. */
 class TestRelay {
-  static create(): OutboxHeartbeatRelay {
-    return new OutboxHeartbeatRelay({
+  static start(): Promise<RelayOutcome> {
+    const running = new OutboxHeartbeatRelay({
       config: state.config,
       relayConfig: state.relayConfig(ingest.url),
       pollMs: 10,
       minBackoffMs: 10,
       maxBackoffMs: 40,
-    });
+    }).run();
+    runs.push(running);
+    return running;
+  }
+
+  static run(): Promise<RelayOutcome> {
+    return FakeTimers.runUntil(TestRelay.start());
   }
 
   static seqsUpTo(count: number): number[] {
@@ -48,28 +102,42 @@ class TestRelay {
 }
 
 describe('OutboxHeartbeatRelay', () => {
-  it('sends a session in order across batches and exits once the outbox is drained', async () => {
-    await state.writeTurns(60);
+  it(
+    'sends a session in order across batches and exits once the outbox is drained',
+    {
+      timeout: 30_000,
+    },
+    async () => {
+      await state.writeTurns(60);
 
-    expect(await TestRelay.create().run()).toBe('drained');
+      expect(await TestRelay.run()).toBe('drained');
 
-    expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(120));
-    expect(ingest.requests).toBe(2);
-    expect(await TestRelay.exists(state.config.relayPidPath)).toBe(false);
-  });
+      expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(120));
+      expect(ingest.requests).toBe(2);
+      expect(await TestRelay.exists(state.config.relayPidPath)).toBe(false);
+    },
+  );
 
   it('queues heartbeats through an outage and delivers them in order, once each, when Mission Control returns', async () => {
     await state.writeTurns(2);
     await ingest.stop();
+    const timeouts = vi.spyOn(globalThis, 'setTimeout');
 
-    const running = TestRelay.create().run();
+    const running = TestRelay.start();
+    await FakeTimers.fire(2);
     await state.writeTurns(2);
-    await sleep(150);
     expect(ingest.stored).toEqual([]);
     await ingest.restart();
 
-    expect(await running).toBe('drained');
+    expect(await FakeTimers.runUntil(running)).toBe('drained');
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(8));
+    const [first, second, third] = timeouts.mock.calls.map(([, ms]) => ms);
+    expect(first).toBeGreaterThanOrEqual(5);
+    expect(first).toBeLessThanOrEqual(10);
+    expect(second).toBeGreaterThanOrEqual(10);
+    expect(second).toBeLessThanOrEqual(20);
+    expect(third).toBeGreaterThanOrEqual(20);
+    expect(third).toBeLessThanOrEqual(40);
     const log = await state.relayLog();
     expect(log.match(/MissionControlUnavailableError/g)).toHaveLength(1);
     expect(log).not.toContain(FakeIngest.API_KEY);
@@ -77,13 +145,30 @@ describe('OutboxHeartbeatRelay', () => {
 
   it('sends only what Mission Control has not acknowledged on the next run', async () => {
     await state.writeTurns(1);
-    await TestRelay.create().run();
+    await TestRelay.run();
     await state.writeTurns(1);
 
-    await TestRelay.create().run();
+    await TestRelay.run();
 
     expect(ingest.sent).toBe(4);
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(4));
+  });
+
+  it('delivers a line written while it was exiting, after letting go of the lock', async () => {
+    await state.writeTurns(1);
+    const release = RelayLock.prototype.release;
+    const releases = vi
+      .spyOn(RelayLock.prototype, 'release')
+      .mockImplementationOnce(async function (this: RelayLock) {
+        await state.writeTurns(1);
+        return release.call(this);
+      });
+
+    expect(await TestRelay.run()).toBe('drained');
+
+    expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(4));
+    expect(releases).toHaveBeenCalledTimes(2);
+    expect(await TestRelay.exists(state.config.relayPidPath)).toBe(false);
   });
 });
 
@@ -92,8 +177,8 @@ describe('OutboxHeartbeatRelay when Mission Control answers badly', () => {
     await state.writeTurns(1);
     ingest.mode = 'refuse';
 
-    expect(await TestRelay.create().run()).toBe('halted');
-    expect(await TestRelay.create().run()).toBe('halted');
+    expect(await TestRelay.run()).toBe('halted');
+    expect(await TestRelay.run()).toBe('halted');
 
     expect(ingest.requests).toBe(1);
     const log = await state.relayLog();
@@ -106,16 +191,37 @@ describe('OutboxHeartbeatRelay when Mission Control answers badly', () => {
       reporterName: FakeIngest.REPORTER,
     });
     expect(
-      RelayHalt.isHalted(state.config.relayHaltPath, rotated.fingerprint),
+      RelayHaltRecord.isHalted(state.config.relayHaltPath, rotated.fingerprint),
     ).toBe(false);
+  });
+
+  it('stops on a 403 as it does on a 401', async () => {
+    await state.writeTurns(1);
+    ingest.mode = 'refuse';
+    ingest.refusalStatus = 403;
+
+    expect(await TestRelay.run()).toBe('halted');
+    expect(await TestRelay.run()).toBe('halted');
+
+    expect(ingest.requests).toBe(1);
+    expect(ingest.stored).toEqual([]);
+    expect(await state.relayLog()).toMatch(
+      /MissionControlRefusedKeyError.*403/,
+    );
+    expect(
+      RelayHaltRecord.isHalted(
+        state.config.relayHaltPath,
+        state.relayConfig(ingest.url).fingerprint,
+      ),
+    ).toBe(true);
   });
 
   it('logs a heartbeat Mission Control rejects and moves past it', async () => {
     ingest.invalidSeqs.add(1);
     await state.writeTurns(2);
 
-    expect(await TestRelay.create().run()).toBe('drained');
-    await TestRelay.create().run();
+    expect(await TestRelay.run()).toBe('drained');
+    await TestRelay.run();
 
     expect(ingest.seqs()).toEqual([0, 2, 3]);
     expect(ingest.requests).toBe(1);
@@ -130,7 +236,7 @@ describe('OutboxHeartbeatRelay when Mission Control answers badly', () => {
     );
     await state.writeTurns(1);
 
-    await TestRelay.create().run();
+    await TestRelay.run();
 
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(4));
     expect(await state.relayLog()).toContain('UnreadableOutboxLineError');
@@ -143,7 +249,7 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
     await state.writeTurns(1);
     await state.run('session-end', RecordedPayloads.for('session-end', paths));
 
-    await TestRelay.create().run();
+    await TestRelay.run();
 
     expect(
       await TestRelay.exists(state.outboxPath(RecordedPayloads.SESSION_ID)),
@@ -151,17 +257,47 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
     expect(await readdir(state.config.relayCursorsDirectory)).toEqual([]);
 
     await state.writeTurns(1);
-    await TestRelay.create().run();
+    await TestRelay.run();
     expect(ingest.seqs()).toEqual(TestRelay.seqsUpTo(5));
     expect(
       await TestRelay.exists(state.outboxPath(RecordedPayloads.SESSION_ID)),
     ).toBe(true);
   });
 
+  it('deletes the relay cursor along with an expired outbox, and relays the resumed session in full', async () => {
+    const paths = { cwd: state.directory, transcriptPath: 'unused' };
+    const outboxPath = state.outboxPath(RecordedPayloads.SESSION_ID);
+    const cursorPath = RelayCursorStore.cursorPath(
+      state.config.relayCursorsDirectory,
+      FileSessionLedger.fileStem(RecordedPayloads.SESSION_ID),
+    );
+    await state.writeTurns(1);
+    await TestRelay.run();
+    expect(await TestRelay.exists(cursorPath)).toBe(true);
+    const longAgo = new Date('2026-01-01T00:00:00Z');
+    await utimes(outboxPath, longAgo, longAgo);
+
+    await state.run('session-start', {
+      ...RecordedPayloads.for('session-start', paths),
+      session_id: 'another-session',
+    });
+
+    expect(await TestRelay.exists(outboxPath)).toBe(false);
+    expect(await TestRelay.exists(cursorPath)).toBe(false);
+
+    await state.writeTurns(1);
+    await TestRelay.run();
+    expect(
+      ingest.stored.filter(
+        ({ sessionId }) => sessionId === RecordedPayloads.SESSION_ID,
+      ),
+    ).toHaveLength(4);
+  });
+
   it('keeps the outbox of a session that has not ended', async () => {
     await state.writeTurns(1);
 
-    await TestRelay.create().run();
+    await TestRelay.run();
 
     expect(
       await TestRelay.exists(state.outboxPath(RecordedPayloads.SESSION_ID)),
@@ -172,7 +308,7 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
     await state.writeTurns(1);
     await writeFile(state.config.relayPidPath, String(process.ppid));
 
-    expect(await TestRelay.create().run()).toBe('busy');
+    expect(await TestRelay.run()).toBe('busy');
     expect(ingest.requests).toBe(0);
   });
 });

@@ -5,16 +5,16 @@ import { jsonLineSchema } from '#src/contracts/json-line.js';
 import {
   type RelayCursor,
   relayCursorSchema,
-} from '#src/services/relay-cursors/relay-cursor.js';
+} from '#src/services/relay-cursor-store/relay-cursor.js';
 
 const relayCursorFileSchema = jsonLineSchema.pipe(relayCursorSchema);
 
 /** Reads and writes each session's relay cursor, one small file per session. */
-export class RelayCursors {
+export class RelayCursorStore {
   /** The session's cursor, or a fresh one at the start of the outbox when it has none or it is damaged. */
   static async load(directory: string, stem: string): Promise<RelayCursor> {
     const text = await readFile(
-      RelayCursors.cursorPath(directory, stem),
+      RelayCursorStore.cursorPath(directory, stem),
       'utf8',
     ).catch(() => undefined);
     const parsed = relayCursorFileSchema.safeParse(text);
@@ -27,7 +27,7 @@ export class RelayCursors {
     stem: string,
     cursor: RelayCursor,
   ): Promise<void> {
-    const cursorPath = RelayCursors.cursorPath(directory, stem);
+    const cursorPath = RelayCursorStore.cursorPath(directory, stem);
     const temporary = `${cursorPath}.${process.pid}.tmp`;
 
     await mkdir(directory, { recursive: true });
@@ -36,7 +36,7 @@ export class RelayCursors {
   }
 
   static async remove(directory: string, stem: string): Promise<void> {
-    await rm(RelayCursors.cursorPath(directory, stem), { force: true });
+    await rm(RelayCursorStore.cursorPath(directory, stem), { force: true });
   }
 
   static cursorPath(directory: string, stem: string): string {
