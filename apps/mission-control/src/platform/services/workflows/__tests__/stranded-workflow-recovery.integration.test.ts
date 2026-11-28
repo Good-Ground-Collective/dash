@@ -1,4 +1,5 @@
 import { DBOS } from '@dbos-inc/dbos-sdk';
+import { getFunctionRegistrationByName } from '@dbos-inc/dbos-sdk/internal/decorators';
 import {
   afterAll,
   afterEach,
@@ -16,6 +17,10 @@ import {
   StaleDeployHarness,
 } from '#src/github-feed/__tests__/support/stale-deploy-harness.ts';
 import { DbosStrandedWorkflowRecovery } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
+
+DBOS.registerWorkflow(async () => undefined, {
+  name: 'registrationLookupProbe',
+});
 
 const databaseUrl = inject('databaseUrl');
 const opened = { gateMs: 0 };
@@ -302,3 +307,15 @@ describe.skipIf(databaseUrl === null)(
     }, 60_000);
   },
 );
+
+describe('the DBOS registration lookup that recovery depends on', () => {
+  it('still resolves from the internal path and finds a registered free-function workflow', () => {
+    expect(
+      getFunctionRegistrationByName('', 'registrationLookupProbe')
+        ?.workflowConfig,
+    ).toBeDefined();
+    expect(
+      getFunctionRegistrationByName('', 'neverRegistered'),
+    ).toBeUndefined();
+  });
+});

@@ -30,6 +30,12 @@ const dbosLogLevels = {
 export const workflowRuntimePropsSchema = z.object({
   databaseUrl: postgresUrlSchema,
   logLevel: logLevelSchema,
+  forceLatestVersion: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Claim "latest" at launch even when a newer version holds it. Set for a rollback deploy, where the older version is the one meant to run.',
+    ),
   recovery: z
     .custom<StrandedWorkflowRecovery>()
     .optional()
@@ -101,13 +107,33 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
   }
 
   /**
-   * After a rollback or revert deploy DBOS reclaims this version's existing row without making it
-   * the latest, so it would stay behind a version that no longer runs: the scheduler enqueues to
-   * the latest version, and only the latest version moves stranded work. Mission Control runs on a
-   * single host where the newest container is the intended one, so it claims latest at launch.
+   * Claims "latest" so the scheduler enqueues to this version and this version moves stranded
+   * work: after a rollback or revert deploy DBOS reclaims an existing version row without making
+   * it the latest. A container never takes "latest" from a version created after its own, so an
+   * old container that restarts during the overlap of a deploy leaves the new one in charge.
+   * Rolling back on purpose therefore needs `DASH_CLAIM_LATEST_VERSION=force`, which claims
+   * regardless; the README's rollback steps set it.
    */
   private async becomeLatestVersion(): Promise<void> {
-    await DBOS.setLatestApplicationVersion(DBOS.applicationVersion);
+    const version = DBOS.applicationVersion;
+    if (!this.props.forceLatestVersion && (await this.newerVersionIsLatest())) {
+      DBOS.logger.warn(
+        `Leaving "latest" with a newer application version; ${version} did not claim it`,
+      );
+      return;
+    }
+    await DBOS.setLatestApplicationVersion(version);
+  }
+
+  private async newerVersionIsLatest(): Promise<boolean> {
+    const latest = await DBOS.getLatestApplicationVersion();
+    if (latest.versionName === DBOS.applicationVersion) {
+      return false;
+    }
+    const own = (await DBOS.listApplicationVersions()).find(
+      (candidate) => candidate.versionName === DBOS.applicationVersion,
+    );
+    return own !== undefined && latest.createdAt > own.createdAt;
   }
 
   /** Sweeps once as soon as the previous container is gone, instead of waiting for the next schedule tick. A failed sweep is logged, never thrown; the schedule tries again. */

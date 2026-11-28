@@ -2,52 +2,12 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
-import type { StrandedWorkflowRecovery } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
+import {
+  databaseUrl,
+  gateMs,
+  LaunchFixture,
+} from '#src/platform/services/workflows/__tests__/support/workflow-launch-fixture.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
-
-const gateMs = 5 * 60_000;
-const databaseUrl = 'postgres://dash:dash@127.0.0.1:54329/mission_control';
-
-class FakeStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
-  readonly recover = vi.fn<() => Promise<number>>();
-
-  untilGateOpensMs(): number {
-    return gateMs;
-  }
-
-  async count(): Promise<number> {
-    return 0;
-  }
-}
-
-class LaunchFixture {
-  readonly recovery = new FakeStrandedWorkflowRecovery();
-  readonly warn = vi.fn();
-
-  constructor() {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    vi.spyOn(DBOS, 'setConfig').mockImplementation(() => undefined);
-    vi.spyOn(DBOS, 'launch').mockResolvedValue(undefined);
-    vi.spyOn(DBOS, 'registerWorkflow').mockImplementation(
-      (workflow) => workflow,
-    );
-    vi.spyOn(DBOS, 'applicationVersion', 'get').mockReturnValue('this-deploy');
-    vi.spyOn(DBOS, 'setLatestApplicationVersion').mockResolvedValue(undefined);
-    vi.spyOn(DBOS, 'applySchedules').mockResolvedValue(undefined);
-    vi.spyOn(DBOS, 'shutdown').mockResolvedValue(undefined);
-    const logger = DBOS.logger;
-    vi.spyOn(logger, 'warn').mockImplementation(this.warn);
-    vi.spyOn(DBOS, 'logger', 'get').mockReturnValue(logger);
-  }
-
-  runtime(): DbosWorkflowRuntime {
-    return new DbosWorkflowRuntime({
-      databaseUrl,
-      logLevel: 'info',
-      recovery: this.recovery,
-    });
-  }
-}
 
 describe('DbosWorkflowRuntime', () => {
   it('rejects a system database URL that is not Postgres', () => {
@@ -80,18 +40,6 @@ describe('DbosWorkflowRuntime stranded work sweep', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-  });
-
-  it('makes this version the latest right after DBOS launches, so a rollback is not left behind', async () => {
-    await fixture.runtime().launch();
-
-    expect(DBOS.setLatestApplicationVersion).toHaveBeenCalledWith(
-      'this-deploy',
-    );
-    expect(vi.mocked(DBOS.launch).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(DBOS.setLatestApplicationVersion).mock.invocationCallOrder[0] ??
-        0,
-    );
   });
 
   it('applies the recovery workflow on the 15-minute schedule', async () => {
