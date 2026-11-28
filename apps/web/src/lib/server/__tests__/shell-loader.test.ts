@@ -10,26 +10,36 @@ import { RecordingCookies } from '#lib/theme/__tests__/support/recording-cookies
 
 const confirmedCodes = { confirmed: true, remaining: 10 };
 
-/** Answers the session lookup with `response` and the recovery code status with `recoveryCodes`. */
+/** Answers the session lookup with `response`, the recovery code status with `recoveryCodes` and the open Needs you items with `needsYou`. */
 class CountingFetch {
   calls = 0;
   private readonly response: () => Response;
   private readonly recoveryCodes: () => Response;
+  private readonly needsYou: () => Response;
+  private readonly sessions: () => Response;
 
   constructor(props: {
     response: () => Response;
     recoveryCodes?: () => Response;
+    needsYou?: () => Response;
+    sessions?: () => Response;
   }) {
     this.response = props.response;
     this.recoveryCodes =
       props.recoveryCodes ?? (() => Response.json(confirmedCodes));
+    this.needsYou = props.needsYou ?? (() => Response.json({ items: [] }));
+    this.sessions = props.sessions ?? (() => Response.json({ sessions: [] }));
   }
 
   readonly fetch: typeof fetch = async (input) => {
     this.calls += 1;
-    return new URL(String(input)).pathname === '/api/auth/recovery-codes/status'
-      ? this.recoveryCodes()
-      : this.response();
+    const { pathname } = new URL(String(input));
+    if (pathname === '/api/auth/recovery-codes/status') {
+      return this.recoveryCodes();
+    }
+    if (pathname === '/api/needs-you') return this.needsYou();
+    if (pathname === '/api/agents/sessions') return this.sessions();
+    return this.response();
   };
 }
 
@@ -75,6 +85,8 @@ describe('ShellLoader', () => {
     ).resolves.toEqual({
       viewer: null,
       recoveryCodes: null,
+      needsYou: [],
+      needsYouSessions: [],
       appearance: lightCharacters,
       build,
     });
@@ -99,6 +111,8 @@ describe('ShellLoader', () => {
         timeZone: 'America/New_York',
       },
       recoveryCodes: confirmedCodes,
+      needsYou: [],
+      needsYouSessions: [],
       appearance: lightCharacters,
       build,
     });
@@ -152,10 +166,12 @@ describe('ShellLoader failures', () => {
     ).resolves.toEqual({
       viewer: null,
       recoveryCodes: null,
+      needsYou: [],
+      needsYouSessions: [],
       appearance: lightCharacters,
       build,
     });
-    expect(counter.calls).toBe(2);
+    expect(counter.calls).toBe(3);
   });
 
   it('refuses an API base URL that is not a URL', () => {
@@ -255,5 +271,63 @@ describe('ShellLoader recovery code failures', () => {
     expect(data.viewer?.name).toBe('Ada');
     expect(data.recoveryCodes).toBeNull();
     expect(warn).toHaveBeenCalledOnce();
+  });
+});
+
+const waitingItem = {
+  id: 'aaaaaaaa-0000-4000-8000-000000000001',
+  reportedBy: '2f0f6d1e-0000-4c1a-9a51-2f1f6a3c0099',
+  sessionId: 'session-1',
+  agentId: 'hooks-builder',
+  question: { text: 'Which outbox path?' },
+  openedAt: '2026-11-27T12:00:00.000Z',
+  resolvedAt: null,
+};
+
+const waitingSession = {
+  reportedBy: waitingItem.reportedBy,
+  sessionId: 'session-1',
+  reporterName: 'studio-mini',
+  benchId: 'studio-mini',
+  harness: 'claude-code',
+  parent: { machine: 'studio-mini' },
+};
+
+describe('ShellLoader needs you', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('loads the open items with the shell so the count is right on first paint', async () => {
+    const counter = new CountingFetch({
+      response: () => Response.json(ada),
+      needsYou: () => Response.json({ items: [waitingItem] }),
+      sessions: () => Response.json({ sessions: [waitingSession] }),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
+    );
+
+    expect(data.needsYouSessions).toEqual([waitingSession]);
+    expect(data.needsYou).toHaveLength(1);
+    expect(data.needsYou[0]).toMatchObject({
+      id: waitingItem.id,
+      question: { text: 'Which outbox path?' },
+      openedAt: new Date('2026-11-27T12:00:00.000Z'),
+    });
+  });
+
+  it('shows nothing for a session cookie Mission Control no longer knows', async () => {
+    const counter = new CountingFetch({
+      response: () => Response.json(null),
+      needsYou: () => Response.json({ items: [waitingItem] }),
+    });
+
+    const data = await shellLoader.load(
+      ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
+    );
+
+    expect(data.needsYou).toEqual([]);
   });
 });

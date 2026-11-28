@@ -39,6 +39,8 @@ const objectivesPort = 4331;
 const objectivesStubPort = 59987;
 const timeZonePort = 4332;
 const timeZoneStubPort = 59986;
+const needsYouPort = 4333;
+const needsYouStubPort = 59985;
 const passkeyWebUrl = `http://localhost:${passkeyPort}`;
 const liveMissionControl = process.env['DASH_E2E_API_BASE_URL'];
 const passkeyApiBaseUrl = liveMissionControl ?? `http://localhost:${stubPort}`;
@@ -66,6 +68,7 @@ export default defineConfig({
         '**/github-feed.e2e.test.ts',
         '**/objectives.e2e.test.ts',
         '**/time-zone.e2e.test.ts',
+        '**/needs-you.e2e.test.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -176,6 +179,15 @@ export default defineConfig({
         baseURL: `http://localhost:${timeZonePort}`,
       },
     },
+    {
+      name: 'needs-you',
+      testMatch: '**/needs-you.e2e.test.ts',
+      metadata: { missionControlUrl: `http://localhost:${needsYouStubPort}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${needsYouPort}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -241,6 +253,7 @@ export default defineConfig({
       { port: feedPort, stubPort: feedStubPort },
       { port: objectivesPort, stubPort: objectivesStubPort },
       { port: timeZonePort, stubPort: timeZoneStubPort },
+      { port: needsYouPort, stubPort: needsYouStubPort },
     ].flatMap(({ port, stubPort }) => [
       {
         command: 'node build',

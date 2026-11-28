@@ -20,12 +20,12 @@ interface StubJson {
   body: object;
 }
 
-type StubFrame =
-  | { type: 'briefing.progress'; data: { runId: string; stage: string } }
-  | {
-      type: 'briefing.ready';
-      data: { runId: string; briefingId: string; status: string };
-    };
+/** The shared event stream the stub publishes on and reports about. */
+interface BriefingEvents {
+  publish(frame: { type: string; data: object }): void;
+  count(): number;
+  drop(): void;
+}
 
 interface StubRun {
   runId: string;
@@ -33,8 +33,8 @@ interface StubRun {
 }
 
 /**
- * Mission Control's `GET /briefings`, `POST /briefing/regenerate` and the `GET /events` stream for
- * `MissionControlStub`. Until a scenario is picked the briefing is not configured.
+ * Mission Control's `GET /briefings` and `POST /briefing/regenerate` for `MissionControlStub`,
+ * publishing its progress on the shared event stream. Until a scenario is picked the briefing is not configured.
  * `POST /briefing/__stub/scenario?name=…` picks one, `POST /briefing/__stub/start` begins a run as
  * a schedule would, and `POST /briefing/__stub/advance` sends the running run's next stage and
  * finally its `briefing.ready`, which swaps in a new briefing. `POST /briefing/__stub/replace`
@@ -46,13 +46,16 @@ export class BriefingsStub {
   private regenerated = false;
   private run: StubRun | null = null;
   private runs = 0;
-  private readonly streams = new Set<ServerResponse>();
+  private readonly events: BriefingEvents;
+
+  constructor(props: { events: BriefingEvents }) {
+    this.events = props.events;
+  }
 
   reset(): void {
     this.scenario = 'unconfigured';
     this.regenerated = false;
     this.run = null;
-    this.dropStreams();
   }
 
   serve(props: {
@@ -60,34 +63,11 @@ export class BriefingsStub {
     url: URL;
     signedIn: boolean;
   }): void {
-    if (props.url.pathname === '/events') {
-      this.openStream(props);
-      return;
-    }
     const reply = this.route(props);
     props.response.writeHead(reply.status, {
       'content-type': 'application/json',
     });
     props.response.end(JSON.stringify(reply.body));
-  }
-
-  private openStream(props: {
-    response: ServerResponse;
-    signedIn: boolean;
-  }): void {
-    const { response } = props;
-    if (!props.signedIn) {
-      response.writeHead(401, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ code: 'SIGN_IN_REQUIRED' }));
-      return;
-    }
-    response.writeHead(200, {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache',
-    });
-    response.write('retry: 300\n\n');
-    this.streams.add(response);
-    response.once('close', () => this.streams.delete(response));
   }
 
   private route(props: { url: URL; signedIn: boolean }): StubJson {
@@ -99,14 +79,14 @@ export class BriefingsStub {
       return { status: 200, body: { scenario: this.scenario } };
     }
     if (pathname === '/briefing/__stub/listeners') {
-      return { status: 200, body: { count: this.streams.size } };
+      return { status: 200, body: { count: this.events.count() } };
     }
     if (pathname === '/briefing/__stub/replace') {
       this.regenerated = true;
       return { status: 200, body: { replaced: true } };
     }
     if (pathname === '/briefing/__stub/drop') {
-      this.dropStreams();
+      this.events.drop();
       return { status: 200, body: { dropped: true } };
     }
     if (pathname === '/briefing/__stub/start') {
@@ -141,7 +121,7 @@ export class BriefingsStub {
     this.runs += 1;
     const run = { runId: `run-${this.runs}`, next: 0 };
     this.run = run;
-    this.publish({
+    this.events.publish({
       type: 'briefing.progress',
       data: { runId: run.runId, stage: 'snapshot' },
     });
@@ -155,7 +135,7 @@ export class BriefingsStub {
     const stage = stagesAfterStart[run.next];
     if (stage !== undefined) {
       run.next += 1;
-      this.publish({
+      this.events.publish({
         type: 'briefing.progress',
         data: { runId: run.runId, stage },
       });
@@ -163,7 +143,7 @@ export class BriefingsStub {
     }
     this.regenerated = true;
     this.run = null;
-    this.publish({
+    this.events.publish({
       type: 'briefing.ready',
       data: {
         runId: run.runId,
@@ -220,20 +200,5 @@ export class BriefingsStub {
       };
     }
     return { ...common, latest: good, lastRun: good, budget };
-  }
-
-  private publish(frame: StubFrame): void {
-    for (const stream of this.streams) {
-      stream.write(
-        `event: ${frame.type}\ndata: ${JSON.stringify(frame.data)}\n\n`,
-      );
-    }
-  }
-
-  private dropStreams(): void {
-    for (const stream of this.streams) {
-      stream.end();
-    }
-    this.streams.clear();
   }
 }

@@ -7,6 +7,12 @@ import {
   type Viewer,
 } from '#lib/api/mission-control.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
+import type { NeedsYouItem } from '#lib/needs-you/needs-you-contracts.ts';
+import type { NeedsYouSession } from '#lib/needs-you/needs-you-session-contracts.ts';
+import {
+  type NeedsYouLoader,
+  MissionControlNeedsYouLoader,
+} from '#lib/server/needs-you/needs-you-loader.ts';
 import { type BuildStamp, buildStampSchema } from '#lib/build/build-stamp.ts';
 import {
   type RecoveryCodeGate,
@@ -29,6 +35,10 @@ export interface ShellData {
   viewer: Viewer | null;
   /** The viewer's recovery codes, or `null` when signed out or Mission Control couldn't say. */
   recoveryCodes: RecoveryCodeStatus | null;
+  /** What is waiting on the viewer, newest first. Empty when signed out or Mission Control couldn't say. */
+  needsYou: NeedsYouItem[];
+  /** The sessions those items came from, for saying where each agent runs. Empty when there are no items or Mission Control couldn't say. */
+  needsYouSessions: NeedsYouSession[];
   /** The theme and mode the page rendered in. */
   appearance: ThemePreference;
   build: BuildStamp;
@@ -44,23 +54,30 @@ export type ShellLoadEvent = Pick<ServerLoadEvent, 'fetch' | 'locals'> & {
   url: Pick<URL, 'pathname'>;
 };
 
-/** Asks Mission Control for the viewer, sends them to the codes step until they've saved recovery codes, renders in their saved appearance and adds the build stamp. The shell still renders when Mission Control is unreachable. */
+/** Asks Mission Control for the viewer and what is waiting on them, sends them to the codes step until they've saved recovery codes, renders in their saved appearance and adds the build stamp. The shell still renders when Mission Control is unreachable. */
 export class MissionControlShellLoader implements ShellLoader {
   private readonly apiBaseUrl: string;
   private readonly build: BuildStamp;
   private readonly cookieMirror: ThemeCookieMirror = themeCookieMirror;
   private readonly gate: RecoveryCodeGate = recoveryCodeGate;
+  private readonly needsYou: NeedsYouLoader;
 
   constructor(props: ShellLoaderProps) {
     const valid = shellLoaderPropsSchema.parse(props);
     this.apiBaseUrl = valid.apiBaseUrl;
     this.build = valid.build;
+    this.needsYou = new MissionControlNeedsYouLoader({
+      apiBaseUrl: valid.apiBaseUrl,
+    });
   }
 
   readonly load = async (event: ShellLoadEvent): Promise<ShellData> => {
-    const [viewer, codes] = await Promise.all([
+    const [viewer, codes, waiting] = await Promise.all([
       this.viewer(event),
       event.locals.hasSessionCookie ? this.recoveryCodes(event) : null,
+      event.locals.hasSessionCookie
+        ? this.needsYou.read(event)
+        : { items: [], sessions: [] },
     ]);
     const recoveryCodes = viewer === null ? null : codes;
 
@@ -79,6 +96,8 @@ export class MissionControlShellLoader implements ShellLoader {
     return {
       viewer,
       recoveryCodes,
+      needsYou: viewer === null ? [] : waiting.items,
+      needsYouSessions: viewer === null ? [] : waiting.sessions,
       appearance: event.locals.themePreference,
       build: this.build,
     };

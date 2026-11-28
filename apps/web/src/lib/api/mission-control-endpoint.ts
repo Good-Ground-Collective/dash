@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
 
 /** A response body as JSON. An empty body or one that isn't JSON, such as a proxy's error page, fails to parse. */
-const jsonTextSchema = z.string().transform((value, context) => {
+export const jsonTextSchema = z.string().transform((value, context) => {
   try {
     const parsed: unknown = JSON.parse(value);
     return parsed;
