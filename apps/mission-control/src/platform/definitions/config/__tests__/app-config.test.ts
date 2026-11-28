@@ -236,10 +236,13 @@ describe('AppConfig briefing', () => {
     expect(new AppConfig(env).briefing).toBeNull();
   });
 
-  it('rejects an empty API key instead of silently turning the briefing off', () => {
-    expect(
-      () => new AppConfig({ ...developmentEnv, OPENAI_API_KEY: '' }),
-    ).toThrow(/OPENAI_API_KEY/u);
+  it.each([
+    ['production', productionEnv],
+    ['development', developmentEnv],
+  ])('treats an empty API key as unset in %s', (_name, base) => {
+    const config = new AppConfig({ ...base, OPENAI_API_KEY: '' });
+
+    expect(config.briefing).toBeNull();
   });
 
   it('uses the verified defaults when only the key is set', () => {

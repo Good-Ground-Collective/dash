@@ -70,8 +70,7 @@ export interface BriefingSettings {
 const usdSchema = z
   .string()
   .regex(/^\d+(\.\d+)?$/u, 'Expected a decimal number such as 0.10')
-  .transform(Number)
-  .pipe(z.number().min(0));
+  .transform(Number);
 
 export const appConfigSchema = z
   .object({
@@ -101,9 +100,14 @@ export const appConfigSchema = z
     GITHUB_APP_CLIENT_SECRET: optionalSecretSchema,
     GITHUB_APP_PRIVATE_KEY: optionalSecretSchema,
     GITHUB_WEBHOOK_SECRET: optionalSecretSchema,
-    OPENAI_API_KEY: optionalSecretSchema.describe(
-      'Turns the AI briefing on. Unset, the briefing is off and production still boots.',
-    ),
+    OPENAI_API_KEY: z
+      .preprocess(
+        (value) => (value === '' ? undefined : value),
+        optionalSecretSchema,
+      )
+      .describe(
+        'Turns the AI briefing on. Unset or empty, the briefing is off and production still boots.',
+      ),
     BRIEFING_MODEL: z
       .string()
       .min(1)
