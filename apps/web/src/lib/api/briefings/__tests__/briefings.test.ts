@@ -75,3 +75,22 @@ describe('HttpBriefings', () => {
     );
   });
 });
+
+describe('briefing paragraphs', () => {
+  it('shows a link that is not http or https as plain text', async () => {
+    const briefings = SampleBriefings.briefings({
+      latest: SampleBriefings.run({
+        paragraphs: [[{ text: 'click', href: 'javascript:alert(1)' }]],
+      }),
+    });
+    const client = new HttpBriefings({
+      baseUrl: 'https://api.example.test',
+      fetch: new RecordingFetch({ response: () => Response.json(briefings) })
+        .fetch,
+    });
+
+    const read = await client.latest();
+
+    expect(read.latest?.paragraphs).toEqual([[{ text: 'click', href: null }]]);
+  });
+});

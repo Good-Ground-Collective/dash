@@ -21,11 +21,27 @@ class Events {
 const requested: BriefingRunState = BriefingRun.requested(runId);
 
 describe('BriefingRun.reconcile', () => {
+  const running = { runId, startedAt: new Date() };
+
   it('follows a run Mission Control reports, and idles otherwise', () => {
-    expect(
-      BriefingRun.busy(BriefingRun.reconcile({ runId, startedAt: new Date() })),
-    ).toBe(true);
+    expect(BriefingRun.busy(BriefingRun.reconcile(running))).toBe(true);
     expect(BriefingRun.reconcile(null)).toEqual({ phase: 'idle' });
+  });
+
+  it('keeps the stage of the run it already follows', () => {
+    const current: BriefingRunState = {
+      phase: 'running',
+      runId,
+      stage: 'saving',
+    };
+
+    expect(BriefingRun.reconcile(running, { current })).toBe(current);
+  });
+
+  it('stays idle for a run it already saw end', () => {
+    expect(BriefingRun.reconcile(running, { ended: new Set([runId]) })).toEqual(
+      { phase: 'idle' },
+    );
   });
 });
 
@@ -43,16 +59,16 @@ describe('BriefingRun.receive', () => {
     });
   });
 
-  it('adopts a run it did not start while idle', () => {
+  it('stays idle on an unknown run and asks for a re-read instead', () => {
     const step = BriefingRun.receive({
       state: BriefingRun.idle(),
-      event: Events.progress('scheduled-run'),
+      event: Events.progress('someone-elses-run'),
     });
 
-    expect(step.state).toEqual({
-      phase: 'running',
-      runId: 'scheduled-run',
-      stage: 'writing',
+    expect(step).toEqual({
+      state: { phase: 'idle' },
+      refetch: true,
+      finished: null,
     });
   });
 
@@ -79,12 +95,40 @@ describe('BriefingRun.receive', () => {
     });
   });
 
-  it('re-reads on a ready it was idle for, such as another tab’s run', () => {
+  it('re-reads on a ready it was idle for without claiming the run', () => {
     const step = BriefingRun.receive({
       state: BriefingRun.idle(),
       event: Events.ready('other-tab'),
     });
 
-    expect(step.refetch).toBe(true);
+    expect(step).toEqual({
+      state: { phase: 'idle' },
+      refetch: true,
+      finished: null,
+    });
+  });
+});
+
+describe('BriefingRun.confirm', () => {
+  it('applies the stage of a run the re-read confirmed', () => {
+    expect(
+      BriefingRun.confirm({ state: requested, event: Events.progress(runId) }),
+    ).toEqual({ phase: 'running', runId, stage: 'writing' });
+  });
+
+  it('leaves another run, a later stage, or an idle card alone', () => {
+    const running: BriefingRunState = {
+      phase: 'running',
+      runId,
+      stage: 'saving',
+    };
+    const cases = [
+      { state: requested, event: Events.progress('other') },
+      { state: running, event: Events.progress(runId) },
+      { state: BriefingRun.idle(), event: Events.progress(runId) },
+    ];
+    for (const { state, event } of cases) {
+      expect(BriefingRun.confirm({ state, event })).toBe(state);
+    }
   });
 });

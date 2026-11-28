@@ -30,9 +30,12 @@
   let button = $state<HTMLButtonElement>();
   let startedHere = false;
   let latestRead = 0;
+  const ended = new Set<string>();
 
   let view = $derived(new BriefingView({ state: reread ?? briefing, now }));
-  let run = $derived(runState ?? BriefingRun.reconcile(view.running));
+  let run = $derived(
+    runState ?? BriefingRun.reconcile(view.running, { ended }),
+  );
   let busy = $derived(starting || BriefingRun.busy(run));
   let statusLine = $derived(
     run.phase === 'running'
@@ -46,16 +49,20 @@
     void briefing;
     reread = null;
     runState = null;
+    finished = '';
   });
 
   /** A quiet re-read keeps what's shown when Mission Control can't answer. */
-  const refresh = async (props: { runEnded: boolean }) => {
+  const refresh = async () => {
     const ticket = ++latestRead;
     try {
       const briefings = await client.latest();
       if (ticket !== latestRead) return;
       reread = { status: 'loaded', briefings };
-      runState = props.runEnded ? BriefingRun.idle() : null;
+      runState = BriefingRun.reconcile(briefings.running, {
+        current: run,
+        ended,
+      });
     } catch {
       return;
     }
@@ -68,13 +75,19 @@
       data: message.data,
     });
     if (event === null) return;
+    if (event.kind === 'ready') ended.add(event.runId);
 
     const step = BriefingRun.receive({ state: run, event });
     runState = step.state;
-    if (step.finished === null) return;
+    if (step.finished !== null) {
+      finished = BriefingWording.finished(step.finished);
+    }
+    if (step.refetch) await refresh();
+    if (step.finished === null) {
+      runState = BriefingRun.confirm({ state: run, event });
+      return;
+    }
 
-    finished = BriefingWording.finished(step.finished);
-    await refresh({ runEnded: true });
     if (startedHere) {
       startedHere = false;
       await tick();
@@ -91,14 +104,15 @@
 
     try {
       const accepted = await client.regenerate();
-      if (run.phase === 'idle')
+      if (run.phase === 'idle' && !ended.has(accepted.runId)) {
         runState = BriefingRun.requested(accepted.runId);
+      }
     } catch (error) {
       startedHere = false;
       refusal = BriefingWording.refusal(
         error instanceof MissionControlError ? error : null,
       );
-      await refresh({ runEnded: false });
+      await refresh();
     } finally {
       starting = false;
     }
@@ -106,7 +120,7 @@
 
   const refreshWhenVisible = () => {
     if (document.visibilityState === 'visible') {
-      void refresh({ runEnded: false });
+      void refresh();
     }
   };
 
@@ -122,7 +136,7 @@
     source.addEventListener('open', () => {
       if (!dropped) return;
       dropped = false;
-      void refresh({ runEnded: false });
+      void refresh();
     });
     for (const type of BriefingEventReader.TYPES) {
       source.addEventListener(type, (message) => void receive(message));
@@ -150,24 +164,26 @@
     </span>
   {/snippet}
 
-  <div class="body" aria-busy={busy}>
-    {#if view.message !== null}
-      <p class="message">{view.message}</p>
-    {/if}
-    {#if view.note !== null}
-      <p class="note">{view.note}</p>
-    {/if}
-    {#each view.paragraphs as paragraph, index (index)}
-      <p class="paragraph">
-        {#each paragraph as segment, position (position)}
-          {#if segment.href !== null}
-            <a href={segment.href}>{segment.text}</a>
-          {:else}
-            {segment.text}
-          {/if}
-        {/each}
-      </p>
-    {/each}
+  <div class="body">
+    <div class="content" aria-busy={busy}>
+      {#if view.message !== null}
+        <p class="message">{view.message}</p>
+      {/if}
+      {#if view.note !== null}
+        <p class="note">{view.note}</p>
+      {/if}
+      {#each view.paragraphs as paragraph, index (index)}
+        <p class="paragraph">
+          {#each paragraph as segment, position (position)}
+            {#if segment.href !== null}
+              <a href={segment.href}>{segment.text}</a>
+            {:else}
+              {segment.text}
+            {/if}
+          {/each}
+        </p>
+      {/each}
+    </div>
 
     <p class="status" role="status">{statusLine}</p>
     {#if refusal !== null}
@@ -201,6 +217,15 @@
     display: grid;
     gap: var(--space-3);
     padding: var(--density-row-block) var(--density-row-inline);
+  }
+
+  .content {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .content:empty {
+    display: none;
   }
 
   .message,

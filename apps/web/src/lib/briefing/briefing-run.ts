@@ -24,7 +24,7 @@ export interface BriefingRunStep {
   finished: BriefingStatus | null;
 }
 
-/** The run a card follows. A run seen while idle is adopted, since a scheduled run or another tab may have started it. */
+/** The run a card follows. `/events` carries everyone's runs, so an unknown run is only followed once `GET /briefings` reports it as this person's. */
 export class BriefingRun {
   static idle(): BriefingRunState {
     return { phase: 'idle' };
@@ -34,11 +34,30 @@ export class BriefingRun {
     return { phase: 'requested', runId };
   }
 
-  /** Whatever Mission Control says is running replaces what the card believed. */
-  static reconcile(running: BriefingRunning | null): BriefingRunState {
-    return running === null
-      ? BriefingRun.idle()
-      : BriefingRun.requested(running.runId);
+  /** Whatever Mission Control says is running replaces what the card believed, except a run the card already saw end. */
+  static reconcile(
+    running: BriefingRunning | null,
+    context: { current?: BriefingRunState; ended?: ReadonlySet<string> } = {},
+  ): BriefingRunState {
+    const { current, ended } = context;
+    if (running === null || ended?.has(running.runId) === true) {
+      return BriefingRun.idle();
+    }
+    if (current !== undefined && current.phase !== 'idle') {
+      if (current.runId === running.runId) return current;
+    }
+    return BriefingRun.requested(running.runId);
+  }
+
+  /** A stage that arrived before the re-read confirmed the run, applied once the card follows it without a stage. */
+  static confirm(props: {
+    state: BriefingRunState;
+    event: BriefingRunEvent;
+  }): BriefingRunState {
+    const { state, event } = props;
+    if (event.kind !== 'progress' || state.phase !== 'requested') return state;
+    if (state.runId !== event.runId) return state;
+    return { phase: 'running', runId: event.runId, stage: event.stage };
   }
 
   /** Whether a run is under way, which keeps the button from starting another. */
@@ -51,8 +70,10 @@ export class BriefingRun {
     event: BriefingRunEvent;
   }): BriefingRunStep {
     const { state, event } = props;
-    const ours = state.phase === 'idle' || state.runId === event.runId;
-    if (!ours) return { state, refetch: false, finished: null };
+    if (state.phase === 'idle') return { state, refetch: true, finished: null };
+    if (state.runId !== event.runId) {
+      return { state, refetch: false, finished: null };
+    }
 
     if (event.kind === 'progress') {
       return {

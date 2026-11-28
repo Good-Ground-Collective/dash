@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { linkSchema } from '#lib/api/github-account-contracts.ts';
 
 const timestampSchema = z.coerce.date();
 
@@ -28,7 +29,10 @@ export const briefingParagraphSchema = z
   .array(
     z.object({
       text: z.string(),
-      href: z.url().nullable(),
+      href: linkSchema
+        .nullable()
+        .catch(null)
+        .describe('A link that is not http or https is shown as plain text.'),
     }),
   )
   .describe('One paragraph as text segments, each optionally a link.');
