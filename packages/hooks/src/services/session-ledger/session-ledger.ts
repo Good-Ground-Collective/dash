@@ -70,7 +70,10 @@ export class FileSessionLedger implements SessionLedger {
 
     return new FileLock({ lockPath: `${statePath}.lock` }).hold(async () => {
       const loaded = await this.load(statePath, outboxPath);
-      const state = FileSessionLedger.withLaunchedChild(plan, loaded);
+      const state = FileSessionLedger.withoutMainChildrenOnEmptyTaskList(
+        plan,
+        FileSessionLedger.withLaunchedChild(plan, loaded),
+      );
       const effective = FileSessionLedger.withChildrenStatus(plan, state);
       if (!this.shouldWrite(effective, state, now)) {
         if (state !== loaded) {
@@ -168,19 +171,11 @@ export class FileSessionLedger implements SessionLedger {
     return plan.draft.agentId ?? mainAgentKey;
   }
 
-  /**
-   * The state with the plan's background child recorded under the agent that launched it. A main
-   * agent `Stop` that reports no background tasks in flight forgets the main agent's children
-   * instead: Claude Code's own empty list outranks a child whose finish was never seen.
-   */
+  /** The state with the plan's background child recorded under the agent that launched it. */
   private static withLaunchedChild(
     plan: HeartbeatPlan,
     state: SessionState,
   ): SessionState {
-    if (plan.reportedBackgroundTasks === 0) {
-      const { [mainAgentKey]: _dropped, ...others } = state.children;
-      return { ...state, children: others };
-    }
     if (plan.launchedChild === undefined) {
       return state;
     }
@@ -195,6 +190,22 @@ export class FileSessionLedger implements SessionLedger {
       ...state,
       children: { ...state.children, [key]: [...known, plan.launchedChild] },
     };
+  }
+
+  /**
+   * The state without the main agent's recorded children when its `Stop` reports an empty
+   * `background_tasks` list: Claude Code's own empty list outranks a child whose finish was never seen.
+   */
+  private static withoutMainChildrenOnEmptyTaskList(
+    plan: HeartbeatPlan,
+    state: SessionState,
+  ): SessionState {
+    if (plan.reportedBackgroundTasks !== 0) {
+      return state;
+    }
+
+    const { [mainAgentKey]: _dropped, ...others } = state.children;
+    return { ...state, children: others };
   }
 
   /**

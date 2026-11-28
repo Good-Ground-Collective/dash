@@ -289,14 +289,14 @@ describe('ClaudeCodeHeartbeatHook main agent background_tasks', () => {
     await Agents.start(child);
     await Agents.launch(undefined, child);
 
+    const undecided = await state.run('stop', Payloads.stopWithoutTaskList());
     const stopped = await state.run('stop', {
       ...Payloads.for('stop'),
       background_tasks: [],
     });
-    const again = await state.run('stop', {
-      ...Payloads.for('stop'),
-    });
+    const again = await state.run('stop', Payloads.stopWithoutTaskList());
 
+    expect(undecided?.payload.status).toBe('waiting');
     expect(stopped?.payload.status).toBe('complete');
     expect(again?.payload.status).toBe('complete');
   });
