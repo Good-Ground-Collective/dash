@@ -4,10 +4,10 @@
   import { API_BASE_URL } from '$app/env/public';
   import { HttpBriefings } from '#lib/api/briefings/briefings.ts';
   import { MissionControlError } from '#lib/api/mission-control-error.ts';
-  import { MissionControlEndpoint } from '#lib/api/mission-control-endpoint.ts';
   import { BriefingEventReader } from '#lib/briefing/briefing-event-reader.ts';
   import {
     BriefingRun,
+    type BriefingRunEvent,
     type BriefingRunState,
   } from '#lib/briefing/briefing-run.ts';
   import {
@@ -16,10 +16,12 @@
   } from '#lib/briefing/briefing-view.ts';
   import { BriefingWording } from '#lib/briefing/briefing-wording.ts';
   import HomeSection from '#lib/home-ui/HomeSection.svelte';
+  import { getLiveEventStream } from '#lib/live/live-event-stream-context.ts';
 
   let { briefing, now }: { briefing: BriefingState; now: Date } = $props();
 
   const client = HttpBriefings.inBrowser({ baseUrl: API_BASE_URL });
+  const liveEvents = getLiveEventStream();
 
   /** What the browser re-read, shown in place of the page's copy until the page loads again. */
   let reread = $state.raw<BriefingState | null>(null);
@@ -68,13 +70,7 @@
     }
   };
 
-  const receive = async (message: Event) => {
-    if (!(message instanceof MessageEvent)) return;
-    const event = BriefingEventReader.read({
-      type: message.type,
-      data: message.data,
-    });
-    if (event === null) return;
+  const receive = async (event: BriefingRunEvent) => {
     if (event.kind === 'ready') ended.add(event.runId);
 
     const step = BriefingRun.receive({ state: run, event });
@@ -125,23 +121,21 @@
   };
 
   onMount(() => {
-    const source = new EventSource(
-      new MissionControlEndpoint({ baseUrl: API_BASE_URL }).url('events'),
-      { withCredentials: true },
-    );
-    let dropped = false;
-    source.addEventListener('error', () => {
-      dropped = true;
+    const stopProgress = liveEvents.subscribe({
+      definition: BriefingEventReader.PROGRESS,
+      onEvent: (event) => void receive(event),
+      onOpen: ({ reconnected }) => {
+        if (reconnected) void refresh();
+      },
     });
-    source.addEventListener('open', () => {
-      if (!dropped) return;
-      dropped = false;
-      void refresh();
+    const stopReady = liveEvents.subscribe({
+      definition: BriefingEventReader.READY,
+      onEvent: (event) => void receive(event),
     });
-    for (const type of BriefingEventReader.TYPES) {
-      source.addEventListener(type, (message) => void receive(message));
-    }
-    return () => source.close();
+    return () => {
+      stopProgress();
+      stopReady();
+    };
   });
 </script>
 

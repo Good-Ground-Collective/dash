@@ -1,7 +1,23 @@
 <script lang="ts">
   import { Popover } from 'bits-ui';
+  import { onMount } from 'svelte';
+  import { ClockRefresh } from '#lib/home/clock-refresh.ts';
+  import { getNeedsYouFeed } from '#lib/needs-you/needs-you-feed-context.ts';
+  import NeedsYouItemRow from '#lib/needs-you-ui/NeedsYouItemRow.svelte';
 
-  let { count = 0 }: { count?: number } = $props();
+  const feed = getNeedsYouFeed();
+
+  let count = $derived(feed.count);
+  let now = $state(new Date());
+
+  onMount(() =>
+    new ClockRefresh({
+      refresh: () => {
+        now = new Date();
+      },
+      visibility: document,
+    }).start(),
+  );
 </script>
 
 <div class="needs-you">
@@ -26,7 +42,15 @@
             <div {...wrapperProps}>
               <div {...props} class="panel">
                 <h2 class="panel-title">Needs you</h2>
-                <p class="empty">Nothing needs you right now.</p>
+                {#if count === 0}
+                  <p class="empty">Nothing needs you right now.</p>
+                {:else}
+                  <ul class="items">
+                    {#each feed.items as item (item.id)}
+                      <NeedsYouItemRow {item} {now} where={feed.where(item)} />
+                    {/each}
+                  </ul>
+                {/if}
               </div>
             </div>
           {/if}
@@ -73,13 +97,20 @@
     color: var(--ink-muted);
   }
 
+  .bubble:not([data-count='0']) {
+    border-color: var(--warn);
+  }
+
   .bubble:not([data-count='0']) .count {
-    background: var(--ink);
-    color: var(--surface);
+    background: var(--warn-surface);
+    color: var(--warn);
+    font-weight: var(--font-weight-semibold);
   }
 
   .panel {
-    width: min(22rem, calc(100vw - var(--space-6)));
+    width: min(26rem, calc(100vw - var(--space-6)));
+    max-height: min(32rem, 70dvh);
+    overflow-y: auto;
     padding: var(--space-4);
     background: var(--surface);
     border: var(--border-hairline) solid var(--line);
@@ -96,6 +127,12 @@
     margin-top: var(--space-2);
     font-size: var(--font-size-sm);
     color: var(--ink-muted);
+  }
+
+  .items {
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
   }
 
   @media (width < 40rem) {

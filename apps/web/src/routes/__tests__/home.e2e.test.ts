@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { z } from 'zod';
-import { BriefingDriver } from './support/briefings/briefing-driver.ts';
+import { BriefingDriver } from './support/live/briefings/briefing-driver.ts';
 
 const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
 
