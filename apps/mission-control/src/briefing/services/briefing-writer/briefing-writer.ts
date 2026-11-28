@@ -102,6 +102,7 @@ export class OpenAiBriefingWriter implements BriefingWriter {
     });
   }
 
+  /** A timed-out request may still finish and be billed, so it is charged at the worst case. */
   private async send(snapshot: BriefingSnapshotDigest): Promise<Response> {
     try {
       return await this.client.responses.create({
@@ -113,11 +114,12 @@ export class OpenAiBriefingWriter implements BriefingWriter {
       });
     } catch (error) {
       if (!(error instanceof OpenAI.APIError)) throw error;
+      const timedOut = error instanceof OpenAI.APIConnectionTimeoutError;
       throw new BriefingWriteFailedError({
         reason: 'provider',
-        model: null,
+        model: timedOut ? this.model : null,
         tokens: { input: 0, cachedInput: 0, output: 0, reasoning: 0 },
-        costMicroUsd: 0,
+        costMicroUsd: timedOut ? this.worstCaseCostMicroUsd(snapshot) : 0,
         cause: error,
       });
     }

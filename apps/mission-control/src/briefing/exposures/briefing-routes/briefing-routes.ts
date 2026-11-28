@@ -7,10 +7,15 @@ import {
   type Briefings,
   briefingsQuerySchema,
   briefingsSchema,
+  regenerateAcceptedSchema,
 } from '#src/briefing/contracts/briefings.ts';
-import { BriefingSignInRequiredError } from '#src/briefing/errors.ts';
+import {
+  BriefingNotConfiguredError,
+  BriefingSignInRequiredError,
+} from '#src/briefing/errors.ts';
 import type { BriefingRepository } from '#src/briefing/repositories/briefings/briefing-repository.ts';
 import type { OwnerTimeZoneReader } from '#src/briefing/repositories/owner-time-zones/owner-time-zone-reader.ts';
+import type { BriefingWorkflows } from '#src/briefing/services/briefing-workflows/briefing-workflows.ts';
 import { BudgetMonth } from '#src/briefing/services/budget-month/budget-month.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
 import type { BriefingSettings } from '#src/platform/definitions/config/app-config.ts';
@@ -26,13 +31,15 @@ const briefingRoutesPropsSchema = z.object({
       >
     >(),
   ownerTimeZone: z.custom<OwnerTimeZoneReader>(),
+  workflows: z.custom<Pick<BriefingWorkflows, 'regenerate' | 'running'>>(),
   settings: z.custom<Pick<BriefingSettings, 'monthlyBudgetUsd'>>().nullable(),
   identity: z.custom<Pick<Identity, 'session'>>(),
 });
 
 /**
- * `GET /briefings`, the signed-in person's latest good briefing, their latest run, recent
- * history, and this month's instance-wide spend against the budget.
+ * `GET /briefings`, the signed-in person's latest good briefing, their latest run, any run in
+ * progress, recent history, and this month's instance-wide spend against the budget.
+ * `POST /briefing/regenerate` starts a run for them, or joins the one already queued or running.
  */
 export class BriefingRoutes {
   private readonly briefings: Pick<
@@ -40,6 +47,7 @@ export class BriefingRoutes {
     'latestSucceeded' | 'latestRun' | 'history' | 'spentSince'
   >;
   private readonly ownerTimeZone: OwnerTimeZoneReader;
+  private readonly workflows: Pick<BriefingWorkflows, 'regenerate' | 'running'>;
   private readonly settings: Pick<BriefingSettings, 'monthlyBudgetUsd'> | null;
   private readonly person: SignedInPerson;
 
@@ -47,6 +55,7 @@ export class BriefingRoutes {
     const props = briefingRoutesPropsSchema.parse(input);
     this.briefings = props.briefings;
     this.ownerTimeZone = props.ownerTimeZone;
+    this.workflows = props.workflows;
     this.settings = props.settings;
     this.person = new SignedInPerson({ identity: props.identity });
   }
@@ -66,6 +75,22 @@ export class BriefingRoutes {
           limit: request.query.limit,
         }),
     );
+
+    app.post(
+      '/briefing/regenerate',
+      { schema: { response: { 202: regenerateAcceptedSchema } } },
+      async (request, reply) => {
+        const userId = await this.signedIn(request);
+        if (this.settings === null) {
+          throw new BriefingNotConfiguredError();
+        }
+        const { runId } = await this.workflows.regenerate({
+          userId,
+          trigger: 'manual',
+        });
+        return reply.code(202).send({ runId });
+      },
+    );
   }
 
   private async read(props: {
@@ -83,15 +108,18 @@ export class BriefingRoutes {
         lastRun: null,
         history: [],
         budget: { month: month.label, spentUsd: 0, capUsd: 0, reached: false },
+        running: null,
       };
     }
 
-    const [latest, lastRun, history, spentMicroUsd] = await Promise.all([
-      this.briefings.latestSucceeded({ userId: props.userId }),
-      this.briefings.latestRun({ userId: props.userId }),
-      this.briefings.history(props),
-      this.briefings.spentSince({ since: month.startsAt }),
-    ]);
+    const [latest, lastRun, history, spentMicroUsd, running] =
+      await Promise.all([
+        this.briefings.latestSucceeded({ userId: props.userId }),
+        this.briefings.latestRun({ userId: props.userId }),
+        this.briefings.history(props),
+        this.briefings.spentSince({ since: month.startsAt }),
+        this.workflows.running({ userId: props.userId }),
+      ]);
     const spentUsd = spentMicroUsd / microUsdPerUsd;
     const capUsd = this.settings.monthlyBudgetUsd;
 
@@ -106,6 +134,7 @@ export class BriefingRoutes {
         capUsd,
         reached: spentUsd >= capUsd,
       },
+      running,
     };
   }
 

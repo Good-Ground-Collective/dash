@@ -245,6 +245,32 @@ describe('OpenAiBriefingWriter refusing and erroring', () => {
   });
 });
 
+describe('OpenAiBriefingWriter timing out', () => {
+  it('charges the worst case when the request times out, since it may still be billed', async () => {
+    const fake = new FakeOpenAi().replyNever();
+    const writer = new OpenAiBriefingWriter({
+      client: fake.client({ timeoutMs: 20 }),
+      settings,
+    });
+    const snapshot = SampleSnapshot.build();
+
+    let error: BriefingWriteFailedError | null = null;
+    try {
+      await writer.write(snapshot);
+    } catch (failure) {
+      if (!(failure instanceof BriefingWriteFailedError)) throw failure;
+      error = failure;
+    }
+
+    expect(error).toBeInstanceOf(BriefingWriteFailedError);
+    expect(error).toMatchObject({
+      reason: 'provider',
+      model: settings.model,
+      costMicroUsd: writer.worstCaseCostMicroUsd(snapshot),
+    });
+  });
+});
+
 describe('OpenAiBriefingWriter worstCaseCostMicroUsd', () => {
   it('prices a token per three prompt characters plus the whole ceiling', () => {
     const harness = new Harness();
