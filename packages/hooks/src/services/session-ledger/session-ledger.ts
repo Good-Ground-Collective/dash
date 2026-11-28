@@ -158,11 +158,19 @@ export class FileSessionLedger implements SessionLedger {
     return sessionId.replaceAll(/[^\w-]/g, '_');
   }
 
-  /** The state with the plan's background child recorded under the agent that launched it. */
+  /**
+   * The state with the plan's background child recorded under the agent that launched it. A main
+   * agent `Stop` that reports no background tasks in flight forgets the main agent's children
+   * instead: Claude Code's own empty list outranks a child whose finish was never seen.
+   */
   private static withLaunchedChild(
     plan: HeartbeatPlan,
     state: SessionState,
   ): SessionState {
+    if (plan.reportedBackgroundTasks === 0) {
+      const { [mainAgentKey]: _dropped, ...others } = state.children;
+      return { ...state, children: others };
+    }
     if (plan.launchedChild === undefined) {
       return state;
     }

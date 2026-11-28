@@ -101,7 +101,8 @@ export class HeartbeatMapper {
     const { event, input } = context;
 
     if (event === 'Stop') {
-      const hasBackgroundTasks = (input.backgroundTaskCount ?? 0) > 0;
+      const reported = input.backgroundTaskCount;
+      const hasBackgroundTasks = (reported ?? 0) > 0;
       return {
         draft: {
           ...HeartbeatMapper.draft(
@@ -114,7 +115,8 @@ export class HeartbeatMapper {
           ),
         },
         condition: 'always',
-        settlesChildren: true,
+        settlesChildren: reported === undefined,
+        reportedBackgroundTasks: reported,
       };
     }
     if (event === 'StopFailure') {

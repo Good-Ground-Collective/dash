@@ -21,6 +21,12 @@ class Payloads {
       transcriptPath,
     });
   }
+
+  /** A main-agent Stop from a Claude Code that sent no `background_tasks` list. */
+  static stopWithoutTaskList(): RecordedPayload {
+    const { background_tasks: _omitted, ...rest } = Payloads.for('stop');
+    return rest;
+  }
 }
 
 const launcher = 'agent-launcher';
@@ -196,9 +202,9 @@ describe('ClaudeCodeHeartbeatHook main agent waiting', () => {
     await Agents.start(child);
     await Agents.launch(undefined, child);
 
-    const waiting = await state.run('stop', Payloads.for('stop'));
+    const waiting = await state.run('stop', Payloads.stopWithoutTaskList());
     await Agents.stop(child);
-    const done = await state.run('stop', Payloads.for('stop'));
+    const done = await state.run('stop', Payloads.stopWithoutTaskList());
 
     expect(waiting?.payload.status).toBe('waiting');
     expect(done?.payload.status).toBe('complete');
@@ -230,5 +236,40 @@ describe('ClaudeCodeHeartbeatHook main agent waiting', () => {
     });
 
     expect(stopped?.payload.status).toBe('complete');
+  });
+});
+
+describe('ClaudeCodeHeartbeatHook main agent background_tasks', () => {
+  it('reports complete on an empty background_tasks list even if a recorded child never finished', async () => {
+    await Agents.start(child);
+    await Agents.launch(undefined, child);
+
+    const stopped = await state.run('stop', {
+      ...Payloads.for('stop'),
+      background_tasks: [],
+    });
+    const again = await state.run('stop', {
+      ...Payloads.for('stop'),
+    });
+
+    expect(stopped?.payload.status).toBe('complete');
+    expect(again?.payload.status).toBe('complete');
+  });
+
+  it('reports waiting on a non-empty background_tasks list even when no child is recorded', async () => {
+    const stopped = await state.run('stop', {
+      ...Payloads.for('stop'),
+      background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }],
+    });
+
+    expect(stopped?.payload.status).toBe('waiting');
+  });
+
+  it('falls back to the recorded children when background_tasks is absent', async () => {
+    await Agents.launch(undefined, child);
+
+    const stopped = await state.run('stop', Payloads.stopWithoutTaskList());
+
+    expect(stopped?.payload.status).toBe('waiting');
   });
 });

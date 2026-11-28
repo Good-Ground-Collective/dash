@@ -26,6 +26,8 @@ export interface HeartbeatPlan {
   toolUseId?: string | undefined;
   /** A `complete` heartbeat that is sent as `waiting` while the agent has background children still running. */
   settlesChildren?: boolean | undefined;
+  /** How many background tasks Claude Code reported in flight on a main-agent `Stop`; absent when it sent no list, so only the ledger's recorded children can say. An empty list means nothing is running, whatever the ledger recorded. */
+  reportedBackgroundTasks?: number | undefined;
   /** The ID of a subagent this agent just launched in the background. */
   launchedChild?: string | undefined;
   /** The session's last heartbeat, after which the relay may delete its outbox once it is delivered. */
