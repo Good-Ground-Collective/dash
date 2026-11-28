@@ -190,7 +190,6 @@ describe('LiveAgentSessions overlapping and idle', () => {
       'second',
     ]);
   });
-
 });
 
 describe('LiveAgentSessions overlapping reads', () => {
