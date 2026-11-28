@@ -1,0 +1,85 @@
+{
+  "name": "@good-ground-collective/dash-hooks",
+  "version": "0.0.0",
+  "description": "Claude Code hooks that turn session events into agent.heartbeat messages in a local JSONL outbox",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Good-Ground-Collective/dash.git",
+    "directory": "packages/hooks"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "dash-hooks": "./dist/bin/dash-hooks.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./hooks.json": "./hooks/hooks.json"
+  },
+  "imports": {
+    "#src/*.js": {
+      "@good-ground-collective/dash-hooks-source": "./src/*.ts",
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "hooks"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@good-ground-collective/agentic-communication-standards": "workspace:^",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@dash/config": "workspace:*",
+    "@semantic-release/exec": "catalog:",
+    "@types/node": "catalog:",
+    "conventional-changelog-conventionalcommits": "catalog:",
+    "eslint": "catalog:",
+    "semantic-release": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "tagFormat": "dash-hooks-v${version}",
+    "plugins": [
+      [
+        "../standards/release/package-commits.ts",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "npm pkg set version=${nextRelease.version} && npm pkg set version=$(git tag --list 'standards-v*' --sort=-v:refname | head -n 1 | sed 's/^standards-v//') --prefix ../standards && pnpm --filter '@good-ground-collective/dash-hooks...' run build && pnpm pack --out package.tgz",
+          "publishCmd": "npm publish package.tgz --registry https://npm.pkg.github.com"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "successComment": false,
+          "failComment": false,
+          "releasedLabels": false
+        }
+      ]
+    ]
+  }
+}

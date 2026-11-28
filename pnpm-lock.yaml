@@ -599,6 +599,40 @@ importers:
         specifier: 'catalog:'
         version: 5.1.1(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/hooks:
+    dependencies:
+      '@good-ground-collective/agentic-communication-standards':
+        specifier: workspace:^
+        version: link:../standards
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      '@dash/config':
+        specifier: workspace:*
+        version: link:../config
+      '@semantic-release/exec':
+        specifier: 'catalog:'
+        version: 7.1.0(semantic-release@25.0.9(supports-color@7.2.0)(typescript@6.0.3))(supports-color@7.2.0)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.2
+      conventional-changelog-conventionalcommits:
+        specifier: 'catalog:'
+        version: 9.3.1
+      eslint:
+        specifier: 'catalog:'
+        version: 10.15.0(supports-color@7.2.0)
+      semantic-release:
+        specifier: 'catalog:'
+        version: 25.0.9(supports-color@7.2.0)(typescript@6.0.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.1.1(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/standards:
     devDependencies:
       '@dash/config':

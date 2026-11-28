@@ -1,0 +1,11 @@
+{
+  "name": "dash-heartbeats",
+  "version": "1.0.0",
+  "description": "Writes an agent.heartbeat line to the local Dash outbox on each Claude Code session event, so Dash can show what every session is doing",
+  "author": {
+    "name": "Good Ground Collective"
+  },
+  "homepage": "https://github.com/Good-Ground-Collective/dash/tree/main/plugins/dash-heartbeats",
+  "repository": "https://github.com/Good-Ground-Collective/dash",
+  "license": "MIT"
+}

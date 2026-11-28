@@ -1,0 +1,13 @@
+{
+  "extends": "@dash/config/tsconfig/base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "erasableSyntaxOnly": true,
+    "types": ["node"],
+    "customConditions": ["@good-ground-collective/dash-hooks-source"],
+    "declaration": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/__tests__"]
+}
