@@ -63,6 +63,7 @@ export class BriefingWorld {
       connectionId: githubConnectionId,
       viewerLogin: 'ada',
       records: ActivityRecords.from({ activity, viewerLogin: 'ada' }),
+      releaseReads: [],
       truncated: false,
       syncedAt,
     });

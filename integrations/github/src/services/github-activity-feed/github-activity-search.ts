@@ -48,8 +48,8 @@ interface SearchScope {
 
 /**
  * The viewer's review requests, open pull requests, assigned issues and recently merged
- * pull requests in one account, as four issue searches that share each request. A search drops out of later pages once it
- * has no next page; none reads past `maxSearchPages`.
+ * pull requests in one account, as four issue searches that share each request. A search
+ * drops out of later pages once it has no next page; none reads past `maxSearchPages`.
  */
 export class GithubActivitySearch {
   private readonly graphql: GraphqlCall;

@@ -4,6 +4,7 @@ import {
   type ActivityQuery,
   activityQuerySchema,
   type ActivityRelease,
+  type ActivityReleaseRead,
   type ActivityRepository,
   type ActivityRun,
 } from '@dash/integrations-core';
@@ -35,6 +36,7 @@ interface DefaultBranches {
   repositories: ActivityRepository[];
   runs: ActivityRun[];
   releases: ActivityRelease[];
+  releaseReads: ActivityReleaseRead[];
 }
 
 const loginSchema = z
@@ -58,8 +60,8 @@ const githubActivityQuerySchema = activityQuerySchema.extend({
 /**
  * A person's work in one installation, read with an installation token: four issue
  * searches share each GraphQL request, and default branches and recent releases are read
- * in batches of repository aliases. Pages and repositories are capped, so a busy account costs at most
- * three search requests and three branch requests.
+ * in batches of repository aliases. Pages and repositories are capped, so a busy account
+ * costs at most three search requests and three branch requests.
  */
 export class GithubActivityFeed implements ActivityFeed {
   private readonly graphql: GithubGraphql;
@@ -106,6 +108,7 @@ export class GithubActivityFeed implements ActivityFeed {
     const repositories: ActivityRepository[] = [];
     const runs: ActivityRun[] = [];
     const releases: ActivityRelease[] = [];
+    const releaseReads: ActivityReleaseRead[] = [];
     for (
       let start = 0;
       start < props.fullNames.length;
@@ -128,6 +131,7 @@ export class GithubActivityFeed implements ActivityFeed {
           const read = GithubActivityRecords.defaultBranch(node);
           repositories.push(read.repository);
           runs.push(...read.runs);
+          releaseReads.push(read.releaseRead);
           releases.push(
             ...read.releases.filter(
               (release) => new Date(release.publishedAt).getTime() >= since,
@@ -136,7 +140,7 @@ export class GithubActivityFeed implements ActivityFeed {
         }
       }
     }
-    return { repositories, runs, releases };
+    return { repositories, runs, releases, releaseReads };
   }
 
   /** GitHub's search takes whole seconds in UTC. */
@@ -205,6 +209,7 @@ export class GithubActivityFeed implements ActivityFeed {
         GithubActivityRecords.pullRequest(node),
       ),
       releases: props.branches.releases,
+      releaseReads: props.branches.releaseReads,
       failedRuns: [...runs.values()],
       assignedIssues: assigned.map((node) => GithubActivityRecords.issue(node)),
       truncated: props.truncated,

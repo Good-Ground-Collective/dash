@@ -93,12 +93,16 @@ export class GithubFeedFixtures {
     });
   }
 
-  static release(props: { id: string; publishedAt: string }): ActivityRelease {
+  static release(props: {
+    id: string;
+    publishedAt: string;
+    repositoryId?: string;
+  }): ActivityRelease {
     return {
       provider: 'github',
       externalId: `REL_${props.id}`,
       url: `https://github.com/acme/app/releases/tag/${props.id}`,
-      repositoryId: 'R_app',
+      repositoryId: props.repositoryId ?? 'R_app',
       tagName: props.id,
       name: `Release ${props.id}`,
       author: 'grace',
@@ -131,6 +135,7 @@ export class GithubFeedFixtures {
       ],
       mergedPullRequests: [],
       releases: [],
+      releaseReads: [],
       failedRuns: [
         {
           provider: 'github',

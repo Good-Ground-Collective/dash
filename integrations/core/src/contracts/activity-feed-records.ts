@@ -114,6 +114,20 @@ export const activityIssueSchema = externalRecordSchema.extend({
   updatedAt: timestampSchema,
 });
 
+export const activityReleaseReadSchema = z.object({
+  repositoryId: z.string().min(1),
+  exhaustive: z
+    .boolean()
+    .describe(
+      'True when the read returned fewer releases than it asked for, so it saw every release the repository has.',
+    ),
+  oldestPublishedAt: timestampSchema
+    .nullable()
+    .describe(
+      'The oldest publish time among the published releases the read returned, whether or not they fall in the window. Null when it returned none.',
+    ),
+});
+
 /** What one installation shows of a person's work. Every list is capped, so a busy account reads in a bounded number of calls. */
 export const activitySchema = z.object({
   repositories: z.array(activityRepositorySchema),
@@ -133,6 +147,11 @@ export const activitySchema = z.object({
     .describe(
       'Published releases of the repositories read, since the query’s `since`. Drafts are never read.',
     ),
+  releaseReads: z
+    .array(activityReleaseReadSchema)
+    .describe(
+      'The repositories whose releases were read, and how far back the read could see. A release of one of them that `releases` leaves out and that is not older than that was deleted or unpublished.',
+    ),
   failedRuns: z
     .array(activityRunSchema)
     .describe(
@@ -148,6 +167,7 @@ export type ActivityChecks = z.infer<typeof activityChecksSchema>;
 export type ActivityReviewer = z.infer<typeof activityReviewerSchema>;
 export type ActivityPullRequest = z.infer<typeof activityPullRequestSchema>;
 export type ActivityRelease = z.infer<typeof activityReleaseSchema>;
+export type ActivityReleaseRead = z.infer<typeof activityReleaseReadSchema>;
 export type ActivityRun = z.infer<typeof activityRunSchema>;
 export type ActivityIssue = z.infer<typeof activityIssueSchema>;
 export type Activity = z.infer<typeof activitySchema>;

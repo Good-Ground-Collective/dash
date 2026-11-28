@@ -59,6 +59,7 @@ export class OwnedGithubSource implements GithubSource {
     return {
       viewerLogin,
       records: ActivityRecords.from({ activity, viewerLogin }),
+      releaseReads: ActivityRecords.releaseReads(activity),
       truncated: activity.truncated,
     };
   }

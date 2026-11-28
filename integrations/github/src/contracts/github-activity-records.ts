@@ -2,10 +2,12 @@ import type {
   ActivityIssue,
   ActivityPullRequest,
   ActivityRelease,
+  ActivityReleaseRead,
   ActivityRepository,
   ActivityRun,
 } from '@dash/integrations-core';
 
+import { githubReleaseCount } from '#src/contracts/github-activity-queries.ts';
 import type {
   GithubDefaultBranchNode,
   GithubFailedSuite,
@@ -21,6 +23,7 @@ export interface DefaultBranchActivity {
   repository: ActivityRepository;
   runs: ActivityRun[];
   releases: ActivityRelease[];
+  releaseRead: ActivityReleaseRead;
 }
 
 /** GraphQL nodes read as provider-neutral activity records. */
@@ -147,15 +150,25 @@ export class GithubActivityRecords {
       });
       return read === null ? [] : [read];
     });
+    const releaseRead: ActivityReleaseRead = {
+      repositoryId: node.id,
+      exhaustive: node.releases.nodes.length < githubReleaseCount,
+      oldestPublishedAt:
+        releases
+          .map(({ publishedAt }) => publishedAt)
+          .toSorted((left, right) => Date.parse(left) - Date.parse(right))[0] ??
+        null,
+    };
     const headSha = branch?.target?.oid;
     if (branch === null || headSha === undefined) {
-      return { repository, runs: [], releases };
+      return { repository, runs: [], releases, releaseRead };
     }
 
     const suites = branch.target?.checkSuites?.nodes ?? [];
     return {
       repository,
       releases,
+      releaseRead,
       runs: suites.flatMap((suite) =>
         suite === null
           ? []

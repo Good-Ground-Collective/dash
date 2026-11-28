@@ -29,6 +29,7 @@ const read = {
   connectionId: ownedId,
   viewerLogin: 'ada',
   records,
+  releaseReads: [],
   truncated: false,
 };
 let store: GithubRecordsDatabase | undefined;

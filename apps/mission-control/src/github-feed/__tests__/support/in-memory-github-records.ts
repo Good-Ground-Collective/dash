@@ -1,6 +1,7 @@
 import type {
   ConnectionKind,
   GithubRecords,
+  GithubReleaseRead,
 } from '#src/github-feed/contracts/github-records.ts';
 import type { GithubSyncTarget } from '#src/github-feed/contracts/github-source.ts';
 import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-retention/feed-retention.ts';
@@ -76,6 +77,7 @@ export class InMemoryGithubRecords
     connectionId: string;
     viewerLogin: string;
     records: GithubRecords;
+    releaseReads: readonly GithubReleaseRead[];
     truncated: boolean;
     syncedAt: Date;
   }): Promise<{ applied: boolean }> {
@@ -97,6 +99,7 @@ export class InMemoryGithubRecords
       truncated: props.truncated,
       records: InMemoryGithubRecords.withRetained({
         read: props.records,
+        releaseReads: props.releaseReads,
         stored: stored?.records ?? null,
         now: props.syncedAt,
       }),
@@ -147,6 +150,7 @@ export class InMemoryGithubRecords
   /** What a read found plus the merged pull requests and releases from before it that are still within their retention. */
   private static withRetained(props: {
     read: GithubRecords;
+    releaseReads: readonly GithubReleaseRead[];
     stored: GithubRecords | null;
     now: Date;
   }): GithubRecords {
@@ -165,6 +169,15 @@ export class InMemoryGithubRecords
       record.mergedAt >= since;
     const published = (record: GithubRecords['releases'][number]) =>
       record.publishedAt >= since;
+    const unreported = (record: GithubRecords['releases'][number]) =>
+      props.releaseReads.some(
+        (read) =>
+          read.repositoryNodeId === record.repositoryNodeId &&
+          (read.exhaustive ||
+            (read.oldestPublishedAt !== null &&
+              Date.parse(record.publishedAt) >=
+                Date.parse(read.oldestPublishedAt))),
+      );
 
     return {
       ...props.read,
@@ -179,7 +192,10 @@ export class InMemoryGithubRecords
       releases: [
         ...props.read.releases.filter(published),
         ...(props.stored?.releases ?? []).filter(
-          (record) => !readReleases.has(record.nodeId) && published(record),
+          (record) =>
+            !readReleases.has(record.nodeId) &&
+            published(record) &&
+            !unreported(record),
         ),
       ],
     };

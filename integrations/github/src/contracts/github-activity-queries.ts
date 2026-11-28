@@ -47,7 +47,12 @@ const issueFields = `
 
 const releaseFields = `id name tagName url isDraft isPrerelease publishedAt author { login }`;
 
-const releaseCount = 5;
+/**
+ * How many of a repository's newest releases one read asks for. GitHub orders them only by
+ * creation time or name, so a release published recently from one created before the newest
+ * `githubReleaseCount` (drafts included) is missed until the repository has fewer of them.
+ */
+export const githubReleaseCount = 10;
 
 const pageInfo = 'pageInfo { hasNextPage endCursor }';
 
@@ -90,7 +95,7 @@ export const githubActivityQueries = {
         (index) => `
   repository${index}: repository(owner: $owner${index}, name: $name${index}) {
     ${repositoryFields}
-    releases(first: ${releaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }
+    releases(first: ${githubReleaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }
     defaultBranchRef {
       name
       target {

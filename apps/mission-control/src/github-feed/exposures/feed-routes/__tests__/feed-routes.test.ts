@@ -202,6 +202,49 @@ describe('GET /integrations/github/feed retention', () => {
   });
 });
 
+describe('GET /integrations/github/feed releases deleted on GitHub', () => {
+  it('drops the release of a repository the read saw empty, and keeps an unread repository’s and a merge', async () => {
+    const harness = await Served.synced();
+    const other = {
+      ...GithubFeedFixtures.activity().repositories[0]!,
+      externalId: 'R_other',
+      fullName: 'acme/other',
+      url: 'https://github.com/acme/other',
+    };
+    const repositories = [...GithubFeedFixtures.activity().repositories, other];
+    await Reads.activity(harness, {
+      repositories,
+      mergedPullRequests: [Reads.merged('2026-11-26T09:00:00Z')],
+      releases: [
+        Reads.release('v1.0.0', '2026-11-26T07:00:00Z'),
+        {
+          ...Reads.release('other-v1.0.0', '2026-11-26T07:30:00Z'),
+          repositoryId: 'R_other',
+        },
+      ],
+    });
+    vi.setSystemTime(new Date(fixedNow.getTime() + 15 * 60_000));
+
+    await Reads.activity(harness, {
+      repositories,
+      releases: [],
+      releaseReads: [
+        {
+          repositoryId: 'R_app',
+          exhaustive: true,
+          oldestPublishedAt: null,
+        },
+      ],
+    });
+    const feed = await Served.feedOf(harness, adaId);
+
+    expect(feed.releases.map(({ tagName }) => tagName)).toEqual([
+      'other-v1.0.0',
+    ]);
+    expect(feed.recentMerges.map(({ id }) => id)).toEqual(['PR_3']);
+  });
+});
+
 describe('GET /integrations/github/feed across connection kinds', () => {
   it('answers the same shape for a guest connection’s rows as for an owned one’s', async () => {
     const owned = await Served.feedOf(await Served.synced(), adaId);
@@ -224,6 +267,7 @@ describe('GET /integrations/github/feed across connection kinds', () => {
         activity: GithubFeedFixtures.activity(),
         viewerLogin: 'ada',
       }),
+      releaseReads: [],
       truncated: false,
       syncedAt: fixedNow,
     });

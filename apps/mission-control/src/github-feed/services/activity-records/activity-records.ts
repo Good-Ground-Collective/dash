@@ -10,6 +10,7 @@ import type {
   GithubIssueRecord,
   GithubPullRequestRecord,
   GithubRecords,
+  GithubReleaseRead,
   GithubReleaseRecord,
   GithubReviewRequestRecord,
   GithubWorkflowRunRecord,
@@ -67,6 +68,20 @@ export class ActivityRecords {
       issues: ActivityRecords.issues(activity),
       assignments: ActivityRecords.assignments({ activity, viewerLogin }),
     };
+  }
+
+  static releaseReads(activity: Activity): GithubReleaseRead[] {
+    return ActivityRecords.unique(
+      activity.releaseReads.map((read) => ({
+        repositoryNodeId: read.repositoryId,
+        exhaustive: read.exhaustive,
+        oldestPublishedAt:
+          read.oldestPublishedAt === null
+            ? null
+            : new Date(read.oldestPublishedAt).toISOString(),
+      })),
+      (read) => read.repositoryNodeId,
+    );
   }
 
   private static assignments(props: {

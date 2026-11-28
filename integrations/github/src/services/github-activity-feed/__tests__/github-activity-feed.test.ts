@@ -66,6 +66,13 @@ const busyAccount = new FakeGithubGraphql()
         repository0: defaultBranchNode({
           fullName: 'acme/app',
           releases: [
+            ...Array.from({ length: 5 }, (_, index) =>
+              releaseNode({
+                id: `REL_newer_draft_${index}`,
+                publishedAt: null,
+                draft: true,
+              }),
+            ),
             releaseNode({
               id: 'REL_new',
               name: 'Dash 1.2.0',
@@ -155,7 +162,7 @@ describe('GithubActivityFeed merges and releases', () => {
     ).not.toContain('WFR_merged');
   });
 
-  it('reads published releases since the cutoff and skips drafts and older ones', async () => {
+  it('reads published releases since the cutoff, behind newer drafts, and skips drafts and older ones', async () => {
     const activity = await busyAccount.feed().read(query);
 
     expect(activity.releases).toEqual([
@@ -169,6 +176,13 @@ describe('GithubActivityFeed merges and releases', () => {
         author: 'grace',
         prerelease: false,
         publishedAt: '2026-11-26T09:00:00Z',
+      },
+    ]);
+    expect(activity.releaseReads).toEqual([
+      {
+        repositoryId: 'R_acme/app',
+        exhaustive: true,
+        oldestPublishedAt: '2026-11-20T09:00:00Z',
       },
     ]);
   });
