@@ -14,6 +14,7 @@ import type { ConnectListener } from '#src/connections/contracts/connect-listene
 import { FakeConnectFlow } from '#src/connections/__tests__/support/fake-connect-flow.ts';
 import {
   InMemoryConnectionRepository,
+  InMemoryInstallRequestRepository,
   InMemoryLinkedAccountRepository,
   InMemoryWebhookDeliveryRepository,
 } from '#src/connections/__tests__/support/in-memory-connections.ts';
@@ -55,6 +56,7 @@ export class ConnectionsHarness {
   readonly flow = new FakeConnectFlow();
   readonly connections = new InMemoryConnectionRepository();
   readonly linkedAccounts = new InMemoryLinkedAccountRepository();
+  readonly installRequests = new InMemoryInstallRequestRepository();
   readonly deliveries = new InMemoryWebhookDeliveryRepository();
   readonly webhookEvents = new InMemoryWebhookEventRegistry();
   readonly module: ConnectionsModule;
@@ -89,6 +91,7 @@ export class ConnectionsHarness {
       },
       connections: this.connections,
       linkedAccounts: this.linkedAccounts,
+      installRequests: this.installRequests,
       deliveries: this.deliveries,
       webhookEvents: this.webhookEvents,
       secret,

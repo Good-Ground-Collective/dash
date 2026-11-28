@@ -28,7 +28,7 @@ export type GithubBody = { readonly [key: string]: GithubJson };
 type Reply = (call: RecordedCall) => {
   status?: number;
   headers?: Record<string, string>;
-  body: GithubBody;
+  body: GithubBody | readonly GithubJson[];
 };
 
 const formBodySchema = z.record(z.string(), z.string());

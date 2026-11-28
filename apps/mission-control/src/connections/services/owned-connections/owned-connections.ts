@@ -96,6 +96,29 @@ export class OwnedConnections {
   }
 
   /**
+   * Runs `read` with the person's access token. Null when they haven't authorized the app,
+   * or the provider refuses their grant, so the only way on is to authorize again.
+   */
+  async readAsPerson<T>(props: {
+    userId: string;
+    read: (accessToken: string) => Promise<T>;
+  }): Promise<T | null> {
+    const grant = await this.userGrant(props);
+    if (grant === null) {
+      return null;
+    }
+
+    try {
+      return await props.read(grant.accessToken);
+    } catch (error) {
+      if (error instanceof GrantRevokedError) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Records an installation as an `owned` connection, after checking that the person's own
    * token can see it, so a forged callback can't attach someone else's installation.
    */

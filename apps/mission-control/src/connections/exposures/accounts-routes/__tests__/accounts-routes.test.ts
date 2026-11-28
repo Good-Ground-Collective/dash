@@ -109,6 +109,7 @@ describe('AccountsRoutes linked', () => {
           },
         },
       ],
+      suggestions: [],
     });
   });
 

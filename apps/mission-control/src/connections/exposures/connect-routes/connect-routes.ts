@@ -18,6 +18,7 @@ import {
   InstallationNotYoursError,
   SignInRequiredError,
 } from '#src/connections/errors.ts';
+import type { InstallRequestRepository } from '#src/connections/repositories/install-requests/install-request-repository.ts';
 import type { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
 import type { ConnectState } from '#src/connections/services/connect-state/connect-state.ts';
 import type { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
@@ -27,7 +28,7 @@ import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts'
 /**
  * A provider's connect flow under `/integrations/<provider>`:
  * - `GET /connect`: the install and authorize URLs for the web's “Connect” button, the linked account and the owned connections. Needs a session.
- * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request). A request isn't recorded, because the provider doesn't say which account it was for; the account shows up once an owner installs.
+ * - `GET /setup`: the provider's install callback (`installation_id`, and `setup_action` of install, update or request). The provider doesn't say which account a request was for, so one is recorded only when the state names the account, as an install link Dash made for an organisation does. A request from the provider's own picker isn't recorded; the account shows up once an owner installs.
  * - `GET /callback`: the OAuth callback, which links the account and finishes an install that was waiting for it.
  *
  * Both callbacks end with a redirect to the web app's `returnTo` path, carrying `connect=<outcome>` and, on failure, `reason`.
@@ -40,6 +41,7 @@ export class ConnectRoutes {
   private readonly paths: ConnectPaths;
   private readonly webOrigin: string;
   private readonly listeners: readonly ConnectListener[];
+  private readonly requests: InstallRequestRepository;
 
   constructor(props: {
     connections: OwnedConnections;
@@ -49,6 +51,7 @@ export class ConnectRoutes {
     paths: ConnectPaths;
     webOrigin: string;
     listeners: readonly ConnectListener[];
+    requests: InstallRequestRepository;
   }) {
     this.connections = props.connections;
     this.flow = props.flow;
@@ -57,6 +60,7 @@ export class ConnectRoutes {
     this.paths = props.paths;
     this.webOrigin = props.webOrigin;
     this.listeners = props.listeners;
+    this.requests = props.requests;
   }
 
   register(app: ZodFastifyInstance): void {
@@ -121,6 +125,13 @@ export class ConnectRoutes {
     const returnTo = state?.returnTo ?? this.paths.defaultReturnTo;
 
     if (query.setupAction === 'request') {
+      if (state?.targetAccountId !== undefined) {
+        await this.requests.record({
+          userId,
+          provider: this.connections.provider,
+          accountExternalId: state.targetAccountId,
+        });
+      }
       return this.finish({ reply, returnTo, outcome: 'requested' });
     }
     if (query.installationId === undefined) {

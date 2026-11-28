@@ -52,13 +52,17 @@
       </span>
     {:else if row.badge.kind === 'suspended'}
       <span class="badge suspended">{row.badge.label}</span>
+    {:else if row.badge.kind === 'requested'}
+      <span class="badge requested">{row.badge.label}</span>
     {/if}
-    <a
-      class={row.action.primary ? 'auth-button small' : 'quiet-link'}
-      href={row.action.href}
-    >
-      {row.action.label}<span class="visually-hidden"> {row.login}</span>
-    </a>
+    {#if row.action !== null}
+      <a
+        class={row.action.primary ? 'auth-button small' : 'quiet-link'}
+        href={row.action.href}
+      >
+        {row.action.label}<span class="visually-hidden"> {row.login}</span>
+      </a>
+    {/if}
   </div>
 </li>
 
@@ -140,13 +144,22 @@
     color: var(--warn);
   }
 
-  .badge.suspended {
+  .badge.suspended,
+  .badge.requested {
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-pill);
-    background: var(--warn-surface);
-    color: var(--warn);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-medium);
+  }
+
+  .badge.suspended {
+    background: var(--warn-surface);
+    color: var(--warn);
+  }
+
+  .badge.requested {
+    border: var(--border-hairline) solid var(--line);
+    color: var(--ink-muted);
   }
 
   a.auth-button {

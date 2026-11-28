@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { GithubAccountReads } from '#lib/api/github-accounts.ts';
 import {
   type ConnectableAccount,
+  type OrganizationSuggestion,
   returnToSchema,
 } from '#lib/api/github-account-contracts.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
@@ -17,6 +18,7 @@ export type ConnectGithubState =
       state: 'linked';
       addAccountUrl: string;
       accounts: ConnectableAccount[];
+      suggestions: OrganizationSuggestion[];
     }
   | { state: 'signed-out' }
   | { state: 'failed'; error: string };
@@ -51,6 +53,7 @@ export class ConnectGithubFlow {
             state: 'linked',
             addAccountUrl: answer.addAccountUrl,
             accounts: answer.accounts,
+            suggestions: answer.suggestions,
           };
     } catch (cause) {
       if (cause instanceof MissionControlError && cause.status === 401) {

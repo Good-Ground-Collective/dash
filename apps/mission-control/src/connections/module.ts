@@ -12,6 +12,7 @@ import { AccountsRoutes } from '#src/connections/exposures/accounts-routes/accou
 import { ConnectRoutes } from '#src/connections/exposures/connect-routes/connect-routes.ts';
 import { WebhookRoutes } from '#src/connections/exposures/webhook-routes/webhook-routes.ts';
 import type { ConnectionRepository } from '#src/connections/repositories/connections/connection-repository.ts';
+import type { InstallRequestRepository } from '#src/connections/repositories/install-requests/install-request-repository.ts';
 import type { LinkedAccountRepository } from '#src/connections/repositories/linked-accounts/linked-account-repository.ts';
 import type { WebhookDeliveryRepository } from '#src/connections/repositories/webhook-deliveries/webhook-delivery-repository.ts';
 import { ConnectPaths } from '#src/connections/services/connect-paths/connect-paths.ts';
@@ -21,6 +22,7 @@ import {
   SignedConnectState,
 } from '#src/connections/services/connect-state/connect-state.ts';
 import { OwnedInstallationChanges } from '#src/connections/services/installation-changes/installation-changes.ts';
+import { OrganizationLookup } from '#src/connections/services/organization-lookup/organization-lookup.ts';
 import { OwnedConnections } from '#src/connections/services/owned-connections/owned-connections.ts';
 import { DbosSuspensionRecheck } from '#src/connections/services/suspension-recheck/suspension-recheck.ts';
 import { AesGcmTokenCipher } from '#src/connections/services/token-cipher/token-cipher.ts';
@@ -39,6 +41,11 @@ const connectionsModulePropsSchema = z.object({
   identity: z.custom<Pick<Identity, 'session'>>(),
   connections: z.custom<ConnectionRepository>(),
   linkedAccounts: z.custom<LinkedAccountRepository>(),
+  installRequests: z
+    .custom<InstallRequestRepository>()
+    .describe(
+      'Organisations people asked to install the app on, through install links Dash made.',
+    ),
   deliveries: z.custom<WebhookDeliveryRepository>(),
   webhookEvents: z
     .custom<WebhookEventRegistry>()
@@ -66,7 +73,8 @@ type ProviderRoutes = AccountsRoutes | ConnectRoutes | WebhookRoutes;
 
 /**
  * `owned` connections: for every registered integration that offers a connect flow, the
- * install and OAuth callbacks, the connectable accounts and the webhook endpoint under
+ * install and OAuth callbacks, the connectable accounts, organisation lookups and pending
+ * install requests, and the webhook endpoint under
  * `/integrations/<provider>`, the workflows that process and prune stored deliveries, and the
  * one that lifts a suspension the provider no longer reports.
  * Provider-neutral: it reaches providers only through `connectFlowCapability`.
@@ -180,12 +188,19 @@ export class ConnectionsModule implements HttpModule, WorkflowModule {
         paths,
         webOrigin: module.webOrigin,
         listeners: module.listeners,
+        requests: module.installRequests,
       }),
       new AccountsRoutes({
         accounts: new ConnectableAccounts({
           owned,
           flow,
           connections: module.connections,
+          requests: module.installRequests,
+        }),
+        lookup: new OrganizationLookup({
+          owned,
+          flow,
+          requests: module.installRequests,
         }),
         flow,
         identity: module.identity,
