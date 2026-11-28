@@ -138,6 +138,20 @@ const connectionDraftSchema = z.object({
 
 const githubItems = briefingLimits.githubItems;
 
+export const briefingCountsSchema = z
+  .object({
+    objectives: z.int().nonnegative(),
+    reviewRequests: z.int().nonnegative(),
+    myPullRequests: z.int().nonnegative(),
+    failedRuns: z.int().nonnegative(),
+    assignedIssues: z.int().nonnegative(),
+    agents: z.int().nonnegative(),
+    benches: z.int().nonnegative(),
+  })
+  .describe(
+    'What each source held before trimming, initiatives and epics together for objectives.',
+  );
+
 /** What the briefing writer is handed: Dash's stored data for one person at one moment, trimmed to fixed caps. Every item has a `ref` to cite. */
 export const briefingSnapshotSchema = z.object({
   takenAt: timestampSchema,
@@ -167,19 +181,7 @@ export const briefingSnapshotSchema = z.object({
   connections: z
     .array(connectionDraftSchema.extend(withRef))
     .max(briefingLimits.connections),
-  counts: z
-    .object({
-      objectives: z.int().nonnegative(),
-      reviewRequests: z.int().nonnegative(),
-      myPullRequests: z.int().nonnegative(),
-      failedRuns: z.int().nonnegative(),
-      assignedIssues: z.int().nonnegative(),
-      agents: z.int().nonnegative(),
-      benches: z.int().nonnegative(),
-    })
-    .describe(
-      'What each source held before trimming, initiatives and epics together for objectives.',
-    ),
+  counts: briefingCountsSchema,
 });
 
 export type BriefingSnapshotDigest = z.infer<typeof briefingSnapshotSchema>;

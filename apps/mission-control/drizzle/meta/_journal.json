@@ -92,6 +92,13 @@
       "when": 1795828789641,
       "tag": "0012_person_time_zone",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795830918629,
+      "tag": "0013_briefings",
+      "breakpoints": true
     }
   ]
 }
