@@ -20,6 +20,7 @@ import {
   StubRequest,
 } from './stub-request.ts';
 import { StubSessions } from './stub-sessions.ts';
+import { TimeZoneStub } from './time-zone/time-zone-stub.ts';
 import { WebAuthnOptions } from './webauthn-options.ts';
 
 /**
@@ -32,7 +33,9 @@ import { WebAuthnOptions } from './webauthn-options.ts';
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
  * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`,
- * `/onboarding/checklist` is `OnboardingStub`, and `/objectives` is `ObjectivesStub`.
+ * `/onboarding/checklist` is `OnboardingStub`, `/objectives` is `ObjectivesStub`, and
+ * `/api/people/me/time-zone` is `TimeZoneStub`, with `GET /api/people/me/time-zone/__stub/saves`
+ * counting what browsers sent.
  */
 export class MissionControlStub {
   private readonly webOrigin: string;
@@ -41,6 +44,7 @@ export class MissionControlStub {
   private readonly sessions = new StubSessions();
   private sessionStale = false;
   private readonly appearance = new AppearanceStub();
+  private readonly timeZone = new TimeZoneStub();
   private readonly serviceAccounts = new ServiceAccountsStub();
   private readonly setup = new SetupStub();
   private readonly github = new GithubStub({ webOrigin: () => this.webOrigin });
@@ -94,6 +98,17 @@ export class MissionControlStub {
     }
     if (url.pathname === '/onboarding/checklist') {
       const reply = this.onboarding.checklist({ signedIn });
+      response.writeHead(reply.status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(reply.body));
+      return;
+    }
+    if (url.pathname.startsWith('/api/people/me/time-zone')) {
+      const reply = url.pathname.endsWith('/__stub/saves')
+        ? this.timeZone.count()
+        : this.timeZone.save({
+            body: await StubRequest.body(request),
+            signedIn,
+          });
       response.writeHead(reply.status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(reply.body));
       return;
@@ -186,6 +201,7 @@ export class MissionControlStub {
     this.sessions.clear();
     this.sessionStale = false;
     this.appearance.reset();
+    this.timeZone.reset();
     this.serviceAccounts.reset();
     this.recovery.reset();
     this.recoveryCodes.reset();
@@ -211,7 +227,9 @@ export class MissionControlStub {
     if (session === null || this.person === null) {
       return { status: 200, body: null };
     }
-    const user = this.appearance.withAppearance(this.person);
+    const user = this.timeZone.withTimeZone(
+      this.appearance.withAppearance(this.person),
+    );
     return {
       status: 200,
       body: { session: { token: session }, user },

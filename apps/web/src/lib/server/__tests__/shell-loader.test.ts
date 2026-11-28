@@ -92,7 +92,12 @@ describe('ShellLoader', () => {
         ShellVisit.event({ fetch: counter.fetch, hasSessionCookie: true }),
       ),
     ).resolves.toEqual({
-      viewer: { ...viewer, theme: 'characters', colorMode: null },
+      viewer: {
+        ...viewer,
+        theme: 'characters',
+        colorMode: null,
+        timeZone: 'America/New_York',
+      },
       recoveryCodes: confirmedCodes,
       appearance: lightCharacters,
       build,
