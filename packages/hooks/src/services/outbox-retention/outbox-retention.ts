@@ -73,7 +73,7 @@ export class OutboxRetention {
       if (await isExpired()) {
         try {
           const remove = async (): Promise<boolean> => {
-            if (lockPathFor !== undefined && !(await isExpired())) {
+            if (!(await isExpired())) {
               return false;
             }
             await beforeRemove?.(stem);
@@ -97,7 +97,7 @@ export class OutboxRetention {
     return result;
   }
 
-  /** Creates the lock's directory first, so an outbox whose session state is gone can still be pruned. */
+  /** Creates the sessions directory first: `FileLock` doesn't, and it may be missing, for example removed externally. */
   private static async holdLock<T>(
     lockPath: string,
     work: () => Promise<T>,

@@ -106,9 +106,9 @@ export class OutboxDelivery {
 
   /**
    * Saves the cursor under the session's lock, only while the outbox still exists with the inode of
-   * the batch just sent. Retention deletes the outbox and its cursor under that lock, so a cursor for
-   * a deleted outbox is never written back to skip the lines of a resumed session. `false` when the
-   * outbox is gone or replaced.
+   * the batch just sent and is at least as long as the batch. Retention deletes the outbox and its
+   * cursor under that lock, so a cursor for a deleted outbox is never written back to skip the lines
+   * of a resumed session. `false` when the outbox is gone, replaced or shorter than the batch.
    */
   private async saveCursorIfOutboxUnchanged(
     stem: string,
@@ -118,7 +118,7 @@ export class OutboxDelivery {
     return new FileLock({ lockPath: this.sessionLockPath(stem) }).hold(
       async () => {
         const outbox = await stat(this.outboxPath(stem)).catch(() => undefined);
-        if (outbox?.ino !== batch.inode) {
+        if (outbox?.ino !== batch.inode || outbox.size < batch.endOffset) {
           return false;
         }
 

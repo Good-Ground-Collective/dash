@@ -1,8 +1,7 @@
 import { mkdir, stat, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
 import { FileLock } from '#src/services/file-lock/file-lock.js';
@@ -20,6 +19,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await state.remove();
 });
 
@@ -30,6 +30,20 @@ class RetentionFixture {
       () => true,
       () => false,
     );
+  }
+
+  /** Resolves once something other than the caller's own hold asks for a lock: the next `hold` call. */
+  static nextLockRequest(): Promise<void> {
+    const hold = FileLock.prototype.hold;
+    return new Promise((resolve) => {
+      vi.spyOn(FileLock.prototype, 'hold').mockImplementationOnce(function (
+        this: FileLock,
+        work,
+      ) {
+        resolve();
+        return hold.call(this, work);
+      });
+    });
   }
 
   static async writeExpiredOutbox(): Promise<{
@@ -65,8 +79,9 @@ describe('OutboxRetention', () => {
     let pruning: Promise<string[]> | undefined;
 
     await new FileLock({ lockPath: files.lock }).hold(async () => {
+      const requested = RetentionFixture.nextLockRequest();
       pruning = OutboxRetention.prune(state.config, now);
-      await sleep(150);
+      await requested;
 
       expect(await RetentionFixture.exists(files.outbox)).toBe(true);
       expect(await RetentionFixture.exists(files.cursor)).toBe(true);
@@ -82,8 +97,9 @@ describe('OutboxRetention', () => {
     let pruning: Promise<string[]> | undefined;
 
     await new FileLock({ lockPath: files.lock }).hold(async () => {
+      const requested = RetentionFixture.nextLockRequest();
       pruning = OutboxRetention.prune(state.config, now);
-      await sleep(150);
+      await requested;
 
       expect(await RetentionFixture.exists(files.outbox)).toBe(true);
       expect(await RetentionFixture.exists(files.cursor)).toBe(true);

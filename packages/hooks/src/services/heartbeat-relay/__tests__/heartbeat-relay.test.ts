@@ -1,4 +1,10 @@
-import { appendFile, readdir, stat, utimes, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  readdir,
+  stat,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 
 import {
   afterEach,
@@ -13,14 +19,13 @@ import {
 import { FakeIngest } from '#src/__tests__/support/fake-ingest.js';
 import { FakeTimers } from '#src/__tests__/support/fake-timers.js';
 import { RecordedPayloads } from '#src/__tests__/support/recorded-payloads.js';
+import { RetentionRace } from '#src/__tests__/support/retention-race.js';
 import { ScratchState } from '#src/__tests__/support/scratch-state.js';
 import { RelayConfig } from '#src/config/relay-config.js';
 import {
   OutboxHeartbeatRelay,
   type RelayOutcome,
 } from '#src/services/heartbeat-relay/heartbeat-relay.js';
-import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
-import { OutboxRetention } from '#src/services/outbox-retention/outbox-retention.js';
 import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
@@ -322,34 +327,37 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
 });
 
 describe('OutboxHeartbeatRelay against retention', () => {
-  it('does not save a cursor for an outbox retention deleted mid-send, and relays the resumed session in full', async () => {
-    const outboxPath = state.outboxPath(RecordedPayloads.SESSION_ID);
-    const cursorPath = RelayCursorStore.cursorPath(
-      state.config.relayCursorsDirectory,
-      FileSessionLedger.fileStem(RecordedPayloads.SESSION_ID),
-    );
+  let race: RetentionRace;
+
+  beforeEach(() => (race = new RetentionRace(state)));
+
+  it('does not save a stale cursor over an outbox the resumed session recreated mid-send, and relays it in full', async () => {
     await state.writeTurns(1);
-    await utimes(outboxPath, new Date(0), new Date(0));
-    const send = MissionControlIngest.prototype.send;
-    vi.spyOn(MissionControlIngest.prototype, 'send').mockImplementationOnce(
-      async function (this: MissionControlIngest, ...args) {
-        const results = await send.apply(this, args);
-        await OutboxRetention.prune(state.config, new Date());
-        return results;
-      },
-    );
+    const oldInode = await race.expireOutbox();
+    const savedCursors = vi.spyOn(RelayCursorStore, 'save');
+    race.afterNextSend(() => race.pruneThenResume());
 
     await TestRelay.run();
 
-    expect(await TestRelay.exists(outboxPath)).toBe(false);
-    expect(await TestRelay.exists(cursorPath)).toBe(false);
-
-    await state.writeTurns(1);
-    await TestRelay.run();
+    const outbox = await stat(race.outboxPath());
+    expect(outbox.ino).not.toBe(oldInode);
     expect(
-      ingest.stored.filter(
-        ({ sessionId }) => sessionId === RecordedPayloads.SESSION_ID,
-      ),
-    ).toHaveLength(4);
+      savedCursors.mock.calls.map(([, , saved]) => saved.inode),
+    ).not.toContain(oldInode);
+    expect(await race.cursorFits(outbox)).toBe(true);
+
+    await TestRelay.run();
+    const { resumed, stored } = await race.seqs(ingest.stored);
+    expect(resumed.length).toBeGreaterThan(0);
+    expect(stored).toEqual(expect.arrayContaining(resumed));
+  });
+
+  it('does not save a cursor when the outbox at the same inode is shorter than the batch sent', async () => {
+    await state.writeTurns(1);
+    race.afterNextSend(() => race.truncateOutbox());
+
+    await TestRelay.run();
+
+    expect(await race.cursorExists()).toBe(false);
   });
 });
