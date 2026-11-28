@@ -35,6 +35,9 @@ export const agentSessionTable = pgTable(
     liveness: text('liveness', { enum: agentLivenesses })
       .notNull()
       .default('live'),
+    livenessChangedAt: timestamp('liveness_changed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     summary: text('summary'),
     question: jsonb('question').$type<AgentHeartbeatQuestion>(),
     error: jsonb('error').$type<AgentHeartbeatError>(),

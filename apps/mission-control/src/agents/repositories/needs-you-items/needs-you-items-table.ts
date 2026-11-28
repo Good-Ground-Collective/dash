@@ -9,9 +9,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import type { AgentHeartbeatQuestion } from '#src/agents/contracts/agent-heartbeat.ts';
+import { needsYouKinds } from '#src/agents/definitions/needs-you-kind/needs-you-kind.ts';
 import { parentAgentId } from '#src/agents/repositories/agent-sessions/agent-sessions-table.ts';
 
-/** One row per question an agent raised for a person. A session or subagent has at most one open row; resolved rows stay. `reported_by` has no foreign key, like `agent_session`. */
+/** One row per thing waiting on a person: a question an agent raised, or a session that stopped responding. A session or subagent has at most one open row; resolved rows stay. `reported_by` has no foreign key, like `agent_session`. */
 export const needsYouItemTable = pgTable(
   'needs_you_item',
   {
@@ -19,6 +20,9 @@ export const needsYouItemTable = pgTable(
     reportedBy: uuid('reported_by').notNull(),
     sessionId: text('session_id').notNull(),
     agentId: text('agent_id').notNull().default(parentAgentId),
+    kind: text('kind', { enum: needsYouKinds })
+      .notNull()
+      .default('needs_input'),
     question: jsonb('question').$type<AgentHeartbeatQuestion>(),
     openedAt: timestamp('opened_at', { withTimezone: true })
       .notNull()

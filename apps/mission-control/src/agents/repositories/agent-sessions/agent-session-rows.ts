@@ -50,6 +50,7 @@ export class AgentSessionRows {
       harness: row.harness,
       status: row.status,
       liveness: row.liveness,
+      livenessChangedAt: row.livenessChangedAt.toISOString(),
       summary: row.summary,
       question: row.question,
       error: row.error,

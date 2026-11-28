@@ -44,13 +44,14 @@ export class AgentsModule implements HttpModule, WorkflowModule {
 
   constructor(input: z.input<typeof agentsModulePropsSchema>) {
     const props = agentsModulePropsSchema.parse(input);
+    const triage = new RulesNeedsYouTriage({
+      repository: props.needsYouRepository,
+      liveEvents: props.liveEvents,
+    });
     this.heartbeats = new CallerCheckedAgentHeartbeats({
       repository: props.heartbeatRepository,
       liveEvents: props.liveEvents,
-      triage: new RulesNeedsYouTriage({
-        repository: props.needsYouRepository,
-        liveEvents: props.liveEvents,
-      }),
+      triage,
     });
     this.retention = new AgentHeartbeatRetentionWorkflows({
       repository: props.heartbeatRepository,
@@ -59,6 +60,7 @@ export class AgentsModule implements HttpModule, WorkflowModule {
       watchdog: new PublishingAgentSessionWatchdog({
         repository: props.sessionRepository,
         liveEvents: props.liveEvents,
+        triage,
       }),
     });
 

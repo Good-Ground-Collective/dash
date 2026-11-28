@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentHeartbeatFixtures } from '#src/agents/__tests__/support/agent-heartbeat-fixtures.ts';
+import {
+  AgentHeartbeatFixtures,
+  sessionId,
+} from '#src/agents/__tests__/support/agent-heartbeat-fixtures.ts';
 import { InMemoryAgentRecords } from '#src/agents/__tests__/support/in-memory-agent-records.ts';
+import { InMemoryNeedsYouItems } from '#src/agents/__tests__/support/in-memory-needs-you-items.ts';
+import { RulesNeedsYouTriage } from '#src/agents/services/needs-you-triage/needs-you-triage.ts';
 import { PublishingAgentSessionWatchdog } from '#src/agents/services/agent-session-watchdog/agent-session-watchdog.ts';
 import type { LiveEvent } from '#src/live/contracts/live-event.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
@@ -12,6 +17,7 @@ const reportedBy = '00000000-0000-4000-8000-0000000000b1';
 /** A watchdog over in-memory records on a fixed clock that starts at `heardAt`. */
 class WatchdogScenario {
   readonly records = new InMemoryAgentRecords();
+  readonly needsYouItems = new InMemoryNeedsYouItems();
   readonly published: LiveEvent[] = [];
   readonly watchdog: PublishingAgentSessionWatchdog;
 
@@ -21,7 +27,25 @@ class WatchdogScenario {
     this.watchdog = new PublishingAgentSessionWatchdog({
       repository: this.records,
       liveEvents,
+      triage: new RulesNeedsYouTriage({
+        repository: this.needsYouItems,
+        liveEvents,
+      }),
     });
+  }
+
+  /** The `agent.session.updated` events published so far. */
+  sessionEvents(): LiveEvent[] {
+    return this.published.filter(
+      (event) => event.type === 'agent.session.updated',
+    );
+  }
+
+  /** The `needs-you.*` event types published so far. */
+  needsYouTypes(): string[] {
+    return this.published
+      .map((event) => event.type)
+      .filter((type) => type.startsWith('needs-you.'));
   }
 
   async hear(
@@ -83,7 +107,7 @@ describe('PublishingAgentSessionWatchdog', () => {
     await scenario.sweepAfter(31);
 
     expect(await scenario.liveness()).toEqual(['lost']);
-    expect(scenario.published).toMatchObject([
+    expect(scenario.sessionEvents()).toMatchObject([
       { type: 'agent.session.updated', data: { liveness: 'stale' } },
       { type: 'agent.session.updated', data: { liveness: 'lost' } },
     ]);
@@ -106,7 +130,102 @@ describe('PublishingAgentSessionWatchdog', () => {
     expect(changed).toBe(2);
     expect(await scenario.liveness()).toEqual(['stale', 'stale']);
   });
+});
 
+describe('PublishingAgentSessionWatchdog parent liveness', () => {
+  it('leaves a parent alone while one of its subagents is still reporting, and marks the subagent on its own silence', async () => {
+    await scenario.hear({ seq: 1 });
+    await scenario.hear({ seq: 2, agentId: 'plan-1' });
+    await scenario.hear({ seq: 3, agentId: 'plan-2' });
+    vi.setSystemTime(new Date(heardAt.getTime() + 8 * 60_000));
+    await scenario.hear({ seq: 4, agentId: 'plan-2' });
+
+    const changed = await scenario.sweepAfter(12);
+
+    expect(changed).toBe(1);
+    expect(await scenario.liveness()).toEqual(['live', 'stale', 'live']);
+    expect(scenario.sessionEvents()).toMatchObject([
+      { data: { agentId: 'plan-1', liveness: 'stale' } },
+    ]);
+  });
+
+  it('marks the parent once its last subagent has gone silent too', async () => {
+    await scenario.hear({ seq: 1 });
+    await scenario.hear({ seq: 2, agentId: 'plan-1' });
+
+    await scenario.sweepAfter(31);
+
+    expect(await scenario.liveness()).toEqual(['lost', 'lost']);
+  });
+});
+
+describe('PublishingAgentSessionWatchdog Needs you', () => {
+  it('resolves every open Needs you item of a session whose own row goes lost, and opens one stopped_responding item', async () => {
+    await scenario.hear({ seq: 1 });
+    await scenario.hear({
+      seq: 2,
+      agentId: 'plan-1',
+      status: 'question',
+      question: { text: 'Which?' },
+    });
+    await scenario.hear({ seq: 3, agentId: 'plan-2' });
+    await scenario.needsYouItems.open({
+      reportedBy,
+      sessionId,
+      agentId: 'plan-1',
+      question: { text: 'Which?' },
+      kind: 'needs_input',
+    });
+
+    await scenario.sweepAfter(31);
+    await scenario.sweepAfter(32);
+
+    expect(await scenario.needsYouItems.listOpen()).toMatchObject([
+      { kind: 'stopped_responding', agentId: null, question: null },
+    ]);
+    expect(scenario.needsYouTypes()).toEqual([
+      'needs-you.resolved',
+      'needs-you.opened',
+    ]);
+  });
+
+  it('raises no Needs you item for a subagent marked lost, or a parent marked only stale', async () => {
+    await scenario.hear({ seq: 1 });
+    await scenario.sweepAfter(11);
+    expect(await scenario.liveness()).toEqual(['stale']);
+
+    const subagents = new WatchdogScenario();
+    await subagents.hear({ seq: 1, agentId: 'plan-1' });
+    await subagents.sweepAfter(31);
+    expect(await subagents.liveness()).toEqual(['lost']);
+
+    expect(scenario.needsYouTypes()).toEqual([]);
+    expect(subagents.needsYouTypes()).toEqual([]);
+  });
+});
+
+describe('PublishingAgentSessionWatchdog liveness change', () => {
+  it('sets livenessChangedAt when it marks a row, and leaves it while the row stays live', async () => {
+    await scenario.hear({ seq: 1 });
+    const before = (
+      await scenario.records.listUpdatedSince({ since: new Date(0) })
+    )[0]?.livenessChangedAt;
+    vi.setSystemTime(new Date(heardAt.getTime() + 5 * 60_000));
+    await scenario.hear({ seq: 2 });
+    const stillLive = (
+      await scenario.records.listUpdatedSince({ since: new Date(0) })
+    )[0]?.livenessChangedAt;
+    await scenario.sweepAfter(16);
+    const stale = (
+      await scenario.records.listUpdatedSince({ since: new Date(0) })
+    )[0]?.livenessChangedAt;
+
+    expect(stillLive).toBe(before);
+    expect(stale).not.toBe(before);
+  });
+});
+
+describe('PublishingAgentSessionWatchdog recovery', () => {
   it('clears stale and lost with the next heartbeat', async () => {
     await scenario.hear({ seq: 1 });
     await scenario.sweepAfter(35);

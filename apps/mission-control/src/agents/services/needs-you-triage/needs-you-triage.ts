@@ -15,6 +15,8 @@ const rulesNeedsYouTriagePropsSchema = z.object({
 export interface NeedsYouTriage {
   /** Runs every rule over the state a heartbeat moved forward, opens and resolves items to match, and publishes `needs-you.opened` and `needs-you.resolved` for each. */
   triage(state: AgentSessionState): Promise<void>;
+  /** Resolves every open item of the session whose own row the watchdog just marked lost, opens one `stopped_responding` item for it, and publishes `needs-you.resolved` for each resolved and `needs-you.opened` for the new one. */
+  sessionLost(state: AgentSessionState): Promise<void>;
 }
 
 export class RulesNeedsYouTriage implements NeedsYouTriage {
@@ -36,6 +38,23 @@ export class RulesNeedsYouTriage implements NeedsYouTriage {
     }
   }
 
+  async sessionLost(state: AgentSessionState): Promise<void> {
+    await this.apply({
+      state,
+      decision: { action: 'resolve', scope: 'session' },
+    });
+    const opened = await this.repository.open({
+      reportedBy: state.reportedBy,
+      sessionId: state.sessionId,
+      agentId: null,
+      question: null,
+      kind: 'stopped_responding',
+    });
+    if (opened !== null) {
+      this.publish('needs-you.opened', opened);
+    }
+  }
+
   private async apply(props: {
     state: AgentSessionState;
     decision: NeedsYouDecision;
@@ -48,6 +67,7 @@ export class RulesNeedsYouTriage implements NeedsYouTriage {
         sessionId: state.sessionId,
         agentId: state.agentId,
         question: decision.question,
+        kind: 'needs_input',
       });
       if (opened !== null) {
         this.publish('needs-you.opened', opened);
@@ -55,12 +75,23 @@ export class RulesNeedsYouTriage implements NeedsYouTriage {
       return;
     }
 
-    const resolved =
-      decision.scope === 'session'
-        ? await this.repository.resolveSession(state)
-        : await this.repository.resolveOne(state);
+    const resolved = await this.resolve({ state, scope: decision.scope });
     for (const item of resolved) {
       this.publish('needs-you.resolved', item);
+    }
+  }
+
+  private async resolve(props: {
+    state: AgentSessionState;
+    scope: 'row' | 'session' | 'stopped';
+  }): Promise<NeedsYouItem[]> {
+    switch (props.scope) {
+      case 'session':
+        return this.repository.resolveSession(props.state);
+      case 'stopped':
+        return this.repository.resolveStopped(props.state);
+      case 'row':
+        return this.repository.resolveOne(props.state);
     }
   }
 

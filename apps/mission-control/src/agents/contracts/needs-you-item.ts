@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { agentHeartbeatQuestionSchema } from '#src/agents/contracts/agent-heartbeat.ts';
+import { needsYouKindSchema } from '#src/agents/definitions/needs-you-kind/needs-you-kind.ts';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -15,6 +16,7 @@ export const needsYouItemSchema = z.object({
     .string()
     .nullable()
     .describe('The subagent that asked. `null` for the session itself.'),
+  kind: needsYouKindSchema,
   question: agentHeartbeatQuestionSchema
     .nullable()
     .describe(
@@ -24,7 +26,7 @@ export const needsYouItemSchema = z.object({
   resolvedAt: timestampSchema
     .nullable()
     .describe(
-      'When a later heartbeat left needs input or the session ended. `null` while it is open.',
+      'When a later heartbeat left needs input or the session ended, or a heartbeat showed a lost session responding again. `null` while it is open.',
     ),
 });
 

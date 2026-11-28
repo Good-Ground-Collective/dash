@@ -36,6 +36,7 @@ export class StoredAgentSessions implements Pick<
       harness: 'claude-code',
       status: 'working',
       liveness: 'live',
+      livenessChangedAt: '2026-11-26T08:00:00.000Z',
       summary: 'Fixing the flaky sync test',
       question: null,
       error: null,

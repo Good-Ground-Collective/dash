@@ -1,0 +1,2 @@
+ALTER TABLE "agent_session" ADD COLUMN "liveness_changed_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "needs_you_item" ADD COLUMN "kind" text DEFAULT 'needs_input' NOT NULL;
