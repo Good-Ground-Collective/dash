@@ -50,6 +50,10 @@ export const ticketSchema = trackedItemSchema.extend({
     .describe(
       'Where the ticket sits among its epic’s tickets, from 0. Null when the ticket has no epic.',
     ),
+  assignees: z
+    .array(z.string().min(1))
+    .default([])
+    .describe('Handles of the people the ticket is assigned to, if any.'),
 });
 
 export const workItemSchema = z.discriminatedUnion('level', [

@@ -50,6 +50,9 @@ const issueSchema = z.object({
 });
 
 export const githubTicketNodeSchema = issueSchema.extend({
+  assignees: z
+    .object({ nodes: z.array(z.object({ login: z.string().min(1) })) })
+    .transform(({ nodes }) => nodes.map(({ login }) => login)),
   comments: z.object({
     nodes: z.array(
       z.object({
