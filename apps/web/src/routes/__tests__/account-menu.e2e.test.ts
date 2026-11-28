@@ -82,15 +82,21 @@ test('the settings sidebar groups the sections and marks the current one', async
   }
 });
 
-test('the account menu keeps Settings current on every settings page', async () => {
+test('the account menu marks its most specific entry current on every settings page', async () => {
   for (const section of settingsSections) {
     await page.goto(section.href);
     await page
       .getByRole('button', { name: 'Account, signed in as Ada Lovelace' })
       .click();
+    const onServiceAccounts = section.href === '/settings/service-accounts';
+    const current = onServiceAccounts ? 'Service accounts' : 'Settings';
+    const other = onServiceAccounts ? 'Settings' : 'Service accounts';
     await expect(
-      page.getByRole('menuitem', { name: 'Settings' }),
+      page.getByRole('menuitem', { name: current, exact: true }),
     ).toHaveAttribute('aria-current', 'page');
+    await expect(
+      page.getByRole('menuitem', { name: other, exact: true }),
+    ).not.toHaveAttribute('aria-current');
     await page.keyboard.press('Escape');
   }
 });

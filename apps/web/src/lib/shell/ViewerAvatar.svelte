@@ -12,6 +12,17 @@
   let { viewer, build }: { viewer: Viewer | null; build: BuildStamp } =
     $props();
 
+  const serviceAccountsCurrent = $derived(
+    NavItems.isCurrent({
+      pathname: page.url.pathname,
+      href: '/settings/service-accounts',
+    }),
+  );
+  const settingsCurrent = $derived(
+    NavItems.isCurrent({ pathname: page.url.pathname, href: '/settings' }) &&
+      !serviceAccountsCurrent,
+  );
+
   const signOut = async (): Promise<void> => {
     await HttpPasskeyAuth.inBrowser({ baseUrl: API_BASE_URL }).signOut();
     await goto('/sign-in', { invalidateAll: true });
@@ -55,12 +66,7 @@
                       {...itemProps}
                       class="item"
                       href="/settings"
-                      aria-current={NavItems.isCurrent({
-                        pathname: page.url.pathname,
-                        href: '/settings',
-                      })
-                        ? 'page'
-                        : undefined}
+                      aria-current={settingsCurrent ? 'page' : undefined}
                     >
                       Settings
                     </a>
@@ -72,6 +78,7 @@
                       {...itemProps}
                       class="item"
                       href="/settings/service-accounts"
+                      aria-current={serviceAccountsCurrent ? 'page' : undefined}
                     >
                       Service accounts
                     </a>
