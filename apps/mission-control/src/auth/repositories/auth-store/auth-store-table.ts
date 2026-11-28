@@ -27,6 +27,7 @@ export const userTable = pgTable(
       .notNull()
       .default('characters'),
     colorMode: text('color_mode', { enum: ['light', 'dark'] }),
+    timeZone: text('time_zone').notNull().default('America/New_York'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

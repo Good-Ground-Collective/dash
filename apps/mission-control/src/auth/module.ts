@@ -7,6 +7,7 @@ import {
 import { AppearanceEndpoints } from '#src/auth/exposures/appearance-endpoints/appearance-endpoints.ts';
 import { AuthHandlerRoutes } from '#src/auth/exposures/auth-handler/auth-handler-routes.ts';
 import { ServiceAccountEndpoints } from '#src/auth/exposures/service-account-endpoints/service-account-endpoints.ts';
+import { TimeZoneRoutes } from '#src/auth/exposures/time-zone-routes/time-zone-routes.ts';
 import type { AuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import type { ServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import {
@@ -22,6 +23,7 @@ import {
   type Identity,
   type IdentitySettings,
 } from '#src/auth/services/identity/identity.ts';
+import { BetterAuthPersonTimeZones } from '#src/auth/services/person-time-zones/person-time-zones.ts';
 import {
   OwnedServiceAccounts,
   type ServiceAccounts,
@@ -32,7 +34,7 @@ import {
 } from '#src/auth/services/service-principals/service-principals.ts';
 import type { HttpModule } from '#src/platform/contracts/http-module.ts';
 
-/** Who is calling: Better Auth under `/api/auth`, with people and service principals in one `user` table. People sign in with passkeys and save their appearance; service accounts send API keys, which other modules check through `agentAuthentication`. */
+/** Who is calling: Better Auth under `/api/auth`, with people and service principals in one `user` table. People sign in with passkeys and save their appearance and time zone; service accounts send API keys, which other modules check through `agentAuthentication`. */
 export class AuthModule implements HttpModule {
   readonly identity: Identity;
   readonly plugin: FastifyPluginAsyncZod;
@@ -69,6 +71,7 @@ export class AuthModule implements HttpModule {
         ...apiKeys.plugins,
         endpoints.plugin,
         new AppearanceEndpoints().plugin,
+        BetterAuthPersonTimeZones.PLUGIN,
       ],
     });
     this.agentAuthentication = new ApiKeyAuthentication({
@@ -77,8 +80,17 @@ export class AuthModule implements HttpModule {
     });
 
     const routes = new AuthHandlerRoutes({ identity: this.identity });
+    const timeZoneRoutes = new TimeZoneRoutes({
+      timeZones: new BetterAuthPersonTimeZones({ identity: this.identity }),
+      identity: this.identity,
+    });
     this.plugin = async (app) => {
-      routes.register(app);
+      await app.register(async (scope) => {
+        routes.register(scope);
+      });
+      await app.register(async (scope) => {
+        timeZoneRoutes.register(scope);
+      });
       app.addHook('onReady', async () => {
         const token = await this.identity.issueSetupToken();
         if (token !== null) {

@@ -261,3 +261,27 @@ export class AgentCallerMissingError extends Error {
     );
   }
 }
+
+/** Fastify answers with `statusCode` and `code`. */
+export class TimeZoneSignInRequiredError extends Error {
+  override name = 'TimeZoneSignInRequiredError';
+  readonly statusCode = 401;
+  readonly code = 'SIGN_IN_REQUIRED';
+
+  constructor() {
+    super('Sign in to Dash as a person to save your time zone.');
+  }
+}
+
+/** Fastify answers with `statusCode` and `code`. */
+export class TimeZoneRejectedError extends Error {
+  override name = 'TimeZoneRejectedError';
+  readonly statusCode = 400;
+  readonly code = 'TIME_ZONE_REJECTED';
+
+  constructor() {
+    super(
+      'Send `{ "timeZone": … }` with an IANA time zone name, such as America/New_York.',
+    );
+  }
+}
