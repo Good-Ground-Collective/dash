@@ -13,3 +13,12 @@ export class WorkflowRuntimeError extends Error {
     super(props.message);
   }
 }
+
+/** A schema whose largest JSON can't be bounded, such as one with an array and no `maxItems`. */
+export class UnboundedJsonSchemaError extends Error {
+  override name = 'UnboundedJsonSchemaError';
+
+  constructor(props: { reason: string }) {
+    super(`The schema has no largest JSON: ${props.reason}.`);
+  }
+}
