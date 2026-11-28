@@ -54,4 +54,3 @@ export class BriefingWriterHarness {
     throw new Error('Expected the write to fail');
   }
 }
-

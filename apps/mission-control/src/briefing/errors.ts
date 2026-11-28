@@ -1,18 +1,13 @@
 import type { BriefingTokens } from '#src/briefing/contracts/briefing-written.ts';
 
 export type BriefingWriteFailureReason =
-  | 'ceiling'
-  | 'refused'
-  | 'unreadable'
-  | 'too_short'
-  | 'incomplete'
-  | 'provider';
+  'ceiling' | 'refused' | 'unreadable' | 'tooShort' | 'incomplete' | 'provider';
 
 const reasonMessages = {
   ceiling: 'The model used up the output token ceiling before it finished.',
   refused: 'The model declined to write the briefing.',
   unreadable: 'The model’s answer was not a usable briefing.',
-  too_short: 'The model’s opening, closing or an action was too short.',
+  tooShort: 'The model’s opening, closing or an action was too short.',
   incomplete: 'The model stopped before it finished the briefing.',
   provider: 'The model provider could not be reached or rejected the request.',
 } satisfies Record<BriefingWriteFailureReason, string>;

@@ -97,7 +97,7 @@ export class OpenAiBriefingWriter implements BriefingWriter {
     const valid = briefingWrittenTextSchema.safeParse(linked);
     if (!valid.success) {
       throw fail(
-        OpenAiBriefingWriter.isTooShort(linked) ? 'too_short' : 'unreadable',
+        OpenAiBriefingWriter.isTooShort(linked) ? 'tooShort' : 'unreadable',
         valid.error,
       );
     }

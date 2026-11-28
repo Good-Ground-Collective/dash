@@ -38,7 +38,6 @@ const microUsdPerUsd = 1_000_000;
 
 const writeStepOptions = {
   name: 'briefingWrite',
-  retriesAllowed: true,
   maxAttempts: 2,
   intervalSeconds: 2,
   backoffRate: 2,
@@ -229,7 +228,7 @@ export class DbosBriefingWorkflows implements BriefingWorkflows {
     }
 
     this.progress({ runId, stage: 'writing' });
-    const outcome = await BriefingWriteAttempt.durably({
+    const outcome = await BriefingWriteAttempt.runAsStep({
       writer: generation.writer,
       snapshot,
       step: writeStepOptions,

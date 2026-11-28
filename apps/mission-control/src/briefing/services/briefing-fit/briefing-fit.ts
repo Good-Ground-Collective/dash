@@ -14,9 +14,10 @@ type Drop = (draft: BriefingDraft) => boolean;
  * one at a time from the tail of their section, until the serialized digest fits: assigned
  * issues, then my pull requests without a problem, then epics beyond the first two under
  * each initiative, then agents. Past those, benches, the rest of my pull requests, review
- * requests, failed runs, epics and last initiatives go, in that order, and the changes since the last briefing go last of all. Connection health
- * stays, so the writer can always say when data is stale. Refs are assigned after each
- * drop, so the ones left run without gaps.
+ * requests, failed runs, epics and last initiatives go, in that order, and the changes
+ * since the last briefing go last of all. Connection health stays, so the writer can
+ * always say when data is stale. Refs are assigned after each drop, so the ones left run
+ * without gaps.
  */
 export class BriefingFit {
   static digest(props: {

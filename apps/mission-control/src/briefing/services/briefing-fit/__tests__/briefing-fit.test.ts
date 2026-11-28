@@ -9,8 +9,14 @@ import {
   briefedPersonId,
 } from '#src/briefing/__tests__/support/briefing-world.ts';
 import { StoredAgentSessions } from '#src/briefing/__tests__/support/stored-agent-sessions.ts';
-import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
+import type { BriefingDraft } from '#src/briefing/contracts/briefing-draft.ts';
+import type {
+  BriefingChangeDraft,
+  BriefingObjectiveDraft,
+  BriefingSnapshotDigest,
+} from '#src/briefing/contracts/briefing-snapshot.ts';
 import { briefingLimits } from '#src/briefing/definitions/briefing-limits/briefing-limits.ts';
+import { BriefingFit } from '#src/briefing/services/briefing-fit/briefing-fit.ts';
 import { fixedNow } from '#src/objectives/__tests__/support/objectives-fixtures.ts';
 
 class Briefed {
@@ -56,6 +62,56 @@ class Briefed {
     return world
       .snapshot()
       .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
+  }
+
+  /** The digest's sections back as a draft whose changes since the last briefing are titled `change-1`, `change-2` and so on. */
+  static drafted(props: {
+    digest: BriefingSnapshotDigest;
+    changes: number;
+  }): BriefingDraft {
+    const { digest } = props;
+    const unreffed = <Item extends { ref: string }>(items: Item[]) =>
+      items.map(({ ref: _ref, ...item }) => item);
+    const objective = ({
+      ref: _ref,
+      initiativeRef: _initiativeRef,
+      ...rest
+    }: BriefingSnapshotDigest['objectives'][number]): BriefingObjectiveDraft =>
+      rest;
+    const change = (index: number): BriefingChangeDraft => ({
+      kind: 'epic',
+      change: 'progressed',
+      title: `change-${index}`.padEnd(briefingLimits.titleLength, 'x'),
+      url: 'https://github.com/acme/web/issues/12',
+      initiativeTitle: null,
+      status: 'active',
+      progress: { source: 'tracker', done: 1, total: 4 },
+      ticketsClosed: 1,
+      pullRequestsMerged: 0,
+    });
+    return {
+      sinceLastBriefing: {
+        ...digest.sinceLastBriefing,
+        changes: Array.from({ length: props.changes }, (_, index) =>
+          change(index + 1),
+        ),
+      },
+      initiatives: digest.objectives
+        .filter(({ kind }) => kind === 'initiative')
+        .map((initiative) => ({
+          initiative: objective(initiative),
+          epics: digest.objectives
+            .filter(({ initiativeRef }) => initiativeRef === initiative.ref)
+            .map(objective),
+        })),
+      reviewRequests: unreffed(digest.github.reviewRequests),
+      myPullRequests: unreffed(digest.github.myPullRequests),
+      failedRuns: unreffed(digest.github.failedRuns),
+      assignedIssues: unreffed(digest.github.assignedIssues),
+      agents: unreffed(digest.agents),
+      benches: unreffed(digest.benches),
+      connections: unreffed(digest.connections),
+    };
   }
 
   static size(digest: BriefingSnapshotDigest): number {
@@ -179,6 +235,61 @@ describe('BriefingFit trimming deeper', () => {
 
     expect(digest.github.assignedIssues.map(({ ref }) => ref)).toEqual(
       digest.github.assignedIssues.map((_, index) => `is${index + 1}`),
+    );
+  });
+});
+
+describe('BriefingFit trimming the changes last', () => {
+  const takenAt = '2026-11-27T09:00:00.000Z';
+
+  it('keeps every change while any other droppable section has an item', async () => {
+    const base = await Briefed.with({
+      tracker: { initiatives: 10, epics: 2 },
+      activity: { reviewRequests: 4, problemPullRequests: 4, failedRuns: 4 },
+    });
+    const draft = Briefed.drafted({ digest: base, changes: 2 });
+
+    const digest = BriefingFit.digest({
+      draft,
+      takenAt,
+      counts: base.counts,
+    });
+
+    expect(digest.objectives.length).toBeGreaterThan(0);
+    expect(digest.sinceLastBriefing.changes).toHaveLength(2);
+  });
+
+  it('trims the changes from the tail only once everything else is gone', async () => {
+    const base = await Briefed.with({
+      tracker: { initiatives: 10, epics: 2 },
+      activity: { reviewRequests: 4, problemPullRequests: 4, failedRuns: 4 },
+    });
+    const draft = Briefed.drafted({ digest: base, changes: 80 });
+
+    const digest = BriefingFit.digest({
+      draft,
+      takenAt,
+      counts: base.counts,
+    });
+
+    const { changes } = digest.sinceLastBriefing;
+    expect(Briefed.size(digest)).toBeLessThanOrEqual(
+      briefingLimits.budgetCharacters,
+    );
+    expect(digest.objectives).toEqual([]);
+    expect(digest.github.reviewRequests).toEqual([]);
+    expect(digest.github.myPullRequests).toEqual([]);
+    expect(digest.github.failedRuns).toEqual([]);
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.length).toBeLessThan(80);
+    expect(
+      changes.map(({ title }) => title.slice(0, 12).replace(/x+$/, '')),
+    ).toEqual(changes.map((_, index) => `change-${index + 1}`));
+    expect(changes.map(({ ref }) => ref)).toEqual(
+      changes.map((_, index) => `ch${index + 1}`),
+    );
+    expect(digest.sinceLastBriefing.totals).toEqual(
+      draft.sinceLastBriefing.totals,
     );
   });
 });

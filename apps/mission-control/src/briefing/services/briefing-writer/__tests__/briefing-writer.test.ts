@@ -148,26 +148,23 @@ describe('OpenAiBriefingWriter holding to its length', () => {
 
     const error = await harness.failure();
 
-    expect(error.reason).toBe('too_short');
+    expect(error.reason).toBe('tooShort');
     expect(error.costMicroUsd).toBeGreaterThan(0);
   });
 
-  it('fails a too-short draft as too_short, then writes the valid draft on the next call', async () => {
+  it('fails with the spend when the closing is a single sentence', async () => {
     const harness = new Harness();
-    harness.fake
-      .replyWithDraft({
-        draft: {
-          ...draft,
-          closing: { segments: [{ text: 'Just one.', ref: null }] },
-        },
-      })
-      .replyWithDraft({ draft });
+    harness.fake.replyWithDraft({
+      draft: {
+        ...draft,
+        closing: { segments: [{ text: 'Just one.', ref: null }] },
+      },
+    });
 
     const error = await harness.failure();
-    const written = await harness.writer.write(SampleSnapshot.build());
 
-    expect(error.reason).toBe('too_short');
-    expect(written.closing.segments.length).toBeGreaterThan(0);
+    expect(error.reason).toBe('tooShort');
+    expect(error.costMicroUsd).toBeGreaterThan(0);
   });
 
   it('allows no actions when nothing needs the owner', async () => {

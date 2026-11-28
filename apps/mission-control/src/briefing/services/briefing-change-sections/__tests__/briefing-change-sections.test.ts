@@ -109,6 +109,26 @@ class ChangeWorld {
     };
   }
 
+  /** One epic whose single ticket was closed, reopened and closed again, and merged two pull requests. */
+  static repeatedEvents(): TrackerSnapshot {
+    const { activity } = ChangeWorld;
+    return {
+      initiatives: [initiative({ externalId: 'PVT_launch', title: 'Launch' })],
+      epics: [epic({ externalId: 'E1', title: 'Steady work' })],
+      tickets: [
+        ticket({ externalId: 'A', epicId: 'E1', position: 0, state: 'closed' }),
+        ticket({ externalId: 'B', epicId: 'E1', position: 1 }),
+      ],
+      activity: [
+        activity('A', 'ticket_closed', '2026-11-25T08:00:00.000Z'),
+        activity('A', 'ticket_closed', closedLate),
+        activity('A', 'pull_request_merged', '2026-11-25T09:00:00.000Z'),
+        activity('A', 'pull_request_merged', closedLate),
+      ],
+      truncated: false,
+    };
+  }
+
   /** One epic that merged a few tickets and nothing else. */
   static routineMerges(): TrackerSnapshot {
     const { activity } = ChangeWorld;
@@ -177,6 +197,19 @@ describe('BriefingChangeSections routine work', () => {
       epicsStarted: 0,
       epicsProgressed: 1,
       ticketsClosed: 2,
+      pullRequestsMerged: 1,
+    });
+  });
+
+  it('counts a ticket once however many times it closed or merged', async () => {
+    const changes = await ChangeWorld.since(ChangeWorld.repeatedEvents());
+
+    expect(changes.totals).toMatchObject({
+      ticketsClosed: 1,
+      pullRequestsMerged: 1,
+    });
+    expect(changes.changes[0]).toMatchObject({
+      ticketsClosed: 1,
       pullRequestsMerged: 1,
     });
   });

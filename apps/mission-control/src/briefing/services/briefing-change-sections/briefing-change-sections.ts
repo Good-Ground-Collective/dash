@@ -84,7 +84,14 @@ export class BriefingChangeSections {
     connections: readonly ConnectionObjectives[];
     since: Date;
   }): Map<string, EpicPace> {
-    const pace = new Map<string, EpicPace>();
+    const closed = new Map<string, Set<string>>();
+    const merged = new Map<string, Set<string>>();
+    const add = (
+      tickets: Map<string, Set<string>>,
+      key: string,
+      ticketNodeId: string,
+    ) => tickets.set(key, (tickets.get(key) ?? new Set()).add(ticketNodeId));
+
     for (const { connectionId, records } of props.connections) {
       const epicOfTicket = new Map(
         records.tickets.map((ticket) => [ticket.nodeId, ticket.epicNodeId]),
@@ -98,19 +105,20 @@ export class BriefingChangeSections {
           continue;
         }
         const key = BriefingChangeSections.key(connectionId, epicNodeId);
-        const current = pace.get(key) ?? noPace;
         if (activity.kind === 'ticket_closed') {
-          pace.set(key, {
-            ...current,
-            ticketsClosed: current.ticketsClosed + 1,
-          });
+          add(closed, key, activity.ticketNodeId);
         } else if (activity.kind === 'pull_request_merged') {
-          pace.set(key, {
-            ...current,
-            pullRequestsMerged: current.pullRequestsMerged + 1,
-          });
+          add(merged, key, activity.ticketNodeId);
         }
       }
+    }
+
+    const pace = new Map<string, EpicPace>();
+    for (const key of new Set([...closed.keys(), ...merged.keys()])) {
+      pace.set(key, {
+        ticketsClosed: closed.get(key)?.size ?? 0,
+        pullRequestsMerged: merged.get(key)?.size ?? 0,
+      });
     }
     return pace;
   }

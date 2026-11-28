@@ -1,4 +1,6 @@
-import { DBOS, Error as DbosError } from '@dbos-inc/dbos-sdk';
+import { setTimeout as delay } from 'node:timers/promises';
+
+import { DBOS } from '@dbos-inc/dbos-sdk';
 import OpenAI from 'openai';
 
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
@@ -39,51 +41,58 @@ export class BriefingWriteAttempt {
     return props.writer.worstCaseCostMicroUsd(props.snapshot) * props.attempts;
   }
 
-  /** Runs the attempt as a durable step, which tries again when `of` throws. The spend of every attempt is kept, including the ones that were retried. */
-  static async durably(props: {
+  /** Runs every attempt inside one durable step, so the step's checkpoint holds the outcome with the spend of all attempts and a replay records the same cost. The step's own retries are off. */
+  static async runAsStep(props: {
     writer: BriefingWriter;
     snapshot: BriefingSnapshotDigest;
     step: {
       name: string;
-      retriesAllowed: boolean;
       maxAttempts: number;
       intervalSeconds: number;
       backoffRate: number;
     };
   }): Promise<BriefingWriteOutcome> {
     const { step, ...attempt } = props;
-    const failures: BriefingWriteFailedError[] = [];
-    try {
-      const outcome = await DBOS.runStep(
-        async () => {
-          try {
-            return await BriefingWriteAttempt.of(attempt);
-          } catch (error) {
-            if (error instanceof BriefingWriteFailedError) {
-              failures.push(error);
-            }
-            throw error;
-          }
-        },
-        { ...step },
-      );
-      return BriefingWriteAttempt.withEarlierSpend({
-        outcome,
-        earlier: failures,
-      });
-    } catch (error) {
-      const last =
-        error instanceof DbosError.DBOSMaxStepRetriesError
-          ? error.errors.at(-1)
-          : error;
-      if (last instanceof BriefingWriteFailedError) {
+    return DBOS.runStep(
+      () => BriefingWriteAttempt.untilSettled({ ...attempt, ...step }),
+      { name: step.name, retriesAllowed: false },
+    );
+  }
+
+  /** Tries up to `maxAttempts` times, waiting longer after each retried one, and folds the spend of the retried attempts into the outcome it returns. */
+  static async untilSettled(props: {
+    writer: BriefingWriter;
+    snapshot: BriefingSnapshotDigest;
+    maxAttempts: number;
+    intervalSeconds: number;
+    backoffRate: number;
+  }): Promise<BriefingWriteOutcome> {
+    const { maxAttempts, intervalSeconds, backoffRate, ...attempt } = props;
+    const retried: BriefingWriteFailedError[] = [];
+    for (let tried = 1; tried <= maxAttempts; tried += 1) {
+      try {
         return BriefingWriteAttempt.withEarlierSpend({
-          outcome: BriefingWriteAttempt.failed(last),
-          earlier: failures.slice(0, -1),
+          outcome: await BriefingWriteAttempt.of(attempt),
+          earlier: retried,
         });
+      } catch (error) {
+        if (!(error instanceof BriefingWriteFailedError)) {
+          throw error;
+        }
+        retried.push(error);
+        if (tried < maxAttempts) {
+          await delay(intervalSeconds * backoffRate ** (tried - 1) * 1000);
+        }
       }
-      throw error;
     }
+    const last = retried.pop();
+    if (last === undefined) {
+      throw new Error('Expected at least one write attempt');
+    }
+    return BriefingWriteAttempt.withEarlierSpend({
+      outcome: BriefingWriteAttempt.failed(last),
+      earlier: retried,
+    });
   }
 
   /** Adds what the attempts before the settled one had already cost, since only the last attempt's outcome is kept. */
@@ -140,7 +149,7 @@ export class BriefingWriteAttempt {
 
   private static worthRetrying(error: BriefingWriteFailedError): boolean {
     return (
-      error.reason === 'too_short' ||
+      error.reason === 'tooShort' ||
       (error.reason === 'provider' &&
         !(error.cause instanceof OpenAI.APIConnectionTimeoutError) &&
         (error.cause instanceof OpenAI.APIConnectionError ||
