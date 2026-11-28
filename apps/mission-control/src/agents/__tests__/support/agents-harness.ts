@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 import { AgentHeartbeatFixtures } from '#src/agents/__tests__/support/agent-heartbeat-fixtures.ts';
 import { InMemoryAgentRecords } from '#src/agents/__tests__/support/in-memory-agent-records.ts';
+import { InMemoryNeedsYouItems } from '#src/agents/__tests__/support/in-memory-needs-you-items.ts';
+import { needsYouItemsSchema } from '#src/agents/contracts/needs-you-item.ts';
+import type { NeedsYouItem } from '#src/agents/contracts/needs-you-item.ts';
 import { AgentsModule } from '#src/agents/module.ts';
 import {
   harnessWebOrigin,
@@ -18,6 +21,7 @@ const responseBodySchema = z.record(z.string(), z.json());
 const agentsHarnessPropsSchema = z.object({
   accounts: z.instanceof(ServiceAccountHarness),
   records: z.instanceof(InMemoryAgentRecords),
+  needsYouItems: z.instanceof(InMemoryNeedsYouItems),
   published: z
     .custom<LiveEvent[]>((value) => Array.isArray(value))
     .describe('The array live events are pushed into, kept by reference.'),
@@ -35,6 +39,7 @@ export interface AgentsResponse {
 export class AgentsHarness {
   readonly accounts: ServiceAccountHarness;
   readonly records: InMemoryAgentRecords;
+  readonly needsYouItems: InMemoryNeedsYouItems;
   readonly published: LiveEvent[];
   readonly app: ZodFastifyInstance;
   readonly cookie: string;
@@ -45,6 +50,7 @@ export class AgentsHarness {
     const parsed = agentsHarnessPropsSchema.parse(props);
     this.accounts = parsed.accounts;
     this.records = parsed.records;
+    this.needsYouItems = parsed.needsYouItems;
     this.published = parsed.published;
     this.app = parsed.app;
     this.cookie = parsed.cookie;
@@ -141,6 +147,40 @@ export class AgentsHarness {
     };
   }
 
+  async needsYou(props: {
+    headers: Record<string, string>;
+  }): Promise<AgentsResponse> {
+    const response = await this.app.inject({
+      method: 'GET',
+      url: '/api/needs-you',
+      headers: props.headers,
+    });
+    return {
+      statusCode: response.statusCode,
+      body: responseBodySchema.parse(response.json()),
+    };
+  }
+
+  /** Sends a heartbeat from the bench as `seth-laptop`, with `payload` laid over the fixture's. */
+  async heartbeat(
+    payload: Parameters<typeof AgentHeartbeatFixtures.message>[0],
+  ): Promise<void> {
+    await this.send(JSON.stringify(AgentHeartbeatFixtures.message(payload)));
+  }
+
+  /** The open items `GET /api/needs-you` answers to the signed-in owner. */
+  async openNeedsYou(): Promise<NeedsYouItem[]> {
+    const response = await this.needsYou({ headers: { cookie: this.cookie } });
+    return needsYouItemsSchema.parse(response.body).items;
+  }
+
+  /** The `needs-you.*` events published so far, by type. */
+  publishedNeedsYouTypes(): string[] {
+    return this.published
+      .map((event) => event.type)
+      .filter((type) => type.startsWith('needs-you.'));
+  }
+
   async stop(): Promise<void> {
     await this.app.close();
   }
@@ -148,6 +188,7 @@ export class AgentsHarness {
   static async start(): Promise<AgentsHarness> {
     const accounts = new ServiceAccountHarness();
     const records = new InMemoryAgentRecords();
+    const needsYouItems = new InMemoryNeedsYouItems();
     const liveEvents = new InProcessLiveEvents();
     const published: LiveEvent[] = [];
     liveEvents.subscribe((event) => published.push(event));
@@ -165,6 +206,7 @@ export class AgentsHarness {
           identity: accounts.auth.identity,
           heartbeatRepository: records,
           sessionRepository: records,
+          needsYouRepository: needsYouItems,
           liveEvents,
         }),
       ],
@@ -172,6 +214,7 @@ export class AgentsHarness {
     return new AgentsHarness({
       accounts,
       records,
+      needsYouItems,
       published,
       app,
       cookie: await accounts.signIn(),

@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { AgentsModule } from '#src/agents/module.ts';
 import { DrizzleAgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import { DrizzleAgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
+import { DrizzleNeedsYouItemRepository } from '#src/agents/repositories/needs-you-items/needs-you-item-repository.ts';
 import { AuthModule } from '#src/auth/module.ts';
 import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
@@ -100,6 +101,7 @@ const agents = new AgentsModule({
   identity: auth.identity,
   heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
   sessionRepository: agentSessions,
+  needsYouRepository: new DrizzleNeedsYouItemRepository({ database }),
   liveEvents,
 });
 
