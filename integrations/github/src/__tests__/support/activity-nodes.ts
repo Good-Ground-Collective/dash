@@ -3,6 +3,7 @@ import type {
   GithubJson,
 } from '#src/__tests__/support/fake-github.ts';
 
+const createdAt = '2026-11-20T08:00:00Z';
 const updatedAt = '2026-11-26T11:00:00Z';
 
 /** GraphQL nodes as GitHub returns them for the activity feed's queries. */
@@ -45,6 +46,7 @@ export class ActivityNodes {
     suites?: GithubJson[];
     mergedAt?: string;
     contexts?: GithubJson[];
+    mergeStateStatus?: string | null;
   }): GithubBody {
     const fullName = props.fullName ?? 'acme/app';
     return {
@@ -55,8 +57,11 @@ export class ActivityNodes {
       state: props.mergedAt === undefined ? 'OPEN' : 'MERGED',
       isDraft: false,
       mergeable: 'MERGEABLE',
+      mergeStateStatus:
+        props.mergeStateStatus === undefined ? 'CLEAN' : props.mergeStateStatus,
       reviewDecision: 'REVIEW_REQUIRED',
       mergedAt: props.mergedAt ?? null,
+      createdAt,
       updatedAt,
       headRefName: `feature-${props.number}`,
       headRefOid: `sha${props.number}`,

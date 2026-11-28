@@ -24,7 +24,7 @@ class PullRequestFields {
   static selection(props: { withCheckContexts: boolean }): string {
     return `
   ... on PullRequest {
-    id number title url state isDraft mergeable reviewDecision mergedAt updatedAt headRefName headRefOid
+    id number title url state isDraft mergeable mergeStateStatus reviewDecision mergedAt createdAt updatedAt headRefName headRefOid
     author { login }
     repository { ${repositoryFields} defaultBranchRef { name } }
     reviewRequests(first: 10) {

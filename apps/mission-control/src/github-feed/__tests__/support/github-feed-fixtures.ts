@@ -63,6 +63,7 @@ export class GithubFeedFixtures {
       state: 'open',
       draft: false,
       mergeable: 'mergeable',
+      mergeState: 'clean',
       reviewDecision: 'review_required',
       headRef: `feature-${number}`,
       headSha: `sha${number}`,
@@ -72,6 +73,7 @@ export class GithubFeedFixtures {
       ],
       checks: { state: 'failure', success: 3, failure: 1, pending: 0 },
       mergedAt: null,
+      createdAt: '2026-11-20T08:00:00Z',
       updatedAt: '2026-11-26T10:00:00Z',
       ...overrides,
     };

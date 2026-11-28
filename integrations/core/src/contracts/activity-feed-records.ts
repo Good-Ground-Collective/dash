@@ -123,6 +123,19 @@ export const activityReviewerSchema = z.object({
   name: handleSchema,
 });
 
+export const activityMergeStates = [
+  'clean',
+  'blocked',
+  'behind',
+  'unstable',
+  'dirty',
+  'draft',
+  'has_hooks',
+  'unknown',
+] as const;
+
+export const activityMergeStateSchema = z.enum(activityMergeStates);
+
 export const activityPullRequestSchema = externalRecordSchema.extend({
   repositoryId: z.string().min(1),
   number: z.int().positive(),
@@ -131,6 +144,9 @@ export const activityPullRequestSchema = externalRecordSchema.extend({
   state: z.enum(['open', 'closed', 'merged']),
   draft: z.boolean(),
   mergeable: z.enum(['mergeable', 'conflicting', 'unknown']),
+  mergeState: activityMergeStateSchema
+    .nullable()
+    .describe('Null when the provider does not report one.'),
   reviewDecision: z
     .enum(['approved', 'changes_requested', 'review_required'])
     .nullable(),
@@ -143,6 +159,7 @@ export const activityPullRequestSchema = externalRecordSchema.extend({
   mergedAt: timestampSchema
     .nullable()
     .describe('When the pull request was merged. Null while it is not merged.'),
+  createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 

@@ -50,11 +50,13 @@ export class GithubRecordRows {
       state: row.state,
       draft: row.draft,
       mergeable: row.mergeable,
+      mergeState: row.mergeState,
       reviewDecision: row.reviewDecision,
       author: row.author,
       headRef: row.headRef,
       headSha: row.headSha,
       mergedAt: row.mergedAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   }

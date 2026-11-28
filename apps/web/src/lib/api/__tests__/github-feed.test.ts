@@ -28,7 +28,28 @@ const wire = {
     },
   ],
   reviewRequests: [],
-  myPullRequests: [],
+  myPullRequests: [
+    {
+      id: 'PR_1',
+      connectionId: '5b0e4d1c-0000-4000-8000-000000000001',
+      repository: { fullName: 'acme/web', url: 'https://github.com/acme/web' },
+      url: 'https://github.com/acme/web/pull/1',
+      updatedAt: '2026-11-27T08:00:00.000Z',
+      mergedAt: null,
+      createdAt: '2026-11-20T08:00:00.000Z',
+      number: 1,
+      title: 'Add dark mode',
+      author: 'ada',
+      state: 'open',
+      draft: false,
+      mergeable: 'mergeable',
+      mergeState: null,
+      reviewDecision: null,
+      headSha: 'a1b2c3d',
+      requestedReviewers: [],
+      checks: null,
+    },
+  ],
   recentMerges: [],
   releases: [],
   failedRuns: [],
@@ -89,6 +110,10 @@ describe('HttpGithubFeed', () => {
     expect(answer.defaultBranches[0]?.checks[0]?.failingSince).toEqual(
       new Date('2026-11-24T08:00:00Z'),
     );
+    expect(answer.myPullRequests[0]?.createdAt).toEqual(
+      new Date('2026-11-20T08:00:00Z'),
+    );
+    expect(answer.myPullRequests[0]?.mergeState).toBeNull();
   });
 
   it('rejects with Mission Control’s code when signed out', async () => {

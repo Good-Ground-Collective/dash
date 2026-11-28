@@ -89,6 +89,7 @@ export class GithubActivityRecords {
       state: node.state,
       draft: node.isDraft,
       mergeable: node.mergeable,
+      mergeState: node.mergeStateStatus,
       reviewDecision: node.reviewDecision,
       headRef: node.headRefName,
       headSha: node.headRefOid,
@@ -98,6 +99,7 @@ export class GithubActivityRecords {
       ),
       checks: commit?.statusCheckRollup?.summary ?? null,
       mergedAt: node.mergedAt,
+      createdAt: node.createdAt,
       updatedAt: node.updatedAt,
     };
   }
