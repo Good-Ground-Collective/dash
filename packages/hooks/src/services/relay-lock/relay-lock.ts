@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { uptime } from 'node:os';
 import path from 'node:path';
 
 import { z } from 'zod';
@@ -62,9 +63,13 @@ export class RelayLock {
     return holder !== undefined && RelayLock.isAlive(holder);
   }
 
+  /** The pid file's process ID, `undefined` when there is none or it was written before this boot. */
   private holder(): number | undefined {
     let text: string;
     try {
+      if (statSync(this.pidPath).mtimeMs < Date.now() - uptime() * 1000) {
+        return undefined;
+      }
       text = readFileSync(this.pidPath, 'utf8');
     } catch {
       return undefined;
@@ -77,15 +82,13 @@ export class RelayLock {
     return new FileLock({ lockPath: `${this.pidPath}.lock` });
   }
 
-  /** Signal 0 checks that the process exists without touching it. `EPERM` means it exists but belongs to someone else. */
+  /** Signal 0 checks that the process exists without touching it. `EPERM` means another user's process, so not our relay. */
   private static isAlive(pid: number): boolean {
     try {
       process.kill(pid, 0);
       return true;
-    } catch (error) {
-      return (
-        error instanceof Error && 'code' in error && error.code === 'EPERM'
-      );
+    } catch {
+      return false;
     }
   }
 }

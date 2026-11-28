@@ -10,6 +10,8 @@ import {
   ingestResultsSchema,
 } from '#src/services/mission-control-ingest/ingest-result.js';
 
+const errorIdentifierSchema = z.string().regex(/^\w{1,64}$/);
+
 const missionControlIngestPropsSchema = z.object({
   config: z.instanceof(RelayConfig),
   timeoutMs: z.int().positive().default(30_000),
@@ -79,13 +81,24 @@ export class MissionControlIngest {
     }
   }
 
-  /** `fetch` reports every network failure as "fetch failed"; the reason, such as `ECONNREFUSED`, is in its cause. */
+  /**
+   * Built from the error's name and code only: `fetch` messages can quote the request, key included,
+   * and the detail ends up in relay.log.
+   */
   private static describe(cause: unknown): string {
-    if (!(cause instanceof Error)) {
-      return 'the request failed';
-    }
-    return cause.cause instanceof Error
-      ? `${cause.message} (${cause.cause.message})`
-      : cause.message;
+    const name = errorIdentifierSchema.safeParse(
+      cause instanceof Error ? cause.name : undefined,
+    ).data;
+    const code = errorIdentifierSchema.safeParse(
+      cause instanceof Error &&
+        cause.cause instanceof Error &&
+        'code' in cause.cause
+        ? cause.cause.code
+        : undefined,
+    ).data;
+    const reason = [name, code].filter(Boolean).join(', ');
+    return reason === ''
+      ? 'the request failed'
+      : `the request failed (${reason})`;
   }
 }

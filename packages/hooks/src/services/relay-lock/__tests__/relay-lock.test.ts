@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, utimesSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir, uptime } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -44,6 +44,27 @@ describe('RelayLock', () => {
       ]),
     );
     await writeFile(pidPath, String(deadPid));
+    const lock = new RelayLock({ pidPath });
+
+    expect(lock.isHeld()).toBe(false);
+    expect(await lock.acquire()).toBe(true);
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    'is taken over from a process another user owns',
+    async () => {
+      await writeFile(pidPath, '1');
+      const lock = new RelayLock({ pidPath });
+
+      expect(lock.isHeld()).toBe(false);
+      expect(await lock.acquire()).toBe(true);
+    },
+  );
+
+  it('is taken over from a pid file written before this boot', async () => {
+    await writeFile(pidPath, String(process.ppid));
+    const beforeBoot = (Date.now() - uptime() * 1000 - 60_000) / 1000;
+    utimesSync(pidPath, beforeBoot, beforeBoot);
     const lock = new RelayLock({ pidPath });
 
     expect(lock.isHeld()).toBe(false);

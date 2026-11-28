@@ -17,11 +17,17 @@ const absolutePathSchema = z.string().regex(/^\//);
 const relaySettingsSchema = z.object({
   apiUrl: z
     .url({ protocol: /^https?$/ })
+    .refine((value) => {
+      const url = new URL(value);
+      return url.username === '' && url.password === '';
+    }, 'must not carry credentials')
     .describe("Dash's API, such as `https://dash.example.com`."),
   apiKey: z
     .string()
-    .startsWith('dash_')
-    .describe('A service account key with `heartbeat:write`.'),
+    .regex(/^dash_[\x21-\x7e]+$/)
+    .describe(
+      'A service account key with `heartbeat:write`, printable ASCII only so it is safe in a header.',
+    ),
   reporterName: z
     .string()
     .regex(/^[\w.-]+$/u)

@@ -87,6 +87,26 @@ describe('RelayConfig.load', () => {
 });
 
 describe('RelayConfig', () => {
+  it.each([
+    ['a key with a line break', { apiKey: `${apiKey}\r\nx-injected: 1` }],
+    ['a key with a NUL', { apiKey: `${apiKey}\u0000` }],
+    ['a key with a space', { apiKey: `${apiKey} more` }],
+    [
+      'a URL with credentials',
+      { apiUrl: 'https://user:pass@dash.example.com' },
+    ],
+  ])('refuses %s', (_, override) => {
+    expect(
+      () =>
+        new RelayConfig({
+          apiUrl: 'https://dash.example.com',
+          apiKey,
+          reporterName: 'seth-laptop',
+          ...override,
+        }),
+    ).toThrow();
+  });
+
   it('keeps the key out of JSON and inspection', () => {
     const config = new RelayConfig({
       apiUrl: 'https://dash.example.com',
