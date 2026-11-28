@@ -83,6 +83,12 @@ export const briefingBudgetSchema = z.object({
     .nonnegative()
     .describe('Spend of every person’s runs this month, failed runs included.'),
   capUsd: z.number().nonnegative(),
+  runs: z
+    .int()
+    .nonnegative()
+    .describe(
+      'Runs started this month that called the model, failed runs included. Runs skipped over budget are not counted.',
+    ),
   reached: z.boolean(),
 });
 

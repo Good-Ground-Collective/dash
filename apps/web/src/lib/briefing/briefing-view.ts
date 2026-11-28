@@ -72,12 +72,6 @@ export class BriefingView {
       : BriefingWording.sources(counts);
   }
 
-  get spend(): string | null {
-    return this.loaded === null
-      ? null
-      : BriefingWording.spend(this.loaded.budget);
-  }
-
   /** Set when a run newer than the shown briefing failed or was skipped. */
   get note(): string | null {
     const { latest, lastRun } = this.loaded ?? { latest: null, lastRun: null };

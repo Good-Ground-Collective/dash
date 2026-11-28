@@ -44,6 +44,7 @@ afterEach(() => {
 
 describe('MissionControlSettingsLoader', () => {
   it('adds the GitHub feed to the settings data', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const event = Visit.of({
       '/api/auth/passkey/list-user-passkeys': () => Response.json([]),
       '/integrations/github/feed': () => Response.json(feed),
@@ -53,6 +54,7 @@ describe('MissionControlSettingsLoader', () => {
       viewer: ada,
       passkeys: [],
       github: { status: 'loaded', feed },
+      briefing: { status: 'failed' },
     });
   });
 

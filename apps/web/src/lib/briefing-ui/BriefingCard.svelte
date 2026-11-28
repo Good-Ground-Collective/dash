@@ -152,9 +152,6 @@
           {view.snapshot.text}{view.snapshot.stale ? ' · stale' : ''}
         </span>
       {/if}
-      {#if view.spend !== null}
-        <span>{view.spend}</span>
-      {/if}
     </span>
   {/snippet}
 

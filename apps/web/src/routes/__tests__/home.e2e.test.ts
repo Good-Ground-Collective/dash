@@ -190,7 +190,7 @@ test('the briefing shows its paragraphs with links, how fresh it is, its sources
   await expect(region).toContainText(
     'Sources: 4 objectives · 2 review requests · 1 of your PRs · 1 failed run · 3 agents · 2 benches',
   );
-  await expect(region).toContainText('$12.40 of $100 this month');
+  await expect(region).not.toContainText('$12.40');
   await expect(briefing.regenerate()).toBeEnabled();
 });
 
@@ -216,8 +216,16 @@ test('over budget keeps the briefing, says why, and turns Regenerate off', async
   await expect(region).toContainText(
     'This month’s budget is reached, so Regenerate is off.',
   );
-  await expect(region).toContainText('$100.00 of $100 this month');
+  await expect(region).not.toContainText('$100');
   await expect(briefing.regenerate()).toBeDisabled();
+});
+
+test('Settings reads out the estimated spend, the cap and the run count', async () => {
+  await briefing.scenario('ready');
+  await page.goto('/settings');
+
+  const spend = page.getByRole('region', { name: 'AI briefing spend' });
+  await expect(spend).toContainText('$12.40 of $100 this month · 37 runs');
 });
 
 test('with no briefing yet the card offers Regenerate, and when it is not set up it offers nothing', async () => {
