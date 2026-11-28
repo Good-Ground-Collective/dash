@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { ActivityNodes } from '#src/__tests__/support/activity-nodes.ts';
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
 import { GithubActivityRecords } from '#src/contracts/github-activity-records.ts';
-import { githubReleasesNodeSchema } from '#src/contracts/github-activity-response.ts';
+import {
+  githubPullRequestNodeSchema,
+  githubReleasesNodeSchema,
+} from '#src/contracts/github-activity-response.ts';
 
-const { releasesNode, releaseNode } = ActivityNodes;
+const { releasesNode, releaseNode, pullRequestNode } = ActivityNodes;
 
 class Read {
   static of(releases: ReturnType<typeof releaseNode>[]) {
@@ -59,5 +62,35 @@ describe('GithubActivityRecords release reads', () => {
     ]);
 
     expect(releaseRead.oldestPublishedAt).toBeNull();
+  });
+});
+
+describe('GithubActivityRecords pull request age and merge state', () => {
+  it('carries when the pull request was opened and GitHub’s merge state lowercased', () => {
+    const record = GithubActivityRecords.pullRequest(
+      githubPullRequestNodeSchema.parse(
+        pullRequestNode({ number: 1, mergeStateStatus: 'HAS_HOOKS' }),
+      ),
+    );
+
+    expect(record).toMatchObject({
+      createdAt: '2026-11-20T08:00:00Z',
+      mergeState: 'has_hooks',
+    });
+  });
+
+  it('keeps no merge state when GitHub returns none', () => {
+    const record = GithubActivityRecords.pullRequest(
+      githubPullRequestNodeSchema.parse(
+        pullRequestNode({ number: 1, mergeStateStatus: null }),
+      ),
+    );
+
+    expect(record.mergeState).toBeNull();
+  });
+
+  it('asks the search for both fields', () => {
+    expect(githubActivityQueries.search).toContain('createdAt');
+    expect(githubActivityQueries.search).toContain('mergeStateStatus');
   });
 });
