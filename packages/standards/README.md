@@ -208,6 +208,24 @@ In 1.45.0 the core registry marks the GenAI attributes as moved to the [semantic
 
 What gets reported, and when, belongs to the heartbeat and telemetry discussions.
 
+## Bench messages
+
+The bench daemon and Mission Control exchange these messages, all at `1.0`. The daemon is written in Go and builds against the generated structs, so both sides share one definition.
+
+| Kind                   | Export               | What it holds                                                                                                       |
+| ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `bench.info`           | `benchInfo`          | Hostname, OS and version, architecture, CPU model and cores, total memory, daemon version                           |
+| `bench.metrics`        | `benchMetrics`       | One sample with its `sampledAt` time: CPU, memory, disk per volume, network bytes since the previous sample         |
+| `bench.processes`      | `benchProcesses`     | Per watched name: running, instance count, combined CPU and memory. No process ids or command lines                 |
+| `bench.harnesses`      | `benchHarnesses`     | Each harness the daemon found, by allowlist id, with its installed version                                          |
+| `bench.config`         | `benchConfig`        | What the daemon pulls from Dash: the watch list and the sampling interval                                           |
+| `bench.command`        | `benchCommand`       | A request to update one harness, naming it by allowlist id. The payload is strict, so a command line fails to parse |
+| `bench.command-result` | `benchCommandResult` | The outcome: exit status, a trimmed tail of the output, the version afterwards                                      |
+
+The generated Go structs ignore unknown fields, so a Go reader of `bench.command` has no field to read a command line from, and Zod and the JSON Schema reject one outright.
+
+A daemon that backfills after being offline sends one `bench.metrics` message per sample, each with its own `sampledAt`; there is no batch shape.
+
 ## License
 
 MIT

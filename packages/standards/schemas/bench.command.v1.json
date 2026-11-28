@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "emittedAt": {
+      "description": "When the sender emitted the message, in UTC.",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "type": "string"
+    },
+    "id": {
+      "description": "Unique per message, so receivers can drop duplicates.",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "type": "string"
+    },
+    "kind": { "const": "bench.command", "type": "string" },
+    "payload": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "description": "Ties the result to this request.",
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "harnessId": {
+          "description": "The harness's id in the daemon's allowlist: a lowercase dotted or dashed name.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9]*([.-][a-z0-9]+)*$",
+          "type": "string"
+        }
+      },
+      "required": ["commandId", "harnessId"],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "description": "The `<major>.<minor>` version of this message kind. Readers accept any `1.x`.",
+      "pattern": "^1\\.(0|[1-9]\\d*)$",
+      "type": "string"
+    }
+  },
+  "required": ["schemaVersion", "kind", "id", "emittedAt", "payload"],
+  "type": "object"
+}
