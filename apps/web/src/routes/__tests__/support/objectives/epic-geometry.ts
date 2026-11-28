@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 
 export interface EpicGeometry {
   title: string;
@@ -6,7 +6,11 @@ export interface EpicGeometry {
   rowHeight: number;
 }
 
-/** Where each epic's chip, title and row sit, measured in the browser. */
+/**
+ * Browser-measured layout of the objectives tree: epic rows (chip, title,
+ * height), progress tracks, actions-button position, and an initiative's
+ * count text.
+ */
 export class EpicGeometries {
   static async measure(panel: Locator): Promise<EpicGeometry[]> {
     return panel.locator('[aria-label^="Epics in"] > li').evaluateAll((items) =>
@@ -96,26 +100,5 @@ export class EpicGeometries {
     title: string,
   ): Promise<number | undefined> {
     return (await rows.filter({ hasText: title }).boundingBox())?.height;
-  }
-
-  /** How far the page scrolls sideways past the viewport. */
-  static async sidewaysOverflow(page: Page): Promise<number> {
-    return page.evaluate(
-      () =>
-        document.documentElement.scrollWidth -
-        document.documentElement.clientWidth,
-    );
-  }
-
-  /** Scrolled to the bottom, the space between the last panel and the Needs you pill. */
-  static async gapAboveNeedsYouPill(page: Page): Promise<number> {
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    const pill = await page
-      .getByRole('button', { name: /^Needs you/u })
-      .boundingBox();
-    const last = await page
-      .getByRole('region', { name: 'Since yesterday', exact: true })
-      .boundingBox();
-    return (pill?.y ?? 0) - ((last?.y ?? 0) + (last?.height ?? 0));
   }
 }

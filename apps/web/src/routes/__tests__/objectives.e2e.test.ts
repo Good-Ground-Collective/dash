@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 import { EpicGeometries } from './support/objectives/epic-geometry.ts';
+import { HomeLayout } from './support/objectives/home-layout.ts';
 
 const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
 
@@ -142,8 +143,8 @@ test('an epic with more tasks than Mission Control sends links to the rest on Gi
       .getByRole('list', { name: 'Tasks in Status page' })
       .getByRole('listitem'),
   ).toHaveCount(25);
-  const more = epic.getByRole('link', { name: /^2 more on GitHub/u });
-  await expect(more).toHaveText(/2 more on GitHub/u);
+  const more = epic.getByRole('link', { name: /more on GitHub/u });
+  await expect(more).toHaveText(/^2 more on GitHub/u);
   await expect(more).toHaveAccessibleName(/Status page/u);
   await expect(more).toHaveAttribute(
     'href',
@@ -298,7 +299,8 @@ test('progress bars and the actions button line up whatever the count or due dat
 
   const tracks = await EpicGeometries.trackLayout(Objectives.panel());
   expect(tracks.count).toBeGreaterThanOrEqual(4);
-  expect([tracks.lefts, tracks.widths]).toEqual([1, 1]);
+  expect(tracks.lefts, 'tracks share a left edge').toBe(1);
+  expect(tracks.widths, 'tracks share a width').toBe(1);
 
   const passkeys = await EpicGeometries.of(
     Objectives.panel(),
@@ -342,11 +344,9 @@ test('home fits a phone and keeps Needs you clear of the last panel', async () =
   await page.goto('/');
   await expect(Objectives.panel()).toBeVisible();
 
-  const overflow = await EpicGeometries.sidewaysOverflow(page);
-  expect(overflow).toBeLessThanOrEqual(0);
-
-  expect(
-    await EpicGeometries.gapAboveNeedsYouPill(page),
-  ).toBeGreaterThanOrEqual(0);
+  expect(await HomeLayout.sidewaysOverflow(page)).toBeLessThanOrEqual(0);
+  const gap = await HomeLayout.gapAboveNeedsYouPill(page);
+  expect(gap, 'region and pill both on the page').toBeDefined();
+  expect(gap).toBeGreaterThanOrEqual(0);
   await page.setViewportSize({ width: 1280, height: 800 });
 });
