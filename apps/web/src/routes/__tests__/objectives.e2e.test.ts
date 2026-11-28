@@ -106,6 +106,30 @@ test('when objectives fail, the rest of home still renders', async () => {
   ).toContainText('Rate-limit the public search endpoint');
 });
 
+test('an expanded epic lists its tasks, open first, with who has them', async () => {
+  await Objectives.scenario('populated');
+  await page.goto('/');
+
+  const epic = Objectives.panel().locator('[data-objective="E_passkeys"]');
+  const list = epic.getByRole('list', { name: /^Tasks in/u });
+  await expect(list).toHaveCount(0);
+
+  await Objectives.expand('Sign-in with passkeys');
+  const tasks = list.getByRole('listitem');
+  await expect(tasks).toHaveCount(3);
+  await expect(tasks.nth(0)).toContainText('Rate-limit sign-in attempts');
+  await expect(tasks.nth(0)).toContainText('ada');
+  await expect(tasks.nth(0)).toContainText('To do');
+  await expect(tasks.nth(1)).toContainText('Show a passkey nickname');
+  await expect(tasks.nth(1)).toContainText('—');
+  await expect(tasks.nth(2)).toContainText('Hash recovery codes');
+  await expect(tasks.nth(2)).toContainText('grace');
+  await expect(tasks.nth(2)).toContainText('Done');
+  await expect(
+    tasks.nth(0).getByRole('link', { name: 'Rate-limit sign-in attempts' }),
+  ).toHaveAttribute('href', 'https://github.com/acme-labs/api/issues/101');
+});
+
 test('active initiatives lead home, in Mission Control’s order, with their epics', async () => {
   await Objectives.scenario('populated');
   await page.goto('/');

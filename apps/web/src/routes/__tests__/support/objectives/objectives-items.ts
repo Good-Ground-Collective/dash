@@ -8,6 +8,13 @@ export interface StubOverlay {
   dueDate: string | null;
 }
 
+/** A task of an epic, in the epic's order. */
+export interface StubTask {
+  title: string;
+  closed?: boolean;
+  assignees?: string[];
+}
+
 /** An initiative or epic as the tracker has it, before Dash's overlay. */
 export interface StubObjective {
   id: string;
@@ -24,6 +31,7 @@ export interface StubObjective {
     ticket: string;
   } | null;
   next: string | null;
+  tasks?: StubTask[];
   hints: string[];
   dueAfterInitiative?: boolean;
   epics?: StubObjective[];
@@ -119,6 +127,24 @@ export class ObjectivesItems {
     };
   }
 
+  /** An epic's tasks as Mission Control sends them: open ones first, and the epic's own count. */
+  static tasks(item: StubObjective) {
+    const tasks = (item.tasks ?? []).map((task, index) => ({
+      id: `I_${item.id}_${String(index)}`,
+      title: task.title,
+      url: `${repo}/issues/${String(100 + index)}`,
+      state: task.closed === true ? 'closed' : 'open',
+      assignees: task.assignees ?? [],
+    }));
+    return {
+      items: tasks.toSorted(
+        (left, right) =>
+          Number(left.state === 'closed') - Number(right.state === 'closed'),
+      ),
+      total: tasks.length,
+    };
+  }
+
   static ago(minutes: number): string {
     return new Date(Date.now() - minutes * 60 * 1000).toISOString();
   }
@@ -132,6 +158,11 @@ export class ObjectivesItems {
         progress: { done: 4, total: 6 },
         update: ObjectivesItems.update('grace', 'Hash recovery codes', 45),
         next: 'Rate-limit sign-in attempts',
+        tasks: [
+          { title: 'Hash recovery codes', closed: true, assignees: ['grace'] },
+          { title: 'Rate-limit sign-in attempts', assignees: ['ada'] },
+          { title: 'Show a passkey nickname' },
+        ],
       },
       {
         ...ObjectivesItems.base('E_billing', 'Billing page', 11),

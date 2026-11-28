@@ -44,6 +44,19 @@ export const nextTicketSchema = z.object({
   priority: prioritySchema.nullable(),
 });
 
+export const epicTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  url: linkSchema,
+  state: z.enum(['open', 'closed']),
+  assignees: z.array(z.string()),
+});
+
+export const epicTasksSchema = z.object({
+  items: z.array(epicTaskSchema),
+  total: z.number().int(),
+});
+
 const objectiveSchema = z.object({
   id: z.string(),
   connectionId: z.string(),
@@ -64,6 +77,7 @@ const objectiveSchema = z.object({
 });
 
 export const epicObjectiveSchema = objectiveSchema.extend({
+  tasks: epicTasksSchema,
   dueAfterInitiative: z.boolean(),
 });
 
@@ -110,6 +124,7 @@ export const overlaySchema = z.object({
 export type ObjectiveStatus = z.infer<typeof objectiveStatusSchema>;
 export type ObjectiveHint = z.infer<typeof objectiveHintSchema>;
 export type ObjectiveProgress = z.infer<typeof objectiveProgressSchema>;
+export type EpicTask = z.infer<typeof epicTaskSchema>;
 export type EpicObjective = z.infer<typeof epicObjectiveSchema>;
 export type InitiativeObjective = z.infer<typeof initiativeObjectiveSchema>;
 export type Objectives = z.infer<typeof objectivesSchema>;
