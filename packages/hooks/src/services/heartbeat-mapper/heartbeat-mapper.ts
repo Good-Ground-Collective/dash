@@ -115,7 +115,7 @@ export class HeartbeatMapper {
           ),
         },
         condition: 'always',
-        settlesChildren: reported === undefined,
+        waitsOnRecordedChildren: reported === undefined,
         reportedBackgroundTasks: reported,
       };
     }
@@ -146,7 +146,7 @@ export class HeartbeatMapper {
         ),
       },
       condition: 'known-subagent',
-      settlesChildren: true,
+      waitsOnRecordedChildren: true,
     };
   }
 

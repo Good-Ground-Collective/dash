@@ -209,7 +209,7 @@ describe('FileSessionLedger state files', () => {
     const ledger = new FileSessionLedger({ config: state.config });
     const stopping = {
       ...Plans.make('complete', 'known-subagent', 'agent-a'),
-      settlesChildren: true,
+      waitsOnRecordedChildren: true,
     };
 
     await Plans.record(ledger, Plans.make('working', 'always', 'agent-a'), 0);

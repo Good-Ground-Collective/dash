@@ -197,6 +197,51 @@ describe('ClaudeCodeHeartbeatHook launches that arrive late', () => {
   });
 });
 
+describe('ClaudeCodeHeartbeatHook launches while waiting', () => {
+  it('keeps a waiting subagent launcher waiting when a second launch arrives late', async () => {
+    const second = 'agent-child-b';
+    await Agents.start(launcher);
+    await Agents.start(child);
+    await Agents.start(second);
+    await Agents.launch(launcher, child);
+    const stopped = await Agents.stop(launcher);
+    await Agents.launch(launcher, second);
+
+    expect(stopped?.payload.status).toBe('waiting');
+    expect(await Agents.lastStatus(launcher)).toBe('waiting');
+  });
+
+  it('keeps a waiting main agent waiting when a second launch arrives late', async () => {
+    await Agents.launch(undefined, child);
+    const waiting = await state.run('stop', Payloads.stopWithoutTaskList());
+    await Agents.launch(undefined, 'agent-child-b');
+
+    expect(waiting?.payload.status).toBe('waiting');
+    expect(await Agents.lastStatus(undefined)).toBe('waiting');
+  });
+});
+
+describe('ClaudeCodeHeartbeatHook stops of launched children', () => {
+  it('records the stop of a launched child whose start was never seen', async () => {
+    await Agents.start(launcher);
+    await Agents.launch(launcher, child);
+    const waiting = await Agents.stop(launcher);
+    const childStop = await Agents.stop(child);
+    const done = await Agents.stop(launcher);
+
+    expect(waiting?.payload.status).toBe('waiting');
+    expect(childStop?.payload).toMatchObject({
+      agentId: child,
+      status: 'complete',
+    });
+    expect(done?.payload.status).toBe('complete');
+  });
+
+  it('writes nothing for a stop of an unrecorded, unstarted agent', async () => {
+    expect(await Agents.stop('agent-unseen')).toBeUndefined();
+  });
+});
+
 describe('ClaudeCodeHeartbeatHook main agent waiting', () => {
   it('reports the main agent as waiting while a background child works, then complete', async () => {
     await Agents.start(child);

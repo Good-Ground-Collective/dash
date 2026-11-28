@@ -24,8 +24,8 @@ export interface HeartbeatPlan {
   awaitsAnswer?: boolean | undefined;
   /** The AskUserQuestion tool call this heartbeat asks or answers. */
   toolUseId?: string | undefined;
-  /** A `complete` heartbeat that is sent as `waiting` while the agent has background children still running. */
-  settlesChildren?: boolean | undefined;
+  /** A `complete` heartbeat is sent as `waiting` while the agent's recorded background children are still running. Set on every `SubagentStop`, and on a main-agent `Stop` only when Claude Code reported no `background_tasks` list; a reported list decides the status instead. */
+  waitsOnRecordedChildren?: boolean | undefined;
   /** How many background tasks Claude Code reported in flight on a main-agent `Stop`; absent when it sent no list, so only the ledger's recorded children can say. An empty list means nothing is running, whatever the ledger recorded. */
   reportedBackgroundTasks?: number | undefined;
   /** The ID of a subagent this agent just launched in the background. */
