@@ -9,6 +9,7 @@ const wire = {
       reportedBy: '2f0f6d1e-0000-4c1a-9a51-2f1f6a3c0099',
       sessionId: 'session-1',
       agentId: null,
+      kind: 'needs_input',
       question: {
         text: '<b>Which</b> path?',
         options: [{ label: 'outbox', description: 'The default' }],

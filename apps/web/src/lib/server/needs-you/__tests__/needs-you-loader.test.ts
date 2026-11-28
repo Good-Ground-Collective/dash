@@ -6,6 +6,7 @@ const item = {
   reportedBy: '2f0f6d1e-0000-4c1a-9a51-2f1f6a3c0099',
   sessionId: 'session-1',
   agentId: 'hooks-builder',
+  kind: 'needs_input',
   question: { text: 'Which outbox path?' },
   openedAt: '2026-11-27T12:00:00.000Z',
   resolvedAt: null,

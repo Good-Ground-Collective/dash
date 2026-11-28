@@ -12,9 +12,20 @@ export class SampleNeedsYouItems {
       reportedBy: '2f0f6d1e-0000-4c1a-9a51-2f1f6a3c0099',
       sessionId: 'session-1234567890',
       agentId: 'hooks-builder',
+      kind: 'needs_input',
       question: { text: props.text ?? 'Which outbox path?' },
       openedAt: new Date(props.openedAt),
       resolvedAt: null,
+    };
+  }
+
+  /** An open item for a session that stopped responding. */
+  static stopped(props: { id: string; openedAt: string }): NeedsYouItem {
+    return {
+      ...SampleNeedsYouItems.open(props),
+      kind: 'stopped_responding',
+      agentId: null,
+      question: null,
     };
   }
 

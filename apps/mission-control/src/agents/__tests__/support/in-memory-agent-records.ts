@@ -85,16 +85,31 @@ export class InMemoryAgentRecords
     lostBefore: Date;
   }): Promise<AgentSessionState[]> {
     const changed: AgentSessionState[] = [];
+    const states = [...this.states.values()];
     for (const [key, state] of this.states) {
       const updatedAt = Date.parse(state.updatedAt);
       const liveness =
         updatedAt <= props.lostBefore.getTime() ? 'lost' : 'stale';
+      const childIsFresh =
+        state.agentId === null &&
+        states.some(
+          (child) =>
+            child.agentId !== null &&
+            child.reportedBy === state.reportedBy &&
+            child.sessionId === state.sessionId &&
+            Date.parse(child.updatedAt) > props.staleBefore.getTime(),
+        );
       if (
         state.status === 'working' &&
         updatedAt <= props.staleBefore.getTime() &&
+        !childIsFresh &&
         state.liveness !== liveness
       ) {
-        const marked = { ...state, liveness } as const;
+        const marked = {
+          ...state,
+          liveness,
+          livenessChangedAt: new Date().toISOString(),
+        } as const;
         this.states.set(key, marked);
         changed.push(marked);
       }
@@ -122,6 +137,10 @@ export class InMemoryAgentRecords
       harness: heartbeat.harness,
       status: heartbeat.status,
       liveness: 'live',
+      livenessChangedAt:
+        current?.liveness === 'live'
+          ? current.livenessChangedAt
+          : heartbeat.receivedAt,
       summary: heartbeat.summary ?? current?.summary ?? null,
       question: heartbeat.question,
       error: heartbeat.error,

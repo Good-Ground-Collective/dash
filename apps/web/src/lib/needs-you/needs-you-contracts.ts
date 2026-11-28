@@ -2,6 +2,12 @@ import { z } from 'zod';
 
 const timestampSchema = z.iso.datetime({ offset: true }).pipe(z.coerce.date());
 
+export const needsYouKindSchema = z
+  .enum(['needs_input', 'stopped_responding'])
+  .describe(
+    '`needs_input` is an agent waiting on an answer. `stopped_responding` is a session the watchdog marked lost.',
+  );
+
 export const needsYouQuestionSchema = z
   .object({
     text: z.string(),
@@ -26,6 +32,7 @@ export const needsYouItemSchema = z.object({
     .string()
     .nullable()
     .describe('The subagent that asked. `null` for the session itself.'),
+  kind: needsYouKindSchema,
   question: needsYouQuestionSchema
     .nullable()
     .describe(

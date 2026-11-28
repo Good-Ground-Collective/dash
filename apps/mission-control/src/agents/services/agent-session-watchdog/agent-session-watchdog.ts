@@ -5,6 +5,7 @@ import {
   agentStaleAfterMinutes,
 } from '#src/agents/definitions/agent-liveness/agent-liveness.ts';
 import type { AgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
+import type { NeedsYouTriage } from '#src/agents/services/needs-you-triage/needs-you-triage.ts';
 import type { LiveEvents } from '#src/live/services/live-events/live-events.ts';
 
 const minuteMilliseconds = 60 * 1000;
@@ -12,6 +13,7 @@ const minuteMilliseconds = 60 * 1000;
 const publishingAgentSessionWatchdogPropsSchema = z.object({
   repository: z.custom<Pick<AgentSessionRepository, 'markSilent'>>(),
   liveEvents: z.custom<LiveEvents>(),
+  triage: z.custom<Pick<NeedsYouTriage, 'sessionLost'>>(),
 });
 
 export interface AgentSessionWatchdog {
@@ -19,10 +21,11 @@ export interface AgentSessionWatchdog {
   sweep(props: { now: Date }): Promise<number>;
 }
 
-/** A working agent silent for 10 minutes is `stale`, and for 30 is `lost`. Publishes `agent.session.updated` for each row it marks. */
+/** A working agent silent for 10 minutes is `stale`, and for 30 is `lost`. Publishes `agent.session.updated` for each row it marks. When a session's own row goes `lost`, its open Needs you items resolve and one "stopped responding" item opens. */
 export class PublishingAgentSessionWatchdog implements AgentSessionWatchdog {
   private readonly repository: Pick<AgentSessionRepository, 'markSilent'>;
   private readonly liveEvents: LiveEvents;
+  private readonly triage: Pick<NeedsYouTriage, 'sessionLost'>;
 
   constructor(
     props: z.input<typeof publishingAgentSessionWatchdogPropsSchema>,
@@ -30,6 +33,7 @@ export class PublishingAgentSessionWatchdog implements AgentSessionWatchdog {
     const parsed = publishingAgentSessionWatchdogPropsSchema.parse(props);
     this.repository = parsed.repository;
     this.liveEvents = parsed.liveEvents;
+    this.triage = parsed.triage;
   }
 
   async sweep(props: { now: Date }): Promise<number> {
@@ -49,6 +53,9 @@ export class PublishingAgentSessionWatchdog implements AgentSessionWatchdog {
         type: 'agent.session.updated',
         data: z.json().parse(session),
       });
+      if (session.agentId === null && session.liveness === 'lost') {
+        await this.triage.sessionLost(session);
+      }
     }
     return marked.length;
   }

@@ -1,5 +1,6 @@
 import type { AgentHeartbeatQuestion } from '#src/agents/contracts/agent-heartbeat.ts';
 import type { NeedsYouItem } from '#src/agents/contracts/needs-you-item.ts';
+import type { NeedsYouKind } from '#src/agents/definitions/needs-you-kind/needs-you-kind.ts';
 import type { NeedsYouItemRepository } from '#src/agents/repositories/needs-you-items/needs-you-item-repository.ts';
 
 /** Needs you items in memory, holding at most one open item per session or subagent as the Drizzle repository does. */
@@ -11,6 +12,7 @@ export class InMemoryNeedsYouItems implements NeedsYouItemRepository {
     sessionId: string;
     agentId: string | null;
     question: AgentHeartbeatQuestion | null;
+    kind: NeedsYouKind;
   }): Promise<NeedsYouItem | null> {
     const alreadyOpen = this.items.some(
       (item) =>
@@ -29,6 +31,7 @@ export class InMemoryNeedsYouItems implements NeedsYouItemRepository {
       sessionId: props.sessionId,
       agentId: props.agentId,
       question: props.question,
+      kind: props.kind,
       openedAt: new Date().toISOString(),
       resolvedAt: null,
     };
@@ -57,6 +60,18 @@ export class InMemoryNeedsYouItems implements NeedsYouItemRepository {
       (item) =>
         item.reportedBy === props.reportedBy &&
         item.sessionId === props.sessionId,
+    );
+  }
+
+  async resolveStopped(props: {
+    reportedBy: string;
+    sessionId: string;
+  }): Promise<NeedsYouItem[]> {
+    return this.resolveWhere(
+      (item) =>
+        item.reportedBy === props.reportedBy &&
+        item.sessionId === props.sessionId &&
+        item.kind === 'stopped_responding',
     );
   }
 

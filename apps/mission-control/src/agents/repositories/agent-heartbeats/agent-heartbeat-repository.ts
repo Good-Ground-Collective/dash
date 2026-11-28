@@ -130,6 +130,7 @@ export class DrizzleAgentHeartbeatRepository implements AgentHeartbeatRepository
           harness: sql`excluded.harness`,
           status: sql`excluded.status`,
           liveness: 'live',
+          livenessChangedAt: sql`case when ${agentSessionTable.liveness} <> 'live' then now() else ${agentSessionTable.livenessChangedAt} end`,
           summary: sql`coalesce(excluded.summary, ${agentSessionTable.summary})`,
           question: sql`excluded.question`,
           error: sql`excluded.error`,

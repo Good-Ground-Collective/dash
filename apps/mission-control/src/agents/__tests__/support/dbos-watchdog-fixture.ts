@@ -9,6 +9,7 @@ import {
   agentSessionWatchdogScheduleName,
   retiredExampleScheduleName,
 } from '#src/agents/services/agent-session-watchdog-workflows/agent-session-watchdog-workflows.ts';
+import { RulesNeedsYouTriage } from '#src/agents/services/needs-you-triage/needs-you-triage.ts';
 import type { LiveEvent } from '#src/live/contracts/live-event.ts';
 import { InProcessLiveEvents } from '#src/live/services/live-events/live-events.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
@@ -61,6 +62,10 @@ export class DbosWatchdogFixture {
       watchdog: new PublishingAgentSessionWatchdog({
         repository: this.store.sessions,
         liveEvents: this.liveEvents,
+        triage: new RulesNeedsYouTriage({
+          repository: this.store.needsYou,
+          liveEvents: this.liveEvents,
+        }),
       }),
     });
     this.workflows.registerWorkflows();

@@ -124,3 +124,110 @@ describe.skipIf(databaseUrl === null)(
     });
   },
 );
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleAgentSessionRepository liveness change and parent liveness',
+  () => {
+    it('moves livenessChangedAt only when liveness changes', async () => {
+      const database = AgentRecordsDatabase.required(store);
+      const changedAt = async () => {
+        const [state] = await database.sessions.listUpdatedSince({
+          since: new Date(0),
+        });
+        return state?.livenessChangedAt ?? '';
+      };
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({ sessionId: 'moving', seq: 1 }),
+      );
+      const first = await changedAt();
+
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({ sessionId: 'moving', seq: 2 }),
+      );
+      const stillLive = await changedAt();
+      const [marked] = await database.sessions.markSilent({
+        staleBefore: new Date(Date.now() + 60_000),
+        lostBefore: new Date(Date.now() + 60_000),
+      });
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({ sessionId: 'moving', seq: 3 }),
+      );
+      const live = await changedAt();
+
+      expect(stillLive).toBe(first);
+      expect(Date.parse(marked?.livenessChangedAt ?? '')).toBeGreaterThan(
+        Date.parse(first),
+      );
+      expect(Date.parse(live)).toBeGreaterThan(
+        Date.parse(marked?.livenessChangedAt ?? ''),
+      );
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleAgentSessionRepository parent liveness',
+  () => {
+    it('leaves a session’s own row while a subagent was updated after staleBefore, and still marks the subagent', async () => {
+      const database = AgentRecordsDatabase.required(store);
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({ sessionId: 'busy', seq: 1 }),
+      );
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({
+          sessionId: 'busy',
+          seq: 2,
+          agentId: 'plan-1',
+        }),
+      );
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({
+          sessionId: 'busy',
+          seq: 3,
+          agentId: 'plan-2',
+        }),
+      );
+      await database.database.orm.execute(
+        sql`update agent_session set updated_at = '2026-11-27T09:00:00Z' where session_id = 'busy' and agent_id <> 'plan-2'`,
+      );
+      await database.database.orm.execute(
+        sql`update agent_session set updated_at = '2026-11-27T09:55:00Z' where session_id = 'busy' and agent_id = 'plan-2'`,
+      );
+      const cutoffs = {
+        staleBefore: new Date('2026-11-27T09:50:00Z'),
+        lostBefore: new Date('2026-11-27T09:30:00Z'),
+      };
+
+      const marked = await database.sessions.markSilent(cutoffs);
+
+      expect(
+        marked.map(({ agentId, liveness }) => ({ agentId, liveness })),
+      ).toEqual([{ agentId: 'plan-1', liveness: 'lost' }]);
+    });
+
+    it('marks a session’s own row once none of its subagents is fresh', async () => {
+      const database = AgentRecordsDatabase.required(store);
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({ sessionId: 'idle', seq: 1 }),
+      );
+      await database.heartbeats.record(
+        AgentRecordsDatabase.record({
+          sessionId: 'idle',
+          seq: 2,
+          agentId: 'plan-1',
+        }),
+      );
+      await database.heardAt({
+        sessionId: 'idle',
+        at: new Date('2026-11-27T09:00:00Z'),
+      });
+
+      const marked = await database.sessions.markSilent({
+        staleBefore: new Date('2026-11-27T09:50:00Z'),
+        lostBefore: new Date('2026-11-27T09:30:00Z'),
+      });
+
+      expect(marked.map(({ liveness }) => liveness)).toEqual(['lost', 'lost']);
+    });
+  },
+);

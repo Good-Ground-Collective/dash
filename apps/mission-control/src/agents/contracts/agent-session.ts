@@ -49,6 +49,9 @@ export const agentActivitySchema = z.object({
     .describe(
       'The latest agent kind reported. A heartbeat without one keeps the last.',
     ),
+  livenessChangedAt: timestampSchema.describe(
+    'When `liveness` last changed. Of two rows with the same `highestSeq`, the later one is newer.',
+  ),
   highestSeq: z.int().nonnegative(),
   startedAt: timestampSchema.describe('When its first heartbeat arrived.'),
   reportedAt: timestampSchema.describe(

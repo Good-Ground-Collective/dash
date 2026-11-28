@@ -23,6 +23,7 @@ export interface StubAgentRow {
   } | null;
   machine: string | null;
   agent: { type?: string; model?: string } | null;
+  livenessChangedAt: string;
   highestSeq: number;
   startedAt: string;
   reportedAt: string;
@@ -90,6 +91,7 @@ export class AgentSessionRows {
       workspace: props.workspace ?? null,
       machine: props.machine ?? null,
       agent: null,
+      livenessChangedAt: AgentSessionRows.minutesAgo(props.minutesAgo + 30),
       highestSeq: props.highestSeq ?? 1,
       startedAt: AgentSessionRows.minutesAgo(props.minutesAgo + 30),
       reportedAt: at,

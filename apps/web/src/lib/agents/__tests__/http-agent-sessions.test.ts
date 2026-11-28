@@ -6,6 +6,7 @@ import { MissionControlError } from '#lib/api/mission-control-error.ts';
 const activity = {
   status: 'working',
   liveness: 'stale',
+  livenessChangedAt: '2026-11-27T11:30:00.000+00:00',
   summary: '<b>Reading</b> the relay',
   question: null,
   error: null,

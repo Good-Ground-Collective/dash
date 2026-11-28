@@ -54,6 +54,7 @@ export class AgentSessionRollup {
     return {
       status: state.status,
       liveness: state.liveness,
+      livenessChangedAt: state.livenessChangedAt,
       summary: state.summary,
       question: state.question,
       error: state.error,

@@ -23,6 +23,7 @@ export class NeedsYouItemRows {
       reportedBy: row.reportedBy,
       sessionId: row.sessionId,
       agentId: storedAgentIdSchema.parse(row.agentId),
+      kind: row.kind,
       question: row.question,
       openedAt: row.openedAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,

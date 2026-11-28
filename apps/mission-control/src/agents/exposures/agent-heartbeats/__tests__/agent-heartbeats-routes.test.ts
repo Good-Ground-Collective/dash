@@ -189,6 +189,51 @@ describe('POST /api/agents/:reporterName/heartbeats session state', () => {
   });
 });
 
+describe('POST /api/agents/:reporterName/heartbeats stopped responding', () => {
+  it.each([
+    ['the session itself', null],
+    ['a subagent of it', 'plan-1'],
+  ])(
+    'resolves the session’s stopped_responding item on a heartbeat from %s',
+    async (_label, agentId) => {
+      await served.heartbeat({ seq: 1 });
+      const [state] = await served.records.listUpdatedSince({
+        since: new Date(0),
+      });
+      await served.needsYouItems.open({
+        reportedBy: state?.reportedBy ?? '',
+        sessionId,
+        agentId: null,
+        question: null,
+        kind: 'stopped_responding',
+      });
+      expect(await served.openNeedsYou()).toMatchObject([
+        { kind: 'stopped_responding', agentId: null },
+      ]);
+
+      await served.heartbeat({ seq: 2, agentId: agentId ?? undefined });
+
+      expect(await served.openNeedsYou()).toEqual([]);
+      expect(served.publishedNeedsYouTypes()).toEqual(['needs-you.resolved']);
+    },
+  );
+
+  it('leaves a subagent’s own question open when another subagent reports', async () => {
+    await served.heartbeat({
+      seq: 1,
+      agentId: 'plan-1',
+      status: 'question',
+      question: { text: 'Which?' },
+    });
+
+    await served.heartbeat({ seq: 1, agentId: 'plan-2' });
+
+    expect(await served.openNeedsYou()).toMatchObject([
+      { kind: 'needs_input', agentId: 'plan-1' },
+    ]);
+  });
+});
+
 describe('POST /api/agents/:reporterName/heartbeats/batch', () => {
   it('answers one result per heartbeat, so an invalid one doesn’t block the rest', async () => {
     const response = await served.sendBatch(
