@@ -32,6 +32,12 @@ export const sessionStateSchema = z.object({
     .string()
     .optional()
     .describe('The model SessionStart reported, sent on later heartbeats.'),
+  ended: z
+    .boolean()
+    .default(false)
+    .describe(
+      'The last heartbeat was SessionEnd. A resumed session writes again and clears it.',
+    ),
 });
 
 export type SessionState = z.output<typeof sessionStateSchema>;
