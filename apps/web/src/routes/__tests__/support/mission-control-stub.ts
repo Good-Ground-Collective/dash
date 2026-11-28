@@ -5,6 +5,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { AppearanceStub } from './appearance-stub.ts';
+import { BriefingsStub } from './briefings/briefings-stub.ts';
 import { GithubStub } from './github/github-stub.ts';
 import { ObjectivesStub } from './objectives/objectives-stub.ts';
 import { OnboardingStub } from './onboarding-stub.ts';
@@ -33,7 +34,8 @@ import { WebAuthnOptions } from './webauthn-options.ts';
  * `POST /__stub/recovery-codes {codes}`, `POST /__stub/break-glass` and
  * `POST /__stub/expire-enrolments` drive recovery (see `RecoveryStub`), and
  * `/recovery-codes` answers as `RecoveryCodesStub` describes. `/integrations/github` is `GithubStub`,
- * `/onboarding/checklist` is `OnboardingStub`, `/objectives` is `ObjectivesStub`, and
+ * `/onboarding/checklist` is `OnboardingStub`, `/objectives` is `ObjectivesStub`, `/briefings`,
+ * `/briefing/regenerate` and `/events` are `BriefingsStub`, and
  * `/api/people/me/time-zone` is `TimeZoneStub`, with `GET /api/people/me/time-zone/__stub/saves`
  * counting what browsers sent.
  */
@@ -51,6 +53,7 @@ export class MissionControlStub {
   private readonly objectives = new ObjectivesStub({
     githubConnected: () => this.github.connected(),
   });
+  private readonly briefings = new BriefingsStub();
   private readonly onboarding = new OnboardingStub({
     githubConnected: () => this.github.connected(),
     anyInitiative: () => this.objectives.anyInitiative(),
@@ -94,6 +97,10 @@ export class MissionControlStub {
     if (url.pathname.startsWith('/objectives')) {
       const body = await StubRequest.body(request);
       this.objectives.serve({ body, response, url, signedIn });
+      return;
+    }
+    if (url.pathname === '/events' || url.pathname.startsWith('/briefing')) {
+      this.briefings.serve({ response, url, signedIn });
       return;
     }
     if (url.pathname === '/onboarding/checklist') {
@@ -207,6 +214,7 @@ export class MissionControlStub {
     this.recoveryCodes.reset();
     this.github.reset();
     this.objectives.reset();
+    this.briefings.reset();
     return { status: 200, body: { status: true } };
   }
 

@@ -10,7 +10,12 @@ import {
   shellDataSchema,
 } from '#lib/server/auth-page-loader.ts';
 import type { GithubFeedState } from '#lib/github-feed/feed-view.ts';
+import type { BriefingState } from '#lib/briefing/briefing-view.ts';
 import type { ObjectivesState } from '#lib/objectives/objectives-view.ts';
+import {
+  type BriefingLoader,
+  MissionControlBriefingLoader,
+} from '#lib/server/briefing/briefing-loader.ts';
 import {
   type GithubFeedLoader,
   MissionControlGithubFeedLoader,
@@ -37,9 +42,11 @@ export interface HomePageData {
   github: GithubFeedState | null;
   /** `null` when signed out. */
   objectives: ObjectivesState | null;
+  /** `null` when signed out. */
+  briefing: BriefingState | null;
 }
 
-/** Home's data for a signed-in person: the setup checklist, objectives and the GitHub feed, read side by side. */
+/** Home's data for a signed-in person: the setup checklist, objectives, the GitHub feed and the briefing, read side by side. */
 export interface HomeLoader {
   readonly load: (event: HomeLoadEvent) => Promise<HomePageData>;
 }
@@ -48,6 +55,7 @@ export class MissionControlHomeLoader implements HomeLoader {
   private readonly apiBaseUrl: string;
   private readonly github: GithubFeedLoader;
   private readonly objectives: ObjectivesLoader;
+  private readonly briefing: BriefingLoader;
 
   constructor(props: HomeLoaderProps) {
     this.apiBaseUrl = homeLoaderPropsSchema.parse(props).apiBaseUrl;
@@ -57,18 +65,27 @@ export class MissionControlHomeLoader implements HomeLoader {
     this.objectives = new MissionControlObjectivesLoader({
       apiBaseUrl: this.apiBaseUrl,
     });
+    this.briefing = new MissionControlBriefingLoader({
+      apiBaseUrl: this.apiBaseUrl,
+    });
   }
 
   readonly load = async (event: HomeLoadEvent): Promise<HomePageData> => {
     const shell = shellDataSchema.parse(await event.parent());
     if (shell.viewer === null) {
-      return { checklist: null, github: null, objectives: null };
+      return {
+        checklist: null,
+        github: null,
+        objectives: null,
+        briefing: null,
+      };
     }
 
-    const [checklist, github, objectives] = await Promise.all([
+    const [checklist, github, objectives, briefing] = await Promise.all([
       this.checklist(event),
       this.github.read(event),
       this.objectives.read(event),
+      this.briefing.read(event),
     ]);
     return {
       checklist,
@@ -78,6 +95,7 @@ export class MissionControlHomeLoader implements HomeLoader {
         checklist,
         github,
       }),
+      briefing,
     };
   };
 

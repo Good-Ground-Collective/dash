@@ -5,6 +5,7 @@
   import { HomeGreeting } from '#lib/home/home-greeting.ts';
   import { SetupChecklist } from '#lib/onboarding/setup-checklist.ts';
   import SetupChecklistCard from '#lib/onboarding-ui/SetupChecklistCard.svelte';
+  import BriefingCard from '#lib/briefing-ui/BriefingCard.svelte';
   import ComingSoon from '#lib/home-ui/ComingSoon.svelte';
   import NeedsYouSection from '#lib/home-ui/NeedsYouSection.svelte';
   import SinceYesterdaySection from '#lib/home-ui/SinceYesterdaySection.svelte';
@@ -51,11 +52,9 @@
     <SetupChecklistCard {checklist} />
   {/if}
   {#if feed !== null}
-    <ComingSoon
-      id="briefing-title"
-      title="Briefing"
-      message="Coming soon: a short read on what changed and where to go next."
-    />
+    {#if data.briefing !== null}
+      <BriefingCard briefing={data.briefing} {now} />
+    {/if}
     <div class="columns">
       <div class="column main">
         <NeedsYouSection {feed} />

@@ -26,6 +26,15 @@ const feed = {
   assignedIssues: [],
 };
 
+const briefings = {
+  configured: true,
+  latest: null,
+  lastRun: null,
+  history: [],
+  budget: { month: '2026-11', spentUsd: 1.5, capUsd: 100, reached: false },
+  running: null,
+};
+
 class HomeVisit {
   readonly requested: string[] = [];
   private readonly viewer: Viewer | null;
@@ -64,7 +73,41 @@ afterEach(() => {
 });
 
 describe('MissionControlHomeLoader', () => {
-  it('reads the setup checklist, objectives and the GitHub feed for a signed-in person', async () => {
+  it('reads the setup checklist, objectives, the GitHub feed and the briefing for a signed-in person', async () => {
+    const visit = new HomeVisit({
+      viewer: ada,
+      answers: {
+        '/onboarding/checklist': () => Response.json(checklist),
+        '/integrations/github/feed': () => Response.json(feed),
+        '/objectives': () => Response.json(objectives),
+        '/briefings': () => Response.json(briefings),
+      },
+    });
+
+    await expect(loader.load(visit.event)).resolves.toEqual({
+      checklist,
+      github: { status: 'loaded', feed },
+      briefing: { status: 'loaded', briefings },
+      objectives: {
+        status: 'loaded',
+        objectives,
+        anyInitiative: false,
+        githubConnected: false,
+      },
+    });
+    expect(visit.requested.toSorted()).toEqual([
+      '/briefings',
+      '/integrations/github/feed',
+      '/objectives',
+      '/objectives',
+      '/onboarding/checklist',
+    ]);
+  });
+});
+
+describe('MissionControlHomeLoader, the briefing', () => {
+  it('keeps the rest of home when the briefing read fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const visit = new HomeVisit({
       viewer: ada,
       answers: {
@@ -74,22 +117,10 @@ describe('MissionControlHomeLoader', () => {
       },
     });
 
-    await expect(loader.load(visit.event)).resolves.toEqual({
-      checklist,
-      github: { status: 'loaded', feed },
-      objectives: {
-        status: 'loaded',
-        objectives,
-        anyInitiative: false,
-        githubConnected: false,
-      },
-    });
-    expect(visit.requested.toSorted()).toEqual([
-      '/integrations/github/feed',
-      '/objectives',
-      '/objectives',
-      '/onboarding/checklist',
-    ]);
+    const data = await loader.load(visit.event);
+
+    expect(data.briefing).toEqual({ status: 'failed' });
+    expect(data.github).toEqual({ status: 'loaded', feed });
   });
 });
 
@@ -151,6 +182,7 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist,
       github: { status: 'failed' },
       objectives: { status: 'failed' },
+      briefing: { status: 'failed' },
     });
   });
 
@@ -161,6 +193,7 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist: null,
       github: null,
       objectives: null,
+      briefing: null,
     });
     expect(visit.requested).toEqual([]);
   });
@@ -173,7 +206,8 @@ describe('MissionControlHomeLoader when reads fail', () => {
       checklist: null,
       github: { status: 'failed' },
       objectives: { status: 'failed' },
+      briefing: { status: 'failed' },
     });
-    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledTimes(4);
   });
 });

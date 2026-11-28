@@ -74,6 +74,9 @@ for (const theme of themes) {
       await page.request.post(
         `${missionControl}/objectives/__stub/scenario?name=populated`,
       );
+      await page.request.post(
+        `${missionControl}/briefing/__stub/scenario?name=ready`,
+      );
       await page.request.post(`${missionControl}/api/auth/appearance/update`, {
         data: { theme, mode },
       });
