@@ -1,3 +1,5 @@
+import OpenAI from 'openai';
+
 import { AgentsModule } from '#src/agents/module.ts';
 import { DrizzleAgentHeartbeatRepository } from '#src/agents/repositories/agent-heartbeats/agent-heartbeat-repository.ts';
 import { DrizzleAgentSessionRepository } from '#src/agents/repositories/agent-sessions/agent-session-repository.ts';
@@ -5,6 +7,10 @@ import { AuthModule } from '#src/auth/module.ts';
 import { DrizzleAuthStore } from '#src/auth/repositories/auth-store/auth-store.ts';
 import { DrizzleServicePrincipalRepository } from '#src/auth/repositories/service-principals/service-principal-repository.ts';
 import { BriefingModule } from '#src/briefing/module.ts';
+import { DrizzlePersonTimeZoneReader } from '#src/briefing/repositories/people-time-zones/person-time-zone-reader.ts';
+import { SourcedBriefingSnapshot } from '#src/briefing/services/briefing-snapshot/briefing-snapshot.ts';
+import { DbosBriefingWorkflows } from '#src/briefing/services/briefing-workflows/briefing-workflows.ts';
+import { OpenAiBriefingWriter } from '#src/briefing/services/briefing-writer/briefing-writer.ts';
 import { DrizzleBriefingRepository } from '#src/briefing/repositories/briefings/briefing-repository.ts';
 import { DrizzleOwnerTimeZoneReader } from '#src/briefing/repositories/owner-time-zones/owner-time-zone-reader.ts';
 import { ConnectionsModule } from '#src/connections/module.ts';
@@ -40,11 +46,11 @@ const workflows = new DbosWorkflowRuntime({
   databaseUrl: config.databaseUrl,
   logLevel: config.logLevel,
 });
+const servicePrincipals = new DrizzleServicePrincipalRepository({ database });
+const agentSessions = new DrizzleAgentSessionRepository({ database });
 const auth = new AuthModule({
   store: new DrizzleAuthStore({ database }),
-  servicePrincipalRepository: new DrizzleServicePrincipalRepository({
-    database,
-  }),
+  servicePrincipalRepository: servicePrincipals,
   secret: config.authSecret,
   baseUrl: config.authBaseUrl,
   webOrigin: config.webOrigin,
@@ -57,22 +63,25 @@ const integrations = new IntegrationsModule({ githubApp: config.githubApp });
 const connectionRepository = new DrizzleConnectionRepository({ database });
 const linkedAccounts = new DrizzleLinkedAccountRepository({ database });
 const webhookEvents = new InMemoryWebhookEventRegistry();
+const githubRecords = new DrizzleGithubRecordReader({ database });
 const githubFeed = new GithubFeedModule({
   registry: integrations.registry,
   identity: auth.identity,
   linkedAccounts,
-  reader: new DrizzleGithubRecordReader({ database }),
+  reader: githubRecords,
   writer: new DrizzleGithubRecordWriter({ database }),
   connections: connectionRepository,
   syncRequests: new DrizzleSyncRequestRepository({ database }),
   webhookEvents,
 });
+const objectiveRecords = new DrizzleObjectiveRecordReader({ database });
+const objectiveOverlays = new DrizzleObjectiveOverlayRepository({ database });
 const objectives = new ObjectivesModule({
   registry: integrations.registry,
   identity: auth.identity,
-  reader: new DrizzleObjectiveRecordReader({ database }),
+  reader: objectiveRecords,
   writer: new DrizzleObjectiveRecordWriter({ database }),
-  overlays: new DrizzleObjectiveOverlayRepository({ database }),
+  overlays: objectiveOverlays,
 });
 const connections = new ConnectionsModule({
   registry: integrations.registry,
@@ -92,7 +101,7 @@ const agents = new AgentsModule({
   authentication: auth.agentAuthentication,
   identity: auth.identity,
   heartbeatRepository: new DrizzleAgentHeartbeatRepository({ database }),
-  sessionRepository: new DrizzleAgentSessionRepository({ database }),
+  sessionRepository: agentSessions,
   liveEvents,
 });
 const heartbeat = new HeartbeatModule({
@@ -100,9 +109,38 @@ const heartbeat = new HeartbeatModule({
   repository: new DrizzleHeartbeatRepository({ database }),
 });
 
+const briefings = new DrizzleBriefingRepository({ database });
+const ownerTimeZone = new DrizzleOwnerTimeZoneReader({ database });
 const briefing = new BriefingModule({
-  briefings: new DrizzleBriefingRepository({ database }),
-  ownerTimeZone: new DrizzleOwnerTimeZoneReader({ database }),
+  briefings,
+  ownerTimeZone,
+  workflows: new DbosBriefingWorkflows({
+    briefings,
+    ownerTimeZone,
+    people: new DrizzlePersonTimeZoneReader({ database }),
+    snapshot: new SourcedBriefingSnapshot({
+      objectives: objectiveRecords,
+      overlays: objectiveOverlays,
+      github: githubRecords,
+      sessions: agentSessions,
+      principals: servicePrincipals,
+    }),
+    liveEvents,
+    generation:
+      config.briefing === null
+        ? null
+        : {
+            settings: config.briefing,
+            writer: new OpenAiBriefingWriter({
+              client: new OpenAI({
+                apiKey: config.briefing.apiKey,
+                maxRetries: 0,
+                timeout: 60_000,
+              }),
+              settings: config.briefing,
+            }),
+          },
+  }),
   identity: auth.identity,
   settings: config.briefing,
 });

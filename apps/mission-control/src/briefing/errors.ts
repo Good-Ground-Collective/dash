@@ -57,6 +57,27 @@ export class BriefingNotRegisteredError extends Error {
   override name = 'BriefingNotRegisteredError';
 
   constructor() {
-    super('Register the briefing retention workflow before activating it');
+    super('Register the briefing workflows before using them');
+  }
+}
+
+/** Fastify answers with `statusCode` and `code`. */
+export class BriefingNotConfiguredError extends Error {
+  override name = 'BriefingNotConfiguredError';
+  readonly statusCode = 409;
+  readonly code = 'BRIEFING_NOT_CONFIGURED';
+
+  constructor() {
+    super(
+      'The AI briefing is off on this Dash. Set OPENAI_API_KEY to turn it on.',
+    );
+  }
+}
+
+export class BriefingRunOutsideWorkflowError extends Error {
+  override name = 'BriefingRunOutsideWorkflowError';
+
+  constructor() {
+    super('A briefing run has to start inside its workflow');
   }
 }
