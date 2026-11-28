@@ -1,4 +1,5 @@
 import { DBOS, type WorkflowStatus } from '@dbos-inc/dbos-sdk';
+import { getFunctionRegistrationByName } from '@dbos-inc/dbos-sdk/internal/decorators';
 import { z } from 'zod';
 
 /**
@@ -57,6 +58,17 @@ export interface StrandedWorkflowRecovery {
  * the steps run again on the running version. A briefing that had already committed its record
  * step before the deploy therefore writes a second briefing when it re-runs. That is accepted:
  * it is narrow, and the briefing budget caps it.
+ *
+ * Cancelling and rewinding both clear a workflow's deduplication ID. A workflow whose ID does not
+ * carry the version (`briefing-<userId>`, `objective-reconcile-<connectionId>`) can therefore
+ * have a second copy enqueued while the recovered one is still running, so the two may overlap.
+ * That is accepted for the same reason: the overlap is narrow and each of those workflows is
+ * safe to run twice.
+ *
+ * Only a workflow whose name this process has registered is moved. Anything else would sit
+ * PENDING forever ("Cannot find workflow function") and, on a queue with a concurrency limit such
+ * as `briefing`, block every workflow behind it; it is warned about and left alone, and is not
+ * counted as stranded.
  */
 export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
   private readonly gateMs: number;
@@ -78,7 +90,9 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
     const version = DBOS.applicationVersion;
     let moved = 0;
 
-    for (const workflow of await this.stranded()) {
+    for (const workflow of await this.stranded({
+      warnAboutUnregistered: true,
+    })) {
       if (!(await this.isStillStranded(workflow.workflowID))) {
         continue;
       }
@@ -133,9 +147,18 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
     }
   }
 
-  private async stranded(): Promise<
-    (WorkflowStatus & { queueName: string })[]
-  > {
+  private isRegisteredHere(workflow: WorkflowStatus): boolean {
+    return (
+      getFunctionRegistrationByName(
+        workflow.workflowClassName,
+        workflow.workflowName,
+      )?.workflowConfig !== undefined
+    );
+  }
+
+  private async stranded(
+    options: { warnAboutUnregistered?: boolean } = {},
+  ): Promise<(WorkflowStatus & { queueName: string })[]> {
     if (this.untilGateOpensMs() > 0 || !(await this.runsLatestVersion())) {
       return [];
     }
@@ -144,7 +167,7 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
       loadInput: false,
       loadOutput: false,
     });
-    return queued.flatMap((workflow) =>
+    const otherVersions = queued.flatMap((workflow) =>
       workflow.applicationVersion !== undefined &&
       workflow.applicationVersion !== DBOS.applicationVersion &&
       workflow.queueName !== undefined &&
@@ -152,5 +175,17 @@ export class DbosStrandedWorkflowRecovery implements StrandedWorkflowRecovery {
         ? [{ ...workflow, queueName: workflow.queueName }]
         : [],
     );
+
+    return otherVersions.filter((workflow) => {
+      if (this.isRegisteredHere(workflow)) {
+        return true;
+      }
+      if (options.warnAboutUnregistered === true) {
+        DBOS.logger.warn(
+          `Leaving stranded workflow ${workflow.workflowID} (${workflow.workflowName}) on queue ${workflow.queueName} alone: this version has no workflow of that name`,
+        );
+      }
+      return false;
+    });
   }
 }

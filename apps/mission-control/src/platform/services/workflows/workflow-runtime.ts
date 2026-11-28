@@ -80,6 +80,7 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
       { name: 'recoverStrandedWorkflows' },
     );
     await DBOS.launch();
+    await this.becomeLatestVersion();
 
     this.sweepWhenPreviousContainerIsGone();
     await DBOS.applySchedules([
@@ -97,6 +98,16 @@ export class DbosWorkflowRuntime implements WorkflowRuntime {
       this.sweepTimer = null;
     }
     await DBOS.shutdown();
+  }
+
+  /**
+   * After a rollback or revert deploy DBOS reclaims this version's existing row without making it
+   * the latest, so it would stay behind a version that no longer runs: the scheduler enqueues to
+   * the latest version, and only the latest version moves stranded work. Mission Control runs on a
+   * single host where the newest container is the intended one, so it claims latest at launch.
+   */
+  private async becomeLatestVersion(): Promise<void> {
+    await DBOS.setLatestApplicationVersion(DBOS.applicationVersion);
   }
 
   /** Sweeps once as soon as the previous container is gone, instead of waiting for the next schedule tick. A failed sweep is logged, never thrown; the schedule tries again. */

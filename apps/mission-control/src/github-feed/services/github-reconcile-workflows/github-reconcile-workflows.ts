@@ -139,6 +139,7 @@ export class GithubReconcileWorkflows
         }
         await DBOS.startWorkflow(followUp, {
           workflowID: `${readWorkflowId}-follow-up`,
+          timeoutMS: null,
         })({ connectionId, readWorkflowId, startedAt });
       },
       { name: 'githubReconcileConnection' },
@@ -183,7 +184,7 @@ export class GithubReconcileWorkflows
     };
   }
 
-  /** Waits for the read to finish, because until it has, enqueueing another read attaches to it. */
+  /** Waits for the read to finish, because until it has, enqueueing another read attaches to it. It is started without a deadline, so it does not inherit the read's timeout and is not cancelled while it waits for a slow read. */
   private registerFollowUp(): FollowUpWorkflow {
     return DBOS.registerWorkflow(
       async (props: {
@@ -244,8 +245,8 @@ export class GithubReconcileWorkflows
   }
 
   /**
-   * A holder on another version is never started by this one. A queued holder on this version
-   * is left alone however long it has waited, because DBOS starts queued work in the order it
+   * The deduplication ID carries the running version, so a holder is always on this version. A
+   * queued holder is left alone however long it has waited, because DBOS starts queued work in the order it
    * was created and cancelling it would put its replacement at the back. A running holder is
    * stuck once it has run longer than the read timeout allows for.
    */
@@ -256,10 +257,6 @@ export class GithubReconcileWorkflows
     if (!unfinished) {
       return false;
     }
-    if (status.applicationVersion !== DBOS.applicationVersion) {
-      return true;
-    }
-
     const startedAt = status.dequeuedAt ?? status.createdAt;
     return (
       status.status === 'PENDING' &&

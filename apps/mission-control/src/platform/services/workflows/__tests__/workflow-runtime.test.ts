@@ -31,6 +31,8 @@ class LaunchFixture {
     vi.spyOn(DBOS, 'registerWorkflow').mockImplementation(
       (workflow) => workflow,
     );
+    vi.spyOn(DBOS, 'applicationVersion', 'get').mockReturnValue('this-deploy');
+    vi.spyOn(DBOS, 'setLatestApplicationVersion').mockResolvedValue(undefined);
     vi.spyOn(DBOS, 'applySchedules').mockResolvedValue(undefined);
     vi.spyOn(DBOS, 'shutdown').mockResolvedValue(undefined);
     const logger = DBOS.logger;
@@ -78,6 +80,18 @@ describe('DbosWorkflowRuntime stranded work sweep', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('makes this version the latest right after DBOS launches, so a rollback is not left behind', async () => {
+    await fixture.runtime().launch();
+
+    expect(DBOS.setLatestApplicationVersion).toHaveBeenCalledWith(
+      'this-deploy',
+    );
+    expect(vi.mocked(DBOS.launch).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(DBOS.setLatestApplicationVersion).mock.invocationCallOrder[0] ??
+        0,
+    );
   });
 
   it('applies the recovery workflow on the 15-minute schedule', async () => {

@@ -206,7 +206,7 @@ describe.skipIf(databaseUrl === null)(
 describe.skipIf(databaseUrl === null)(
   'DbosStrandedWorkflowRecovery and deduplication IDs',
   () => {
-    it('lets the ID of a recovered unversioned workflow be enqueued again once it completes', async () => {
+    it('clears the deduplication ID of a recovered unversioned workflow, so its ID can be enqueued as a second copy', async () => {
       const id = 'briefing-like-1';
       const deduplicationID = `briefing-${id}`;
       const runningId = await StaleDeployHarness.required(deploys).seedHolder({
@@ -224,12 +224,6 @@ describe.skipIf(databaseUrl === null)(
           1,
         );
       }, settle);
-      StaleDeployHarness.required(deploys).reconcile.release();
-      await vi.waitFor(async () => {
-        expect((await DBOS.getWorkflowStatus(runningId))?.status).toBe(
-          'SUCCESS',
-        );
-      }, settle);
 
       const again = await StaleDeployHarness.required(deploys).seedHolder({
         connectionId: id,
@@ -237,6 +231,74 @@ describe.skipIf(databaseUrl === null)(
       });
 
       expect(again).not.toBe(runningId);
+      expect((await DBOS.getWorkflowStatus(runningId))?.status).not.toBe(
+        'SUCCESS',
+      );
+    }, 60_000);
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DbosStrandedWorkflowRecovery after a rollback deploy',
+  () => {
+    it('moves stranded work once this version is promoted past the version that no longer runs', async () => {
+      const id = 'rollback-1';
+      const strandedId = await StaleDeployHarness.required(deploys).seedHolder({
+        connectionId: id,
+        deduplicationID: `github-reconcile-${id}`,
+        appVersion: previousDeploy,
+      });
+      await StaleDeployHarness.required(deploys).sql(
+        'insert into dbos.application_versions (version_id, version_name, version_timestamp) values (gen_random_uuid()::text, $1, $2)',
+        [newerDeploy, Date.now() - 1],
+      );
+      const recovery = new DbosStrandedWorkflowRecovery(opened);
+      expect(await recovery.recover()).toBe(0);
+
+      await DBOS.setLatestApplicationVersion(DBOS.applicationVersion);
+
+      expect(await recovery.recover()).toBe(1);
+      expect(
+        (await DBOS.getWorkflowStatus(strandedId))?.applicationVersion,
+      ).toBe(DBOS.applicationVersion);
+      await StaleDeployHarness.required(deploys).sql(
+        'delete from dbos.application_versions where version_name = $1',
+        [newerDeploy],
+      );
+    }, 60_000);
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DbosStrandedWorkflowRecovery and workflows this version does not have',
+  () => {
+    it('warns about them and leaves them queued under their own version, uncounted', async () => {
+      const unregisteredId = await StaleDeployHarness.required(
+        deploys,
+      ).seedHolder({
+        connectionId: 'unregistered-1',
+        deduplicationID: 'github-reconcile-unregistered-1',
+        appVersion: previousDeploy,
+        workflowName: 'removedInThisVersion',
+      });
+      const registeredId = await StaleDeployHarness.required(
+        deploys,
+      ).seedHolder({
+        connectionId: 'registered-1',
+        deduplicationID: 'github-reconcile-registered-1',
+        appVersion: previousDeploy,
+      });
+      const recovery = new DbosStrandedWorkflowRecovery(opened);
+
+      expect(await recovery.count()).toBe(1);
+      expect(await recovery.recover()).toBe(1);
+
+      const left = await DBOS.getWorkflowStatus(unregisteredId);
+      expect(left?.applicationVersion).toBe(previousDeploy);
+      expect(left?.status).toBe('DELAYED');
+      expect(
+        (await DBOS.getWorkflowStatus(registeredId))?.applicationVersion,
+      ).toBe(DBOS.applicationVersion);
     }, 60_000);
   },
 );

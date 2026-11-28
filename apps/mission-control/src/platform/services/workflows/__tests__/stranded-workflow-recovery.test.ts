@@ -19,6 +19,10 @@ import {
   previousContainerGoneAfterMs,
 } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
 
+DBOS.registerWorkflow(async () => undefined, {
+  name: 'githubReconcileConnection',
+});
+
 const startedAt = new Date('2026-11-27T10:00:00Z');
 
 class Queued {
@@ -108,18 +112,18 @@ class Spies {
   }
 }
 
+let spies: Spies;
+
+beforeEach(() => {
+  spies = new Spies();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 describe('DbosStrandedWorkflowRecovery', () => {
-  let spies: Spies;
-
-  beforeEach(() => {
-    spies = new Spies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it('moves nothing and counts nothing until the previous container is gone', async () => {
     const recovery = new DbosStrandedWorkflowRecovery();
     spies.list.mockResolvedValue([Queued.workflow()]);
@@ -169,17 +173,6 @@ describe('DbosStrandedWorkflowRecovery', () => {
 });
 
 describe('DbosStrandedWorkflowRecovery work it must not move or cannot move', () => {
-  let spies: Spies;
-
-  beforeEach(() => {
-    spies = new Spies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it('leaves internal-queue, current-version and queueless work alone', async () => {
     const recovery = new DbosStrandedWorkflowRecovery();
     spies.list.mockResolvedValue([
@@ -194,6 +187,29 @@ describe('DbosStrandedWorkflowRecovery work it must not move or cannot move', ()
 
     expect(await recovery.recover()).toBe(0);
     expect(spies.cancel).not.toHaveBeenCalled();
+  });
+
+  it('warns about a workflow this version has no function for, leaves it alone, and does not count it', async () => {
+    const recovery = new DbosStrandedWorkflowRecovery();
+    spies.list.mockResolvedValue([
+      Queued.workflow({
+        workflowID: 'removed',
+        workflowName: 'removedInThisVersion',
+        queueName: 'briefing',
+      }),
+      Queued.workflow({ workflowID: 'known' }),
+    ]);
+    Sweep.openGate();
+
+    expect(await recovery.count()).toBe(1);
+    expect(spies.warn).not.toHaveBeenCalled();
+    expect(await recovery.recover()).toBe(1);
+
+    expect(spies.cancel).toHaveBeenCalledTimes(1);
+    expect(spies.cancel).toHaveBeenCalledWith('known');
+    expect(spies.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/removed.*removedInThisVersion.*briefing/),
+    );
   });
 
   it('keeps going when one workflow cannot be moved, and warns about it', async () => {
@@ -217,17 +233,6 @@ describe('DbosStrandedWorkflowRecovery work it must not move or cannot move', ()
 });
 
 describe('DbosStrandedWorkflowRecovery on a container that is not the latest version', () => {
-  let spies: Spies;
-
-  beforeEach(() => {
-    spies = new Spies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it('counts and moves nothing while a newer version is registered', async () => {
     const recovery = new DbosStrandedWorkflowRecovery();
     spies.list.mockResolvedValue([Queued.workflow()]);
@@ -266,17 +271,6 @@ describe('DbosStrandedWorkflowRecovery on a container that is not the latest ver
 });
 
 describe('DbosStrandedWorkflowRecovery re-reading a workflow before moving it', () => {
-  let spies: Spies;
-
-  beforeEach(() => {
-    spies = new Spies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it.each([
     ['now on the running version', { applicationVersion: 'current' }],
     ['already finished', { status: 'SUCCESS' as const }],
@@ -314,17 +308,6 @@ describe('DbosStrandedWorkflowRecovery re-reading a workflow before moving it', 
 });
 
 describe('DbosStrandedWorkflowRecovery when the rewind fails after the cancel', () => {
-  let spies: Spies;
-
-  beforeEach(() => {
-    spies = new Spies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it('does not count it, warns that it was left cancelled, and carries on', async () => {
     const recovery = new DbosStrandedWorkflowRecovery();
     spies.list.mockResolvedValue([

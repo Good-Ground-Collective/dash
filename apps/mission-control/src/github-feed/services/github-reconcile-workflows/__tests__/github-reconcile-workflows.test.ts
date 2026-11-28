@@ -164,6 +164,14 @@ describe.skipIf(databaseUrl === null)(
       await vi.waitFor(async () => {
         expect(await Reads.followUpsOf('acme')).toHaveLength(1);
       }, settle);
+      const [read] = await DBOS.listWorkflows({
+        workflowName: 'githubReconcileConnection',
+      });
+      const followUp = await DBOS.getWorkflowStatus(
+        `${read?.workflowID}-follow-up`,
+      );
+      expect(read?.deadlineEpochMS).toBeDefined();
+      expect(followUp?.deadlineEpochMS).toBeUndefined();
       await workflows.syncPerson({ userId: 'ada' });
       await vi.waitFor(() => {
         expect(Reads.of('acme')).toHaveLength(2);

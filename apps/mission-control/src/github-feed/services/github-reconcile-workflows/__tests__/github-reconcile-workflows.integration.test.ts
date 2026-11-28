@@ -61,25 +61,6 @@ describe.skipIf(databaseUrl === null)(
         (await DBOS.getWorkflowStatus(leftBehind))?.applicationVersion,
       ).toBe(previousDeploy);
     }, 60_000);
-
-    it('reads a connection whose version-scoped holder is on another version', async () => {
-      const id = 'left-behind-2';
-      await StaleDeployHarness.required(deploys).seedHolder({
-        connectionId: id,
-        deduplicationID: `github-reconcile-${DBOS.applicationVersion}-${id}`,
-        appVersion: previousDeploy,
-      });
-
-      await StaleDeployHarness.required(deploys).workflows.syncConnection({
-        connectionId: id,
-      });
-
-      await vi.waitFor(() => {
-        expect(StaleDeployHarness.required(deploys).readsOf(id)).toHaveLength(
-          1,
-        );
-      }, settle);
-    }, 60_000);
   },
 );
 

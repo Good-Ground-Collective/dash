@@ -60,11 +60,12 @@ export class StaleDeployHarness {
     connectionId: string;
     deduplicationID: string;
     appVersion?: string;
+    workflowName?: string;
   }): Promise<string> {
     const handle = await DBOS.enqueueWorkflowWithOptions(
       {
         queueName: 'github-reconcile',
-        workflowName: 'githubReconcileConnection',
+        workflowName: props.workflowName ?? 'githubReconcileConnection',
         deduplicationID: props.deduplicationID,
         delaySeconds: 3600,
         appVersion: props.appVersion ?? DBOS.applicationVersion,
