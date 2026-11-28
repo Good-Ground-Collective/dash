@@ -12,7 +12,7 @@ export const navItems: readonly NavItem[] = [
   { label: 'Benches', href: '/benches', available: false },
 ];
 
-/** Which top-level section a URL belongs to. */
+/** Whether a URL is a nav entry's page or one beneath it. */
 export class NavItems {
   /** Whether `pathname` is `href` or a page under it. Home matches only itself. */
   static isCurrent(props: { pathname: string; href: string }): boolean {
@@ -21,5 +21,19 @@ export class NavItems {
       props.pathname === props.href ||
       props.pathname.startsWith(`${props.href}/`)
     );
+  }
+
+  /** The longest of `hrefs` that `pathname` is current for, or undefined when none is. */
+  static mostSpecific(props: {
+    pathname: string;
+    hrefs: readonly string[];
+  }): string | undefined {
+    return props.hrefs
+      .filter((href) => NavItems.isCurrent({ pathname: props.pathname, href }))
+      .reduce<string | undefined>(
+        (best, href) =>
+          best === undefined || href.length > best.length ? href : best,
+        undefined,
+      );
   }
 }

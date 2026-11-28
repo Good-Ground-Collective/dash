@@ -7,20 +7,17 @@
   import { HttpPasskeyAuth } from '#lib/auth/passkey-auth.ts';
   import type { BuildStamp } from '#lib/build/build-stamp.ts';
   import { Initials } from '#lib/shell/initials.ts';
+  import { serviceAccountsSection } from '#lib/settings/settings-sections.ts';
   import { NavItems } from '#lib/shell/nav-items.ts';
 
   let { viewer, build }: { viewer: Viewer | null; build: BuildStamp } =
     $props();
 
-  const serviceAccountsCurrent = $derived(
-    NavItems.isCurrent({
+  const currentMenuHref = $derived(
+    NavItems.mostSpecific({
       pathname: page.url.pathname,
-      href: '/settings/service-accounts',
+      hrefs: ['/settings', serviceAccountsSection.href],
     }),
-  );
-  const settingsCurrent = $derived(
-    NavItems.isCurrent({ pathname: page.url.pathname, href: '/settings' }) &&
-      !serviceAccountsCurrent,
   );
 
   const signOut = async (): Promise<void> => {
@@ -66,7 +63,9 @@
                       {...itemProps}
                       class="item"
                       href="/settings"
-                      aria-current={settingsCurrent ? 'page' : undefined}
+                      aria-current={currentMenuHref === '/settings'
+                        ? 'page'
+                        : undefined}
                     >
                       Settings
                     </a>
@@ -77,10 +76,13 @@
                     <a
                       {...itemProps}
                       class="item"
-                      href="/settings/service-accounts"
-                      aria-current={serviceAccountsCurrent ? 'page' : undefined}
+                      href={serviceAccountsSection.href}
+                      aria-current={currentMenuHref ===
+                      serviceAccountsSection.href
+                        ? 'page'
+                        : undefined}
                     >
-                      Service accounts
+                      {serviceAccountsSection.label}
                     </a>
                   {/snippet}
                 </DropdownMenu.Item>

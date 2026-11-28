@@ -13,3 +13,17 @@ describe('NavItems.isCurrent', () => {
     expect(NavItems.isCurrent({ pathname, href })).toBe(expected);
   });
 });
+
+describe('NavItems.mostSpecific', () => {
+  const hrefs = ['/settings', '/settings/service-accounts'];
+
+  it.each([
+    ['/settings/service-accounts', '/settings/service-accounts'],
+    ['/settings/service-accounts/new', '/settings/service-accounts'],
+    ['/settings/passkeys', '/settings'],
+    ['/settings', '/settings'],
+    ['/agents', undefined],
+  ])('%s picks %s', (pathname, expected) => {
+    expect(NavItems.mostSpecific({ pathname, hrefs })).toBe(expected);
+  });
+});

@@ -11,6 +11,12 @@ export interface SettingsGroup {
   sections: NonEmpty<SettingsSection>;
 }
 
+/** Service accounts, which the account menu also links to. */
+export const serviceAccountsSection: SettingsSection = {
+  label: 'Service accounts',
+  href: '/settings/service-accounts',
+};
+
 export const settingsGroups: NonEmpty<SettingsGroup> = [
   {
     label: 'Account',
@@ -27,9 +33,7 @@ export const settingsGroups: NonEmpty<SettingsGroup> = [
   },
   {
     label: 'Agents',
-    sections: [
-      { label: 'Service accounts', href: '/settings/service-accounts' },
-    ],
+    sections: [serviceAccountsSection],
   },
   {
     label: 'Briefings',
