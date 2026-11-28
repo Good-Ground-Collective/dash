@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "bench.processes",
+  "id": "6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f",
+  "emittedAt": "2026-11-27T09:30:00Z",
+  "payload": {
+    "processes": [
+      {
+        "name": "claude",
+        "running": true,
+        "instances": 2,
+        "cpuPercent": 35.2,
+        "memoryBytes": 1288490188
+      },
+      {
+        "name": "codex",
+        "running": false,
+        "instances": 0,
+        "cpuPercent": 0,
+        "memoryBytes": 0
+      }
+    ]
+  }
+}
