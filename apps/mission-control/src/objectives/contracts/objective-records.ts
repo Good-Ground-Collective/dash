@@ -37,6 +37,7 @@ export const placementRecordSchema = z.object({
 export const ticketRecordSchema = trackedRecordSchema.extend({
   epicNodeId: nodeIdSchema,
   position: z.int().nonnegative(),
+  assignees: z.array(z.string().min(1)),
 });
 
 export const activityRecordSchema = z.object({

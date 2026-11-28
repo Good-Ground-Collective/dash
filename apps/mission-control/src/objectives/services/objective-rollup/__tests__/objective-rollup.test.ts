@@ -37,6 +37,31 @@ class Rolled {
     );
   }
 
+  /** Epic E2 with 30 tickets, the last two open. */
+  static crowdedEpic() {
+    const [template] = connection.records.tickets;
+    const crowded: ConnectionObjectives = {
+      ...connection,
+      records: {
+        ...connection.records,
+        tickets: Array.from({ length: 30 }, (_, position) => ({
+          ...template!,
+          nodeId: `X${position}`,
+          epicNodeId: 'E2',
+          position,
+          state: position < 28 ? ('closed' as const) : ('open' as const),
+        })),
+      },
+    };
+    return ObjectiveRollup.initiatives({
+      connection: crowded,
+      overlays: new Map(),
+      now: new Date(),
+    })
+      .flatMap(({ epics }) => epics)
+      .find(({ id }) => id === 'E2');
+  }
+
   static parked(id: string): ReadonlyMap<string, Overlay> {
     return new Map([
       [
@@ -136,5 +161,51 @@ describe('ObjectiveRollup next ticket and latest update', () => {
       ticket: { id: 'T2', title: 'Ticket T2' },
     });
     expect(Rolled.initiative('PVT_launch')?.latestUpdate?.ticket.id).toBe('T2');
+  });
+});
+
+describe('ObjectiveRollup tasks', () => {
+  it('lists an epic’s open tasks before its closed ones, with their assignees and links', () => {
+    expect(Rolled.epic('E1')?.tasks).toEqual({
+      total: 3,
+      items: [
+        {
+          id: 'T2',
+          title: 'Ticket T2',
+          url: 'https://github.com/acme/app/issues/T2',
+          state: 'open',
+          assignees: ['grace'],
+        },
+        {
+          id: 'T3',
+          title: 'Ticket T3',
+          url: 'https://github.com/acme/app/issues/T3',
+          state: 'open',
+          assignees: [],
+        },
+        {
+          id: 'T1',
+          title: 'Ticket T1',
+          url: 'https://github.com/acme/app/issues/T1',
+          state: 'closed',
+          assignees: [],
+        },
+      ],
+    });
+  });
+
+  it('gives an epic with no tickets an empty list', () => {
+    expect(Rolled.epic('E2')?.tasks).toEqual({ items: [], total: 0 });
+  });
+
+  it('caps the list at 25 open-first tasks and still reports the total', () => {
+    const epic = Rolled.crowdedEpic();
+
+    expect(epic?.tasks.total).toBe(30);
+    expect(epic?.tasks.items).toHaveLength(25);
+    expect(epic?.tasks.items.slice(0, 2).map(({ id }) => id)).toEqual([
+      'X28',
+      'X29',
+    ]);
   });
 });

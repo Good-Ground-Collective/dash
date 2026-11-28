@@ -1,0 +1,1 @@
+ALTER TABLE "objective_ticket" ADD COLUMN "assignees" text[] DEFAULT '{}' NOT NULL;

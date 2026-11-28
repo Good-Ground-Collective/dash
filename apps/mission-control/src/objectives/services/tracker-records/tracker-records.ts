@@ -1,6 +1,9 @@
-import type { TrackerSnapshot } from '@dash/integrations-core';
+import type { Ticket, TrackerSnapshot } from '@dash/integrations-core';
 
-import type { ObjectiveRecords } from '#src/objectives/contracts/objective-records.ts';
+import type {
+  ObjectiveRecords,
+  TicketRecord,
+} from '#src/objectives/contracts/objective-records.ts';
 
 /** A tracker's provider-neutral snapshot in the shape of the objective tables. */
 export class TrackerRecords {
@@ -47,22 +50,29 @@ export class TrackerRecords {
             epicNodeId: epic.externalId,
           })),
       ),
-      tickets: tickets.map((ticket) => ({
-        nodeId: ticket.externalId,
-        epicNodeId: ticket.epicId,
-        position: ticket.position,
-        title: ticket.title,
-        url: ticket.url,
-        state: ticket.state,
-        priority: ticket.priority,
-        lastActivityAt: ticket.lastActivityAt,
-      })),
+      tickets: tickets.map((ticket) => TrackerRecords.ticket(ticket)),
       activity: snapshot.activity
         .filter(({ ticketId }) => ticketIds.has(ticketId))
         .map(({ ticketId, ...activity }) => ({
           ...activity,
           ticketNodeId: ticketId,
         })),
+    };
+  }
+
+  private static ticket(
+    ticket: Ticket & { epicId: string; position: number },
+  ): TicketRecord {
+    return {
+      nodeId: ticket.externalId,
+      epicNodeId: ticket.epicId,
+      position: ticket.position,
+      assignees: ticket.assignees,
+      title: ticket.title,
+      url: ticket.url,
+      state: ticket.state,
+      priority: ticket.priority,
+      lastActivityAt: ticket.lastActivityAt,
     };
   }
 }
