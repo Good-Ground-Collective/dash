@@ -64,6 +64,7 @@ export class FakeGithubGraphql {
           review: ActivityNodes.page({ nodes: [] }),
           authored: ActivityNodes.page({ nodes: [] }),
           assigned: ActivityNodes.page({ nodes: [] }),
+          merged: ActivityNodes.page({ nodes: [] }),
         },
       }),
     }).on({

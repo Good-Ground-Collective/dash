@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemoryLinkedAccountRepository } from '#src/connections/__tests__/support/in-memory-connections.ts';
 import {
   adaId,
   FakeActivityFeed,
+  fixedNow,
   GithubFeedFixtures,
 } from '#src/github-feed/__tests__/support/github-feed-fixtures.ts';
 import {
@@ -39,6 +40,14 @@ class Source {
   }
 }
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: fixedNow });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('OwnedGithubSource', () => {
   it('reads the installation for the login the connecting person linked', async () => {
     const { source, feed } = await new Source().linked('ada');
@@ -51,6 +60,7 @@ describe('OwnedGithubSource', () => {
         account: { login: 'acme', kind: 'organization' },
         viewerLogin: 'ada',
         repositories: ['acme/app'],
+        since: '2026-11-24T12:00:00.000Z',
       },
     ]);
     expect(snapshot.viewerLogin).toBe('ada');

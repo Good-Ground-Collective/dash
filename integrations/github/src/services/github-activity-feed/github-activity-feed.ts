@@ -3,6 +3,7 @@ import {
   type ActivityFeed,
   type ActivityQuery,
   activityQuerySchema,
+  type ActivityRelease,
   type ActivityRepository,
   type ActivityRun,
 } from '@dash/integrations-core';
@@ -33,6 +34,7 @@ const toleratedRepositoryErrors = new Set(['NOT_FOUND', 'FORBIDDEN']);
 interface DefaultBranches {
   repositories: ActivityRepository[];
   runs: ActivityRun[];
+  releases: ActivityRelease[];
 }
 
 const loginSchema = z
@@ -54,9 +56,9 @@ const githubActivityQuerySchema = activityQuerySchema.extend({
 });
 
 /**
- * A person's open work in one installation, read with an installation token: three issue
- * searches share each GraphQL request, and default branches are read in batches of
- * repository aliases. Pages and repositories are capped, so a busy account costs at most
+ * A person's work in one installation, read with an installation token: four issue
+ * searches share each GraphQL request, and default branches and recent releases are read
+ * in batches of repository aliases. Pages and repositories are capped, so a busy account costs at most
  * three search requests and three branch requests.
  */
 export class GithubActivityFeed implements ActivityFeed {
@@ -75,6 +77,7 @@ export class GithubActivityFeed implements ActivityFeed {
     const searched = await new GithubActivitySearch({ graphql }).run({
       viewerLogin: parsed.viewerLogin,
       account: parsed.account,
+      mergedSince: GithubActivityFeed.searchDate(parsed.since),
     });
     const candidates = GithubActivityFeed.branchCandidates({
       searched,
@@ -83,6 +86,7 @@ export class GithubActivityFeed implements ActivityFeed {
     const branches = await this.defaultBranches({
       graphql,
       fullNames: candidates.slice(0, maxDefaultBranchRepositories),
+      since: parsed.since,
     });
 
     return GithubActivityFeed.assemble({
@@ -96,9 +100,12 @@ export class GithubActivityFeed implements ActivityFeed {
   private async defaultBranches(props: {
     graphql: GraphqlCall;
     fullNames: readonly string[];
+    since: string;
   }): Promise<DefaultBranches> {
+    const since = new Date(props.since).getTime();
     const repositories: ActivityRepository[] = [];
     const runs: ActivityRun[] = [];
+    const releases: ActivityRelease[] = [];
     for (
       let start = 0;
       start < props.fullNames.length;
@@ -121,10 +128,20 @@ export class GithubActivityFeed implements ActivityFeed {
           const read = GithubActivityRecords.defaultBranch(node);
           repositories.push(read.repository);
           runs.push(...read.runs);
+          releases.push(
+            ...read.releases.filter(
+              (release) => new Date(release.publishedAt).getTime() >= since,
+            ),
+          );
         }
       }
     }
-    return { repositories, runs };
+    return { repositories, runs, releases };
+  }
+
+  /** GitHub's search takes whole seconds in UTC. */
+  private static searchDate(since: string): string {
+    return new Date(since).toISOString().replace(/\.\d{3}Z$/u, 'Z');
   }
 
   private static repositoryVariables(fullNames: readonly string[]) {
@@ -144,8 +161,8 @@ export class GithubActivityFeed implements ActivityFeed {
     searched: SearchedActivity;
     repositories: readonly string[];
   }): string[] {
-    const { review, authored, assigned } = props.searched;
-    const touched = [...review, ...authored, ...assigned]
+    const { review, authored, assigned, merged } = props.searched;
+    const touched = [...review, ...authored, ...assigned, ...merged]
       .filter(({ repository }) => !repository.archived)
       .map(({ repository }) => repository.fullName);
     return [...new Set([...touched, ...props.repositories])];
@@ -156,10 +173,12 @@ export class GithubActivityFeed implements ActivityFeed {
     branches: DefaultBranches;
     truncated: boolean;
   }): Activity {
-    const { review, authored, assigned } = props.searched;
+    const { review, authored, assigned, merged } = props.searched;
     const repositories = new Map<string, ActivityRepository>();
     for (const repository of [
-      ...[...review, ...authored, ...assigned].map((node) => node.repository),
+      ...[...review, ...authored, ...assigned, ...merged].map(
+        (node) => node.repository,
+      ),
       ...props.branches.repositories,
     ]) {
       repositories.set(repository.externalId, repository);
@@ -182,6 +201,10 @@ export class GithubActivityFeed implements ActivityFeed {
       authoredPullRequests: authored.map((node) =>
         GithubActivityRecords.pullRequest(node),
       ),
+      mergedPullRequests: merged.map((node) =>
+        GithubActivityRecords.pullRequest(node),
+      ),
+      releases: props.branches.releases,
       failedRuns: [...runs.values()],
       assignedIssues: assigned.map((node) => GithubActivityRecords.issue(node)),
       truncated: props.truncated,

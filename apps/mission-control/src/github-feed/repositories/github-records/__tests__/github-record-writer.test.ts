@@ -210,3 +210,108 @@ describe.skipIf(databaseUrl === null)(
     });
   },
 );
+
+const mergedAt = '2026-11-26T09:00:00Z';
+const withRecent = ActivityRecords.from({
+  activity: {
+    ...GithubFeedFixtures.activity(),
+    mergedPullRequests: [
+      GithubFeedFixtures.mergedPullRequest({ number: 3, mergedAt }),
+    ],
+    releases: [GithubFeedFixtures.release({ id: 'v1', publishedAt: mergedAt })],
+  },
+  viewerLogin: 'ada',
+});
+const withoutRecent = { ...records, pullRequests: [], releases: [] };
+const hour = 3_600_000;
+
+class Replaced {
+  static async at(props: { when: Date; recordsRead: typeof records }) {
+    await GithubRecordsDatabase.required(store).writer.replace({
+      ...read,
+      records: props.recordsRead,
+      syncedAt: props.when,
+    });
+    return Stored.owned();
+  }
+}
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter keeps recent merges and releases',
+  () => {
+    it('stores the merge time and the release', async () => {
+      const owned = await Replaced.at({
+        when: fixedNow,
+        recordsRead: withRecent,
+      });
+
+      expect(
+        owned?.records.pullRequests.find(({ nodeId }) => nodeId === 'PR_3'),
+      ).toMatchObject({
+        state: 'merged',
+        mergedAt: '2026-11-26T09:00:00.000Z',
+      });
+      expect(owned?.records.releases).toEqual([
+        expect.objectContaining({
+          nodeId: 'REL_v1',
+          tagName: 'v1',
+          publishedAt: '2026-11-26T09:00:00.000Z',
+        }),
+      ]);
+    });
+
+    it('keeps them through a read that no longer reports them', async () => {
+      await Replaced.at({ when: fixedNow, recordsRead: withRecent });
+
+      const owned = await Replaced.at({
+        when: later,
+        recordsRead: withoutRecent,
+      });
+
+      expect(owned?.records.pullRequests.map(({ nodeId }) => nodeId)).toEqual([
+        'PR_3',
+      ]);
+      expect(owned?.records.releases).toHaveLength(1);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordWriter ages out recent merges and releases',
+  () => {
+    it('keeps them up to 48 hours after they happened', async () => {
+      await Replaced.at({ when: fixedNow, recordsRead: withRecent });
+
+      const owned = await Replaced.at({
+        when: new Date(Date.parse(mergedAt) + 48 * hour),
+        recordsRead: withoutRecent,
+      });
+
+      expect(owned?.records.pullRequests).toHaveLength(1);
+      expect(owned?.records.releases).toHaveLength(1);
+    });
+
+    it('ages them out once 48 hours have passed', async () => {
+      await Replaced.at({ when: fixedNow, recordsRead: withRecent });
+
+      const owned = await Replaced.at({
+        when: new Date(Date.parse(mergedAt) + 48 * hour + 1000),
+        recordsRead: withoutRecent,
+      });
+
+      expect(owned?.records.pullRequests).toEqual([]);
+      expect(owned?.records.releases).toEqual([]);
+    });
+
+    it('never keeps an open pull request a read no longer reports', async () => {
+      await Replaced.at({ when: fixedNow, recordsRead: records });
+
+      const owned = await Replaced.at({
+        when: later,
+        recordsRead: withoutRecent,
+      });
+
+      expect(owned?.records.pullRequests).toEqual([]);
+    });
+  },
+);

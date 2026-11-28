@@ -1,4 +1,8 @@
-import type { Activity, ActivityPullRequest } from '@dash/integrations-core';
+import type {
+  Activity,
+  ActivityPullRequest,
+  ActivityRelease,
+} from '@dash/integrations-core';
 
 import type {
   GithubAssignmentRecord,
@@ -6,6 +10,7 @@ import type {
   GithubIssueRecord,
   GithubPullRequestRecord,
   GithubRecords,
+  GithubReleaseRecord,
   GithubReviewRequestRecord,
   GithubWorkflowRunRecord,
 } from '#src/github-feed/contracts/github-records.ts';
@@ -22,7 +27,11 @@ export class ActivityRecords {
   }): GithubRecords {
     const { activity, viewerLogin } = props;
     const pullRequests = ActivityRecords.unique(
-      [...activity.reviewRequests, ...activity.authoredPullRequests],
+      [
+        ...activity.reviewRequests,
+        ...activity.authoredPullRequests,
+        ...activity.mergedPullRequests,
+      ],
       (pullRequest) => pullRequest.externalId,
     );
 
@@ -39,6 +48,10 @@ export class ActivityRecords {
       ),
       pullRequests: pullRequests.map((pullRequest) =>
         ActivityRecords.pullRequest(pullRequest),
+      ),
+      releases: ActivityRecords.unique(
+        activity.releases.map((release) => ActivityRecords.release(release)),
+        (release) => release.nodeId,
       ),
       reviewRequests: ActivityRecords.unique(
         pullRequests.flatMap((pullRequest) =>
@@ -134,7 +147,24 @@ export class ActivityRecords {
       author: pullRequest.author,
       headRef: pullRequest.headRef,
       headSha: pullRequest.headSha,
+      mergedAt:
+        pullRequest.mergedAt === null
+          ? null
+          : new Date(pullRequest.mergedAt).toISOString(),
       updatedAt: new Date(pullRequest.updatedAt).toISOString(),
+    };
+  }
+
+  private static release(release: ActivityRelease): GithubReleaseRecord {
+    return {
+      nodeId: release.externalId,
+      repositoryNodeId: release.repositoryId,
+      tagName: release.tagName,
+      name: release.name,
+      url: release.url,
+      author: release.author,
+      prerelease: release.prerelease,
+      publishedAt: new Date(release.publishedAt).toISOString(),
     };
   }
 

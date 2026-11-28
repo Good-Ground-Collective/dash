@@ -135,6 +135,7 @@ export const githubPullRequestNodeSchema = z.object({
     .transform((value) => value.toLowerCase())
     .pipe(z.enum(['approved', 'changes_requested', 'review_required']))
     .nullable(),
+  mergedAt: z.iso.datetime({ offset: true }).nullable(),
   updatedAt: z.iso.datetime({ offset: true }),
   headRefName: z.string().min(1),
   headRefOid: z.string().min(1),
@@ -166,6 +167,20 @@ export const githubIssueNodeSchema = z.object({
   assignees: z.object({ nodes: z.array(loginSchema) }),
 });
 
+export const githubReleaseNodeSchema = z.object({
+  id: z.string().min(1),
+  name: z
+    .string()
+    .nullable()
+    .transform((name) => (name === null || name === '' ? null : name)),
+  tagName: z.string().min(1),
+  url: z.url(),
+  isDraft: z.boolean(),
+  isPrerelease: z.boolean(),
+  publishedAt: z.iso.datetime({ offset: true }).nullable(),
+  author: loginSchema.nullable(),
+});
+
 const searchPageSchema = <T extends z.ZodType>(node: T) =>
   z.object({
     pageInfo: z.object({
@@ -179,6 +194,7 @@ export const githubSearchDataSchema = z.object({
   review: searchPageSchema(githubPullRequestNodeSchema).optional(),
   authored: searchPageSchema(githubPullRequestNodeSchema).optional(),
   assigned: searchPageSchema(githubIssueNodeSchema).optional(),
+  merged: searchPageSchema(githubPullRequestNodeSchema).optional(),
 });
 
 export const githubDefaultBranchNodeSchema = z
@@ -187,6 +203,7 @@ export const githubDefaultBranchNodeSchema = z
     nameWithOwner: z.string().min(1),
     url: z.url(),
     isArchived: z.boolean(),
+    releases: z.object({ nodes: z.array(githubReleaseNodeSchema) }),
     defaultBranchRef: z
       .object({
         name: z.string().min(1),
@@ -213,6 +230,7 @@ export const githubGraphqlEnvelopeSchema = z.object({
 });
 
 export type GithubPullRequestNode = z.infer<typeof githubPullRequestNodeSchema>;
+export type GithubReleaseNode = z.infer<typeof githubReleaseNodeSchema>;
 export type GithubIssueNode = z.infer<typeof githubIssueNodeSchema>;
 export type GithubFailedSuite = z.infer<typeof githubFailedSuiteSchema>;
 export type GithubDefaultBranchNode = z.infer<

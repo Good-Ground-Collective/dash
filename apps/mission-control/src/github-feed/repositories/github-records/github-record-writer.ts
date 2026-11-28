@@ -1,11 +1,13 @@
-import { and, eq, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 
 import type { GithubRecords } from '#src/github-feed/contracts/github-records.ts';
+import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-retention/feed-retention.ts';
 import {
   githubAssignmentTable,
   githubCheckRollupTable,
   githubIssueTable,
   githubPullRequestTable,
+  githubReleaseTable,
   githubRepoTable,
   githubReviewRequestTable,
   githubSyncTable,
@@ -19,7 +21,6 @@ import {
 
 const prunedTables = [
   githubRepoTable,
-  githubPullRequestTable,
   githubReviewRequestTable,
   githubCheckRollupTable,
   githubWorkflowRunTable,
@@ -31,6 +32,8 @@ export interface GithubRecordWriter {
   /**
    * Upserts what a read found, keyed on GitHub node ids, and prunes every row of the
    * connection that read didn't report, such as closed pull requests and unassigned issues.
+   * Pull requests merged and releases published within the retention before the read are
+   * kept whether or not it reported them, and older ones age out.
    * A read that started before the one already stored is dropped, so an overlapping slow
    * read never brings back rows a newer one pruned.
    */
@@ -93,6 +96,7 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
             ),
           );
       }
+      await DrizzleGithubRecordWriter.pruneRecent({ transaction, ...props });
       await DrizzleGithubRecordWriter.recordSync({ transaction, ...props });
       return { applied: true };
     });
@@ -123,6 +127,44 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
           props.attemptedAt,
         )}`,
       });
+  }
+
+  private static async pruneRecent(props: {
+    transaction: Transaction;
+    connectionId: string;
+    syncedAt: Date;
+  }): Promise<void> {
+    const { transaction, connectionId, syncedAt } = props;
+    const cutoff = new Date(syncedAt.getTime() - recentActivityRetentionMs);
+    await transaction
+      .delete(githubPullRequestTable)
+      .where(
+        and(
+          eq(githubPullRequestTable.connectionId, connectionId),
+          or(
+            and(
+              lt(githubPullRequestTable.syncedAt, syncedAt),
+              or(
+                ne(githubPullRequestTable.state, 'merged'),
+                isNull(githubPullRequestTable.mergedAt),
+                lt(githubPullRequestTable.mergedAt, cutoff),
+              ),
+            ),
+            and(
+              eq(githubPullRequestTable.state, 'merged'),
+              lt(githubPullRequestTable.mergedAt, cutoff),
+            ),
+          ),
+        ),
+      );
+    await transaction
+      .delete(githubReleaseTable)
+      .where(
+        and(
+          eq(githubReleaseTable.connectionId, connectionId),
+          lt(githubReleaseTable.publishedAt, cutoff),
+        ),
+      );
   }
 
   private static async recordSync(props: {
@@ -175,11 +217,24 @@ export class DrizzleGithubRecordWriter implements GithubRecordWriter {
       ...stamp,
       updatedAt: new Date(record.updatedAt),
     });
+    const pullRequest = (record: GithubRecords['pullRequests'][number]) => ({
+      ...dated(record),
+      mergedAt: record.mergedAt === null ? null : new Date(record.mergedAt),
+    });
+    const release = (record: GithubRecords['releases'][number]) => ({
+      ...record,
+      ...stamp,
+      publishedAt: new Date(record.publishedAt),
+    });
 
     const stamped = <T extends object>(record: T) => ({ ...record, ...stamp });
     const writes = [
       { table: githubRepoTable, rows: records.repositories.map(stamped) },
-      { table: githubPullRequestTable, rows: records.pullRequests.map(dated) },
+      {
+        table: githubPullRequestTable,
+        rows: records.pullRequests.map(pullRequest),
+      },
+      { table: githubReleaseTable, rows: records.releases.map(release) },
       {
         table: githubReviewRequestTable,
         rows: records.reviewRequests.map(stamped),

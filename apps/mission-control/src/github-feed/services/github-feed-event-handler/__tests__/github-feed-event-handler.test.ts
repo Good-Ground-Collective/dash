@@ -28,6 +28,8 @@ describe('GithubFeedModule webhook events', () => {
     ['issues', 'closed'],
     ['issues', 'reopened'],
     ['issues', 'edited'],
+    ['release', 'published'],
+    ['release', 'deleted'],
     ['installation', 'suspend'],
     ['installation', 'unsuspend'],
     ['installation_repositories', 'added'],
@@ -44,6 +46,7 @@ describe('GithubFeedModule webhook events', () => {
     ['installation', 'deleted'],
     ['projects_v2_item', 'edited'],
     ['sub_issues', 'sub_issue_added'],
+    ['release', 'created'],
     ['star', 'created'],
     ['push', null],
   ])('leaves %s %s alone', (event, action) => {

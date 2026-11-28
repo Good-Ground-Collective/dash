@@ -50,7 +50,19 @@ export const githubPullRequestRecordSchema = z.object({
   author: z.string().min(1).nullable(),
   headRef: z.string().min(1),
   headSha: z.string().min(1),
+  mergedAt: timestampSchema.nullable(),
   updatedAt: timestampSchema,
+});
+
+export const githubReleaseRecordSchema = z.object({
+  nodeId: nodeIdSchema,
+  repositoryNodeId: nodeIdSchema,
+  tagName: z.string().min(1),
+  name: z.string().min(1).nullable(),
+  url: z.url(),
+  author: z.string().min(1).nullable(),
+  prerelease: z.boolean(),
+  publishedAt: timestampSchema,
 });
 
 export const githubReviewRequestRecordSchema = z.object({
@@ -100,10 +112,11 @@ export const githubAssignmentRecordSchema = z.object({
   role: z.enum(['review_requested', 'assignee']),
 });
 
-/** Everything one read of a connection found, in the shape of its tables. A later read replaces it whole. */
+/** Everything one read of a connection found, in the shape of its tables. A later read replaces it, except the merged pull requests and releases still within their retention. */
 export const githubRecordsSchema = z.object({
   repositories: z.array(githubRepositoryRecordSchema),
   pullRequests: z.array(githubPullRequestRecordSchema),
+  releases: z.array(githubReleaseRecordSchema),
   reviewRequests: z.array(githubReviewRequestRecordSchema),
   checkRollups: z.array(githubCheckRollupRecordSchema),
   workflowRuns: z.array(githubWorkflowRunRecordSchema),
@@ -118,6 +131,7 @@ export type GithubRepositoryRecord = z.infer<
 export type GithubPullRequestRecord = z.infer<
   typeof githubPullRequestRecordSchema
 >;
+export type GithubReleaseRecord = z.infer<typeof githubReleaseRecordSchema>;
 export type GithubReviewRequestRecord = z.infer<
   typeof githubReviewRequestRecordSchema
 >;

@@ -7,7 +7,7 @@ const failedSuiteFields = `conclusion workflowRun { id runNumber url event updat
 
 const pullRequestFields = `
   ... on PullRequest {
-    id number title url state isDraft mergeable reviewDecision updatedAt headRefName headRefOid
+    id number title url state isDraft mergeable reviewDecision mergedAt updatedAt headRefName headRefOid
     author { login }
     repository { ${repositoryFields} defaultBranchRef { name } }
     reviewRequests(first: 10) {
@@ -45,6 +45,10 @@ const issueFields = `
     assignees(first: 10) { nodes { login } }
   }`;
 
+const releaseFields = `id name tagName url isDraft isPrerelease publishedAt author { login }`;
+
+const releaseCount = 5;
+
 const pageInfo = 'pageInfo { hasNextPage endCursor }';
 
 const searchDocument = `
@@ -53,6 +57,7 @@ query DashActivity(
   $reviewQuery: String!, $reviewAfter: String, $withReview: Boolean!
   $authoredQuery: String!, $authoredAfter: String, $withAuthored: Boolean!
   $assignedQuery: String!, $assignedAfter: String, $withAssigned: Boolean!
+  $mergedQuery: String!, $mergedAfter: String, $withMerged: Boolean!
 ) {
   review: search(type: ISSUE, query: $reviewQuery, first: $pageSize, after: $reviewAfter) @include(if: $withReview) {
     ${pageInfo} nodes { ${pullRequestFields} }
@@ -62,6 +67,9 @@ query DashActivity(
   }
   assigned: search(type: ISSUE, query: $assignedQuery, first: $pageSize, after: $assignedAfter) @include(if: $withAssigned) {
     ${pageInfo} nodes { ${issueFields} }
+  }
+  merged: search(type: ISSUE, query: $mergedQuery, first: $pageSize, after: $mergedAfter) @include(if: $withMerged) {
+    ${pageInfo} nodes { ${pullRequestFields} }
   }
 }`;
 
@@ -82,6 +90,7 @@ export const githubActivityQueries = {
         (index) => `
   repository${index}: repository(owner: $owner${index}, name: $name${index}) {
     ${repositoryFields}
+    releases(first: ${releaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }
     defaultBranchRef {
       name
       target {

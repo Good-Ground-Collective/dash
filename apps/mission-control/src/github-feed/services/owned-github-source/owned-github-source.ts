@@ -11,6 +11,7 @@ import {
   ConnectorUnknownError,
   ViewerNotLinkedError,
 } from '#src/github-feed/errors.ts';
+import { recentActivityRetentionMs } from '#src/github-feed/definitions/feed-retention/feed-retention.ts';
 import { ActivityRecords } from '#src/github-feed/services/activity-records/activity-records.ts';
 
 /**
@@ -53,6 +54,7 @@ export class OwnedGithubSource implements GithubSource {
       account: target.account,
       viewerLogin,
       repositories: [...target.repositories],
+      since: new Date(Date.now() - recentActivityRetentionMs).toISOString(),
     });
     return {
       viewerLogin,

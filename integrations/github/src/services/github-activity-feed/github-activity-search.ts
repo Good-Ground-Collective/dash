@@ -11,12 +11,13 @@ import type { GraphqlCall } from '#src/services/github-graphql/github-graphql.ts
 const searchPageSize = 50;
 const maxSearchPages = 3;
 
-const searchKeys = ['review', 'authored', 'assigned'] as const;
+const searchKeys = ['review', 'authored', 'assigned', 'merged'] as const;
 
 export interface SearchedActivity {
   review: GithubPullRequestNode[];
   authored: GithubPullRequestNode[];
   assigned: GithubIssueNode[];
+  merged: GithubPullRequestNode[];
   truncated: boolean;
 }
 
@@ -29,22 +30,25 @@ interface SearchCursors {
   review: Cursor;
   authored: Cursor;
   assigned: Cursor;
+  merged: Cursor;
 }
 
 interface SearchQueries {
   review: string;
   authored: string;
   assigned: string;
+  merged: string;
 }
 
 interface SearchScope {
   viewerLogin: string;
+  mergedSince: string;
   account: { login: string; kind: 'organization' | 'user' };
 }
 
 /**
- * The viewer's review requests, open pull requests and assigned issues in one account, as
- * three issue searches that share each request. A search drops out of later pages once it
+ * The viewer's review requests, open pull requests, assigned issues and recently merged
+ * pull requests in one account, as four issue searches that share each request. A search drops out of later pages once it
  * has no next page; none reads past `maxSearchPages`.
  */
 export class GithubActivitySearch {
@@ -60,11 +64,13 @@ export class GithubActivitySearch {
       review: { after: null, done: false },
       authored: { after: null, done: false },
       assigned: { after: null, done: false },
+      merged: { after: null, done: false },
     };
     const found: SearchedActivity = {
       review: [],
       authored: [],
       assigned: [],
+      merged: [],
       truncated: false,
     };
 
@@ -108,6 +114,10 @@ export class GithubActivitySearch {
       found.assigned.push(...data.assigned.nodes);
       cursors.assigned = GithubActivitySearch.next(data.assigned.pageInfo);
     }
+    if (data.merged !== undefined) {
+      found.merged.push(...data.merged.nodes);
+      cursors.merged = GithubActivitySearch.next(data.merged.pageInfo);
+    }
   }
 
   private static next(pageInfo: {
@@ -137,6 +147,9 @@ export class GithubActivitySearch {
       assignedQuery: queries.assigned,
       assignedAfter: cursors.assigned.after,
       withAssigned: active.includes('assigned'),
+      mergedQuery: queries.merged,
+      mergedAfter: cursors.merged.after,
+      withMerged: active.includes('merged'),
     } satisfies GithubGraphqlVariables;
   }
 
@@ -149,6 +162,7 @@ export class GithubActivitySearch {
       review: `is:pr ${open} review-requested:${scope.viewerLogin} ${filter}`,
       authored: `is:pr ${open} author:${scope.viewerLogin} ${filter}`,
       assigned: `is:issue ${open} assignee:${scope.viewerLogin} ${filter}`,
+      merged: `is:pr is:merged merged:>=${scope.mergedSince} archived:false sort:updated-desc author:${scope.viewerLogin} ${filter}`,
     };
   }
 }

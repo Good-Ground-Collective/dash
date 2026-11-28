@@ -1,6 +1,7 @@
 import type {
   ActivityIssue,
   ActivityPullRequest,
+  ActivityRelease,
   ActivityRepository,
   ActivityRun,
 } from '@dash/integrations-core';
@@ -10,14 +11,16 @@ import type {
   GithubFailedSuite,
   GithubIssueNode,
   GithubPullRequestNode,
+  GithubReleaseNode,
 } from '#src/contracts/github-activity-response.ts';
 
 type FailedSuite = NonNullable<GithubFailedSuite>;
 
-/** A default branch's repository and the runs that failed on its head commit. */
+/** A repository, the runs that failed on its default branch head and the releases it published. */
 export interface DefaultBranchActivity {
   repository: ActivityRepository;
   runs: ActivityRun[];
+  releases: ActivityRelease[];
 }
 
 /** GraphQL nodes read as provider-neutral activity records. */
@@ -67,6 +70,7 @@ export class GithubActivityRecords {
           requestedReviewer === null ? [] : [requestedReviewer],
       ),
       checks: commit?.statusCheckRollup ?? null,
+      mergedAt: node.mergedAt,
       updatedAt: node.updatedAt,
     };
   }
@@ -102,6 +106,28 @@ export class GithubActivityRecords {
     };
   }
 
+  /** `null` for a draft, which GitHub has not published. */
+  static release(props: {
+    node: GithubReleaseNode;
+    repositoryId: string;
+  }): ActivityRelease | null {
+    const { node } = props;
+    if (node.isDraft || node.publishedAt === null) {
+      return null;
+    }
+    return {
+      provider: 'github',
+      externalId: node.id,
+      url: node.url,
+      repositoryId: props.repositoryId,
+      tagName: node.tagName,
+      name: node.name,
+      author: node.author?.login ?? null,
+      prerelease: node.isPrerelease,
+      publishedAt: node.publishedAt,
+    };
+  }
+
   static defaultBranch(
     node: NonNullable<GithubDefaultBranchNode>,
   ): DefaultBranchActivity {
@@ -114,14 +140,22 @@ export class GithubActivityRecords {
       defaultBranch: branch?.name ?? null,
       archived: node.isArchived,
     };
+    const releases = node.releases.nodes.flatMap((release) => {
+      const read = GithubActivityRecords.release({
+        node: release,
+        repositoryId: node.id,
+      });
+      return read === null ? [] : [read];
+    });
     const headSha = branch?.target?.oid;
     if (branch === null || headSha === undefined) {
-      return { repository, runs: [] };
+      return { repository, runs: [], releases };
     }
 
     const suites = branch.target?.checkSuites?.nodes ?? [];
     return {
       repository,
+      releases,
       runs: suites.flatMap((suite) =>
         suite === null
           ? []

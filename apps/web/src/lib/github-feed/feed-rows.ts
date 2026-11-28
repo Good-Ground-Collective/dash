@@ -1,6 +1,7 @@
 import type {
   GithubFeedIssue,
   GithubFeedPullRequest,
+  GithubFeedRelease,
   GithubFeedRun,
 } from '#lib/api/github-feed-contracts.ts';
 
@@ -66,6 +67,34 @@ export class FeedRows {
     if (checks !== null) badges.push(checks);
 
     return { ...FeedRows.pullBase(pull), detail: null, badges };
+  }
+
+  /** A pull request of yours that merged, timed by its merge. */
+  static mergedPullRequest(pull: GithubFeedPullRequest): FeedRow {
+    return {
+      ...FeedRows.pullBase(pull),
+      updatedAt: pull.mergedAt ?? pull.updatedAt,
+      detail: FeedRows.byAuthor(pull.author),
+      badges: [{ label: 'Merged', tone: 'ok' }],
+    };
+  }
+
+  /** A published release, linking to the release itself. */
+  static release(release: GithubFeedRelease): FeedRow {
+    return {
+      id: release.id,
+      href: release.url,
+      title: release.name ?? release.tagName,
+      context: `${release.repository.fullName} · ${release.tagName}`,
+      detail: FeedRows.byAuthor(release.author),
+      updatedAt: release.publishedAt,
+      badges: [
+        { label: 'Shipped', tone: 'ok' },
+        ...(release.prerelease
+          ? [{ label: 'Pre-release', tone: 'neutral' } satisfies FeedBadge]
+          : []),
+      ],
+    };
   }
 
   static failedRun(run: GithubFeedRun): FeedRow {
