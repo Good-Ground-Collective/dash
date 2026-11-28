@@ -14,14 +14,19 @@ import type {
   GithubIssueNode,
   GithubPullRequestNode,
   GithubReleaseNode,
+  GithubReleasesNode,
 } from '#src/contracts/github-activity-response.ts';
 
 type FailedSuite = NonNullable<GithubFailedSuite>;
 
-/** A repository, the runs that failed on its default branch head and the releases it published. */
+/** A repository and the runs that failed on its default branch head. */
 export interface DefaultBranchActivity {
   repository: ActivityRepository;
   runs: ActivityRun[];
+}
+
+/** The releases a repository published, and how much of its history the read covered. */
+export interface ReleasesActivity {
   releases: ActivityRelease[];
   releaseRead: ActivityReleaseRead;
 }
@@ -131,6 +136,29 @@ export class GithubActivityRecords {
     };
   }
 
+  static releases(node: NonNullable<GithubReleasesNode>): ReleasesActivity {
+    const releases = node.releases.nodes.flatMap((release) => {
+      const read = GithubActivityRecords.release({
+        node: release,
+        repositoryId: node.id,
+      });
+      return read === null ? [] : [read];
+    });
+    return {
+      releases,
+      releaseRead: {
+        repositoryId: node.id,
+        exhaustive: node.releases.nodes.length < githubReleaseCount,
+        oldestPublishedAt:
+          releases
+            .map(({ publishedAt }) => publishedAt)
+            .toSorted(
+              (left, right) => Date.parse(left) - Date.parse(right),
+            )[0] ?? null,
+      },
+    };
+  }
+
   static defaultBranch(
     node: NonNullable<GithubDefaultBranchNode>,
   ): DefaultBranchActivity {
@@ -143,32 +171,14 @@ export class GithubActivityRecords {
       defaultBranch: branch?.name ?? null,
       archived: node.isArchived,
     };
-    const releases = node.releases.nodes.flatMap((release) => {
-      const read = GithubActivityRecords.release({
-        node: release,
-        repositoryId: node.id,
-      });
-      return read === null ? [] : [read];
-    });
-    const releaseRead: ActivityReleaseRead = {
-      repositoryId: node.id,
-      exhaustive: node.releases.nodes.length < githubReleaseCount,
-      oldestPublishedAt:
-        releases
-          .map(({ publishedAt }) => publishedAt)
-          .toSorted((left, right) => Date.parse(left) - Date.parse(right))[0] ??
-        null,
-    };
     const headSha = branch?.target?.oid;
     if (branch === null || headSha === undefined) {
-      return { repository, runs: [], releases, releaseRead };
+      return { repository, runs: [] };
     }
 
     const suites = branch.target?.checkSuites?.nodes ?? [];
     return {
       repository,
-      releases,
-      releaseRead,
       runs: suites.flatMap((suite) =>
         suite === null
           ? []

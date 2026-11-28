@@ -203,7 +203,6 @@ export const githubDefaultBranchNodeSchema = z
     nameWithOwner: z.string().min(1),
     url: z.url(),
     isArchived: z.boolean(),
-    releases: z.object({ nodes: z.array(githubReleaseNodeSchema) }),
     defaultBranchRef: z
       .object({
         name: z.string().min(1),
@@ -217,6 +216,13 @@ export const githubDefaultBranchNodeSchema = z
           .nullable(),
       })
       .nullable(),
+  })
+  .nullable();
+
+export const githubReleasesNodeSchema = z
+  .object({
+    id: z.string().min(1),
+    releases: z.object({ nodes: z.array(githubReleaseNodeSchema) }),
   })
   .nullable();
 
@@ -236,6 +242,7 @@ export type GithubFailedSuite = z.infer<typeof githubFailedSuiteSchema>;
 export type GithubDefaultBranchNode = z.infer<
   typeof githubDefaultBranchNodeSchema
 >;
+export type GithubReleasesNode = z.infer<typeof githubReleasesNodeSchema>;
 export type GithubSearchData = z.infer<typeof githubSearchDataSchema>;
 export type GithubGraphqlData = z.infer<typeof githubGraphqlDataSchema>;
 export type GithubGraphqlVariables = Readonly<

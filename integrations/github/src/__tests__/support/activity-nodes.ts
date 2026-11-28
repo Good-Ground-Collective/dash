@@ -137,11 +137,9 @@ export class ActivityNodes {
   static defaultBranchNode(props: {
     fullName: string;
     suites?: GithubJson[];
-    releases?: GithubJson[];
   }): GithubBody {
     return {
       ...ActivityNodes.repositoryNode(props),
-      releases: { nodes: props.releases ?? [] },
       defaultBranchRef: {
         name: 'main',
         target: {
@@ -149,6 +147,16 @@ export class ActivityNodes {
           checkSuites: { nodes: props.suites ?? [] },
         },
       },
+    };
+  }
+
+  static releasesNode(props: {
+    fullName: string;
+    releases?: GithubJson[];
+  }): GithubBody {
+    return {
+      id: `R_${props.fullName}`,
+      releases: { nodes: props.releases ?? [] },
     };
   }
 }

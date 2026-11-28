@@ -20,7 +20,7 @@ const {
   issueNode,
   failedSuite,
   defaultBranchNode,
-  releaseNode,
+  releasesNode,
 } = ActivityNodes;
 
 const busyAccount = new FakeGithubGraphql()
@@ -65,27 +65,6 @@ const busyAccount = new FakeGithubGraphql()
       data: {
         repository0: defaultBranchNode({
           fullName: 'acme/app',
-          releases: [
-            ...Array.from({ length: 5 }, (_, index) =>
-              releaseNode({
-                id: `REL_newer_draft_${index}`,
-                publishedAt: null,
-                draft: true,
-              }),
-            ),
-            releaseNode({
-              id: 'REL_new',
-              name: 'Dash 1.2.0',
-              publishedAt: '2026-11-26T09:00:00Z',
-            }),
-            releaseNode({ id: 'REL_old', publishedAt: '2026-11-20T09:00:00Z' }),
-            releaseNode({
-              id: 'REL_draft',
-              publishedAt: '2026-11-26T09:30:00Z',
-              draft: true,
-            }),
-            releaseNode({ id: 'REL_unpublished', publishedAt: null }),
-          ],
           suites: [
             failedSuite({
               id: 'WFR_9',
@@ -96,6 +75,12 @@ const busyAccount = new FakeGithubGraphql()
           ],
         }),
       },
+    }),
+  })
+  .on({
+    operation: 'DashReleases',
+    reply: () => ({
+      data: { repository0: releasesNode({ fullName: 'acme/app' }) },
     }),
   });
 
@@ -160,31 +145,6 @@ describe('GithubActivityFeed merges and releases', () => {
     expect(
       activity.failedRuns.map(({ externalId }) => externalId),
     ).not.toContain('WFR_merged');
-  });
-
-  it('reads published releases since the cutoff, behind newer drafts, and skips drafts and older ones', async () => {
-    const activity = await busyAccount.feed().read(query);
-
-    expect(activity.releases).toEqual([
-      {
-        provider: 'github',
-        externalId: 'REL_new',
-        url: 'https://github.com/acme/app/releases/tag/v-REL_new',
-        repositoryId: 'R_acme/app',
-        tagName: 'v-REL_new',
-        name: 'Dash 1.2.0',
-        author: 'grace',
-        prerelease: false,
-        publishedAt: '2026-11-26T09:00:00Z',
-      },
-    ]);
-    expect(activity.releaseReads).toEqual([
-      {
-        repositoryId: 'R_acme/app',
-        exhaustive: true,
-        oldestPublishedAt: '2026-11-20T09:00:00Z',
-      },
-    ]);
   });
 });
 

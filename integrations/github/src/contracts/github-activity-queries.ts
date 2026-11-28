@@ -78,6 +78,24 @@ query DashActivity(
   }
 }`;
 
+class RepositoryBatch {
+  static variables(count: number): string {
+    return Array.from(
+      { length: count },
+      (_, index) => `$owner${index}: String!, $name${index}: String!`,
+    ).join(', ');
+  }
+
+  static aliases(props: { count: number; fields: string }): string {
+    return Array.from(
+      { length: props.count },
+      (_, index) => `
+  repository${index}: repository(owner: $owner${index}, name: $name${index}) {${props.fields}
+  }`,
+    ).join('');
+  }
+}
+
 /**
  * The GraphQL documents the activity feed sends. Repositories are batched as aliases
  * `repository0`, `repository1`… whose owner and name travel as variables, never in the text.
@@ -86,16 +104,11 @@ export const githubActivityQueries = {
   search: searchDocument,
 
   defaultBranches(count: number): string {
-    const indexes = Array.from({ length: count }, (_, index) => index);
-    const variables = indexes
-      .map((index) => `$owner${index}: String!, $name${index}: String!`)
-      .join(', ');
-    const fields = indexes
-      .map(
-        (index) => `
-  repository${index}: repository(owner: $owner${index}, name: $name${index}) {
+    return `query DashDefaultBranches(${RepositoryBatch.variables(count)}) {${RepositoryBatch.aliases(
+      {
+        count,
+        fields: `
     ${repositoryFields}
-    releases(first: ${githubReleaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }
     defaultBranchRef {
       name
       target {
@@ -104,10 +117,23 @@ export const githubActivityQueries = {
           checkSuites(first: 20, filterBy: { appId: ${actionsAppId} }) { nodes { ${failedSuiteFields} } }
         }
       }
-    }
-  }`,
-      )
-      .join('');
-    return `query DashDefaultBranches(${variables}) {${fields}\n}`;
+    }`,
+      },
+    )}\n}`;
+  },
+
+  /**
+   * Read apart from the default branches: an installation without Contents access may be
+   * refused a repository's releases, and that must cost only the releases, not the runs.
+   */
+  releases(count: number): string {
+    return `query DashReleases(${RepositoryBatch.variables(count)}) {${RepositoryBatch.aliases(
+      {
+        count,
+        fields: `
+    id
+    releases(first: ${githubReleaseCount}, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${releaseFields} } }`,
+      },
+    )}\n}`;
   },
 };

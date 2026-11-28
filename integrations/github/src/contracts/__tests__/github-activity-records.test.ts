@@ -3,24 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { ActivityNodes } from '#src/__tests__/support/activity-nodes.ts';
 import { githubActivityQueries } from '#src/contracts/github-activity-queries.ts';
 import { GithubActivityRecords } from '#src/contracts/github-activity-records.ts';
-import { githubDefaultBranchNodeSchema } from '#src/contracts/github-activity-response.ts';
+import { githubReleasesNodeSchema } from '#src/contracts/github-activity-response.ts';
 
-const { defaultBranchNode, releaseNode } = ActivityNodes;
+const { releasesNode, releaseNode } = ActivityNodes;
 
 class Read {
   static of(releases: ReturnType<typeof releaseNode>[]) {
-    const node = githubDefaultBranchNodeSchema
+    const node = githubReleasesNodeSchema
       .unwrap()
-      .parse(defaultBranchNode({ fullName: 'acme/app', releases }));
-    return GithubActivityRecords.defaultBranch(node);
+      .parse(releasesNode({ fullName: 'acme/app', releases }));
+    return GithubActivityRecords.releases(node);
   }
 }
 
 describe('GithubActivityRecords release reads', () => {
-  it('asks for the ten newest releases of each repository', () => {
-    expect(githubActivityQueries.defaultBranches(2)).toContain(
-      'releases(first: 10,',
-    );
+  it('asks for the ten newest releases of each repository, apart from the default branches', () => {
+    expect(githubActivityQueries.defaultBranches(2)).not.toContain('releases');
+    expect(githubActivityQueries.releases(2)).toContain('releases(first: 10,');
   });
 
   it('reports a repository whose releases were all returned as exhaustive, back to the oldest published', () => {
