@@ -4,6 +4,7 @@ import pg from 'pg';
 
 import { userTable } from '#src/auth/repositories/auth-store/auth-store-table.ts';
 import { DrizzleBriefingRepository } from '#src/briefing/repositories/briefings/briefing-repository.ts';
+import { DrizzlePersonTimeZoneReader } from '#src/briefing/repositories/people-time-zones/person-time-zone-reader.ts';
 import { DrizzleOwnerTimeZoneReader } from '#src/briefing/repositories/owner-time-zones/owner-time-zone-reader.ts';
 import {
   adaId,
@@ -19,6 +20,7 @@ export class BriefingsDatabase {
   readonly database: PostgresDatabase;
   readonly briefings: DrizzleBriefingRepository;
   readonly ownerTimeZone: DrizzleOwnerTimeZoneReader;
+  readonly people: DrizzlePersonTimeZoneReader;
 
   private constructor(props: { url: string }) {
     this.database = new PostgresDatabase({
@@ -31,6 +33,7 @@ export class BriefingsDatabase {
     this.ownerTimeZone = new DrizzleOwnerTimeZoneReader({
       database: this.database,
     });
+    this.people = new DrizzlePersonTimeZoneReader({ database: this.database });
   }
 
   async reset(): Promise<void> {

@@ -24,7 +24,9 @@ const defaultUsage: FakeOpenAiUsage = {
   reasoningTokens: 0,
 };
 
-type FakeReply = () => Response;
+type FakeReply = (
+  signal: AbortSignal | null | undefined,
+) => Response | Promise<Response>;
 
 /** Stands in for api.openai.com behind the SDK's injected `fetch`. Replies are queued in order; an unqueued call fails the test. */
 export class FakeOpenAi {
@@ -38,11 +40,16 @@ export class FakeOpenAi {
     this.requests.push(requestBodySchema.parse(JSON.parse(`${init?.body}`)));
     const reply = this.replies.shift();
     if (reply === undefined) throw new Error('No reply queued for the call');
-    return reply();
+    return reply(init?.signal);
   };
 
-  client(): OpenAI {
-    return new OpenAI({ apiKey: 'test', fetch: this.fetch, maxRetries: 0 });
+  client(props: { timeoutMs?: number } = {}): OpenAI {
+    return new OpenAI({
+      apiKey: 'test',
+      fetch: this.fetch,
+      maxRetries: 0,
+      timeout: props.timeoutMs ?? 600_000,
+    });
   }
 
   replyWithText(props: {
@@ -115,6 +122,20 @@ export class FakeOpenAi {
         { error: { message: 'Provider detail', type: 'server_error' } },
         { status },
       ),
+    );
+  }
+
+  /** Never answers, so the SDK's own timeout aborts the request. */
+  replyNever(): this {
+    return this.reply(
+      (signal) =>
+        new Promise<Response>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            reject(
+              new DOMException('The operation was aborted.', 'AbortError'),
+            );
+          });
+        }),
     );
   }
 

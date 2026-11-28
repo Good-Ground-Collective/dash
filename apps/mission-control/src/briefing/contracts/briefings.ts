@@ -76,6 +76,30 @@ export const briefingsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
+export const briefingRunningSchema = z.object({
+  runId: z.string().describe('The workflow id; the same id live events carry.'),
+  startedAt: timestampSchema.describe('When the run was queued.'),
+});
+
+export const regenerateAcceptedSchema = z.object({
+  runId: z
+    .string()
+    .describe(
+      'The run started, or the run already queued or running for this person.',
+    ),
+});
+
+export const briefingProgressEventSchema = z.object({
+  runId: z.string(),
+  stage: z.enum(['snapshot', 'writing', 'saving']),
+});
+
+export const briefingReadyEventSchema = z.object({
+  runId: z.string(),
+  briefingId: z.uuid().describe('The stored run, whatever its status.'),
+  status: briefingStatusSchema,
+});
+
 export const briefingsSchema = z.object({
   configured: z.boolean(),
   latest: briefingRunSchema
@@ -86,8 +110,14 @@ export const briefingsSchema = z.object({
     .describe('The newest run of any status.'),
   history: z.array(briefingRunSchema).describe('Newest first.'),
   budget: briefingBudgetSchema,
+  running: briefingRunningSchema
+    .nullable()
+    .describe('This person’s run that is queued or in progress, if any.'),
 });
 
+export type BriefingRunning = z.infer<typeof briefingRunningSchema>;
+export type BriefingProgressEvent = z.infer<typeof briefingProgressEventSchema>;
+export type BriefingReadyEvent = z.infer<typeof briefingReadyEventSchema>;
 export type BriefingRun = z.infer<typeof briefingRunSchema>;
 export type BriefingPrices = z.infer<typeof briefingPricesSchema>;
 export type BriefingParagraph = z.infer<typeof briefingParagraphSchema>;

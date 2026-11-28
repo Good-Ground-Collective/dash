@@ -3,6 +3,7 @@ import {
   FixedOwnerTimeZone,
   InMemoryBriefingRepository,
 } from '#src/briefing/__tests__/support/in-memory-briefings.ts';
+import { FakeBriefingWorkflows } from '#src/briefing/__tests__/support/fake-briefing-workflows.ts';
 import { BriefingModule } from '#src/briefing/module.ts';
 import { fixedNow } from '#src/objectives/__tests__/support/objectives-fixtures.ts';
 import type { ZodFastifyInstance } from '#src/platform/contracts/http-module.ts';
@@ -27,6 +28,7 @@ const settings: BriefingSettings = {
  */
 export class BriefingsHarness {
   readonly briefings = new InMemoryBriefingRepository();
+  readonly workflows = new FakeBriefingWorkflows();
   readonly module: BriefingModule;
   private app: ZodFastifyInstance | undefined;
 
@@ -34,6 +36,7 @@ export class BriefingsHarness {
     this.module = new BriefingModule({
       briefings: this.briefings,
       ownerTimeZone: new FixedOwnerTimeZone({ timeZone: 'America/New_York' }),
+      workflows: this.workflows,
       identity: {
         session: async ({ headers }): Promise<PrincipalSession | null> => {
           const userId = /session=(?<id>[\w-]+)/u.exec(
