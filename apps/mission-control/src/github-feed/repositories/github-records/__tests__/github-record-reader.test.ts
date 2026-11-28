@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import {
   afterAll,
   beforeAll,
@@ -8,6 +9,7 @@ import {
   it,
 } from 'vitest';
 
+import { connectionTable } from '#src/connections/repositories/connections/connections-table.ts';
 import {
   adaId,
   fixedNow,
@@ -126,6 +128,51 @@ describe.skipIf(databaseUrl === null)(
           limit: 10,
         }),
       ).toEqual([]);
+    });
+  },
+);
+
+describe.skipIf(databaseUrl === null)(
+  'DrizzleGithubRecordReader stale syncs',
+  () => {
+    const longAgo = new Date(fixedNow.getTime() - 60 * 60_000);
+    const before = new Date(fixedNow.getTime() - 45 * 60_000);
+
+    async function readLongAgo(connectionId: string, syncedAt: Date) {
+      await GithubRecordsDatabase.required(store).writer.replace({
+        connectionId,
+        viewerLogin: 'ada',
+        records,
+        releaseReads: [],
+        truncated: false,
+        syncedAt,
+      });
+    }
+
+    it('lists a stale unsuspended connection and leaves a suspended one out', async () => {
+      await readLongAgo(ownedId, longAgo);
+      await readLongAgo(guestId, longAgo);
+      await GithubRecordsDatabase.required(store)
+        .database.orm.update(connectionTable)
+        .set({ suspended: true })
+        .where(eq(connectionTable.id, guestId));
+
+      const stale = await GithubRecordsDatabase.required(
+        store,
+      ).reader.staleSyncs({ before, kinds: ['owned', 'guest'], limit: 10 });
+
+      expect(stale).toEqual([{ connectionId: ownedId, lastSyncedAt: longAgo }]);
+    });
+
+    it('lists the stalest connections up to the limit', async () => {
+      await readLongAgo(ownedId, longAgo);
+      await readLongAgo(guestId, new Date(longAgo.getTime() - 60_000));
+
+      const stale = await GithubRecordsDatabase.required(
+        store,
+      ).reader.staleSyncs({ before, kinds: ['owned', 'guest'], limit: 1 });
+
+      expect(stale.map(({ connectionId }) => connectionId)).toEqual([guestId]);
     });
   },
 );

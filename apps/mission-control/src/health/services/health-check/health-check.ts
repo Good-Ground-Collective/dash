@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { HealthReport } from '#src/health/contracts/health-report.ts';
 import { DuplicateProbeNameError } from '#src/health/errors.ts';
+import type { HealthGauge } from '#src/platform/contracts/health-gauge.ts';
 import type { HealthProbe } from '#src/platform/contracts/health-probe.ts';
 
 export const probeHealthCheckPropsSchema = z.object({
@@ -18,12 +19,14 @@ export interface HealthCheck {
  */
 export class ProbeHealthCheck implements HealthCheck {
   private readonly probes: readonly HealthProbe[];
+  private readonly gauges: readonly HealthGauge[];
   private readonly timeoutMilliseconds: number;
 
   constructor(
-    props: { probes: readonly HealthProbe[] } & z.input<
-      typeof probeHealthCheckPropsSchema
-    >,
+    props: {
+      probes: readonly HealthProbe[];
+      gauges?: readonly HealthGauge[];
+    } & z.input<typeof probeHealthCheckPropsSchema>,
   ) {
     const seen = new Set<string>();
     for (const probe of props.probes) {
@@ -34,6 +37,7 @@ export class ProbeHealthCheck implements HealthCheck {
     }
 
     this.probes = props.probes;
+    this.gauges = props.gauges ?? [];
     this.timeoutMilliseconds = probeHealthCheckPropsSchema.parse({
       timeoutMilliseconds: props.timeoutMilliseconds,
     }).timeoutMilliseconds;
@@ -41,7 +45,7 @@ export class ProbeHealthCheck implements HealthCheck {
 
   async run(): Promise<HealthReport> {
     const results = await Promise.allSettled(
-      this.probes.map((probe) => this.withTimeout(probe)),
+      this.probes.map((probe) => this.withTimeout(() => probe.check())),
     );
 
     const checks = Object.fromEntries(
@@ -52,16 +56,34 @@ export class ProbeHealthCheck implements HealthCheck {
     ) satisfies HealthReport['checks'];
 
     const healthy = Object.values(checks).every((status) => status === 'ok');
-    return { status: healthy ? 'ok' : 'unavailable', checks };
+    const status = healthy ? 'ok' : 'unavailable';
+    const gauges = await this.readGauges();
+    return Object.keys(gauges).length === 0
+      ? { status, checks }
+      : { status, checks, gauges };
   }
 
-  private async withTimeout(probe: HealthProbe): Promise<void> {
+  private async readGauges(): Promise<Record<string, number>> {
+    const readings = await Promise.allSettled(
+      this.gauges.map((gauge) => this.withTimeout(() => gauge.read())),
+    );
+    return Object.fromEntries(
+      this.gauges.flatMap((gauge, index) => {
+        const reading = readings[index];
+        return reading?.status === 'fulfilled'
+          ? [[gauge.name, reading.value]]
+          : [];
+      }),
+    );
+  }
+
+  private async withTimeout<T>(run: () => Promise<T>): Promise<T> {
     const signal = AbortSignal.timeout(this.timeoutMilliseconds);
     const timedOut = new Promise<never>((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(signal.reason), {
         once: true,
       });
     });
-    await Promise.race([probe.check(), timedOut]);
+    return Promise.race([run(), timedOut]);
   }
 }

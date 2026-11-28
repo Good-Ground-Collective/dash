@@ -37,13 +37,17 @@ import { OnboardingModule } from '#src/onboarding/module.ts';
 import { AppConfig } from '#src/platform/definitions/config/app-config.ts';
 import { PlatformModule } from '#src/platform/module.ts';
 import { PostgresDatabase } from '#src/platform/services/database/database.ts';
+import { DbosStrandedWorkflowRecovery } from '#src/platform/services/workflows/stranded-workflow-recovery.ts';
+import { StrandedWorkflowGauge } from '#src/platform/services/workflows/stranded-workflow-gauge.ts';
 import { DbosWorkflowRuntime } from '#src/platform/services/workflows/workflow-runtime.ts';
 
 const config = AppConfig.fromEnvironment();
 const database = new PostgresDatabase({ url: config.databaseUrl });
+const strandedWorkflows = new DbosStrandedWorkflowRecovery();
 const workflows = new DbosWorkflowRuntime({
   databaseUrl: config.databaseUrl,
   logLevel: config.logLevel,
+  recovery: strandedWorkflows,
 });
 const servicePrincipals = new DrizzleServicePrincipalRepository({ database });
 const agentSessions = new DrizzleAgentSessionRepository({ database });
@@ -146,7 +150,11 @@ const platform = new PlatformModule({
   database,
   workflows,
   httpModules: [
-    new HealthModule({ probes: [database, workflows], build: config.build }),
+    new HealthModule({
+      probes: [database, workflows],
+      gauges: [new StrandedWorkflowGauge({ recovery: strandedWorkflows })],
+      build: config.build,
+    }),
     auth,
     agents,
     connections,
