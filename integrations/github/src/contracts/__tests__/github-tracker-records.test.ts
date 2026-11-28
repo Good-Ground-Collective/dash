@@ -17,6 +17,7 @@ const github = TrackerGithub.withEpics([
         number: 13,
         labels: ['P2', 'P1'],
         updatedAt: '2026-11-25T08:00:00Z',
+        assignees: ['grace', 'ada'],
       }),
       TrackerNodes.ticket({
         number: 11,
@@ -46,6 +47,15 @@ describe('GithubTrackerRecords tickets', () => {
         priority: null,
         state: 'closed',
       }),
+    ]);
+  });
+
+  it('keeps who each ticket is assigned to, none when unassigned', async () => {
+    const snapshot = await github.tracker().read(query);
+
+    expect(snapshot.tickets.map(({ assignees }) => assignees)).toEqual([
+      ['grace', 'ada'],
+      [],
     ]);
   });
 

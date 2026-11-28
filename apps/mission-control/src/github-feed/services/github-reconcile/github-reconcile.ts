@@ -105,6 +105,7 @@ export class SourcedGithubReconcile implements GithubReconcile {
         connectionId: target.connectionId,
         viewerLogin: snapshot.viewerLogin,
         records: snapshot.records,
+        releaseReads: snapshot.releaseReads,
         truncated: snapshot.truncated,
         syncedAt: attemptedAt,
       });

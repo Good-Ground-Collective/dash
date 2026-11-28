@@ -3,6 +3,7 @@ import type {
   ActivityFeed,
   ActivityPullRequest,
   ActivityQuery,
+  ActivityRelease,
 } from '@dash/integrations-core';
 
 import type { GithubFeed } from '#src/github-feed/contracts/github-feed.ts';
@@ -70,8 +71,43 @@ export class GithubFeedFixtures {
         { kind: 'team', name: 'platform' },
       ],
       checks: { state: 'failure', success: 3, failure: 1, pending: 0 },
+      mergedAt: null,
       updatedAt: '2026-11-26T10:00:00Z',
       ...overrides,
+    };
+  }
+
+  /** Ada's own pull request, merged at `mergedAt`. */
+  static mergedPullRequest(props: {
+    number: number;
+    mergedAt: string;
+  }): ActivityPullRequest {
+    return GithubFeedFixtures.pullRequest({
+      number: props.number,
+      author: 'ada',
+      state: 'merged',
+      requestedReviewers: [],
+      checks: null,
+      mergedAt: props.mergedAt,
+      updatedAt: props.mergedAt,
+    });
+  }
+
+  static release(props: {
+    id: string;
+    publishedAt: string;
+    repositoryId?: string;
+  }): ActivityRelease {
+    return {
+      provider: 'github',
+      externalId: `REL_${props.id}`,
+      url: `https://github.com/acme/app/releases/tag/${props.id}`,
+      repositoryId: props.repositoryId ?? 'R_app',
+      tagName: props.id,
+      name: `Release ${props.id}`,
+      author: 'grace',
+      prerelease: false,
+      publishedAt: props.publishedAt,
     };
   }
 
@@ -97,6 +133,9 @@ export class GithubFeedFixtures {
           updatedAt: '2026-11-26T11:00:00Z',
         }),
       ],
+      mergedPullRequests: [],
+      releases: [],
+      releaseReads: [],
       failedRuns: [
         {
           provider: 'github',
@@ -139,6 +178,8 @@ export class GithubFeedFixtures {
     return {
       reviewRequests: feed?.reviewRequests.map(item),
       myPullRequests: feed?.myPullRequests.map(item),
+      recentMerges: feed?.recentMerges.map(item),
+      releases: feed?.releases.map(item),
       failedRuns: feed?.failedRuns.map(item),
       assignedIssues: feed?.assignedIssues.map(item),
     };

@@ -5,7 +5,7 @@ import type {
 } from '#lib/api/briefings/briefing-contracts.ts';
 import { BriefingWording } from '#lib/briefing/briefing-wording.ts';
 
-/** What home got from Mission Control: the briefings, or `failed` when it didn't answer. */
+/** What Home and Settings got from Mission Control: the briefings, or `failed` when it didn't answer. */
 export type BriefingState =
   { status: 'loaded'; briefings: Briefings } | { status: 'failed' };
 
@@ -70,12 +70,6 @@ export class BriefingView {
     return counts === null || counts === undefined
       ? []
       : BriefingWording.sources(counts);
-  }
-
-  get spend(): string | null {
-    return this.loaded === null
-      ? null
-      : BriefingWording.spend(this.loaded.budget);
   }
 
   /** Set when a run newer than the shown briefing failed or was skipped. */

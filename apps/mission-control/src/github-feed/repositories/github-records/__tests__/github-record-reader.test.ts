@@ -52,6 +52,7 @@ describe.skipIf(databaseUrl === null)('DrizzleGithubRecordReader', () => {
         connectionId,
         viewerLogin: 'ada',
         records,
+        releaseReads: [],
         truncated: false,
         syncedAt: fixedNow,
       });

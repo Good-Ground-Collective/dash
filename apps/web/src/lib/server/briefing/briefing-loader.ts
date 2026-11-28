@@ -12,7 +12,7 @@ export type BriefingLoaderProps = z.input<typeof briefingLoaderPropsSchema>;
 
 export type BriefingLoadEvent = Pick<ServerLoadEvent, 'fetch'>;
 
-/** Reads home's briefing as Mission Control stored it. A failed read never fails the page. */
+/** Reads the briefing for Home and Settings as Mission Control stored it. A failed read never fails the page. */
 export interface BriefingLoader {
   readonly read: (event: BriefingLoadEvent) => Promise<BriefingState>;
 }

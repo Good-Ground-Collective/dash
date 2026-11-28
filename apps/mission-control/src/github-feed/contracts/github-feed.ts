@@ -43,6 +43,9 @@ const feedItemSchema = z.object({
 });
 
 export const githubFeedPullRequestSchema = feedItemSchema.extend({
+  mergedAt: timestampSchema
+    .nullable()
+    .describe('When the pull request was merged. Null while it is not merged.'),
   number: z.int().positive(),
   title: z.string(),
   author: z.string().min(1).nullable(),
@@ -81,6 +84,21 @@ export const githubFeedRunSchema = feedItemSchema.extend({
     .describe('Your pull request it ran on, or null for a default branch.'),
 });
 
+export const githubFeedReleaseSchema = feedItemSchema
+  .omit({ updatedAt: true })
+  .extend({
+    tagName: z.string().min(1),
+    name: z
+      .string()
+      .min(1)
+      .nullable()
+      .describe('Null when the release has no title of its own.'),
+    author: z.string().min(1).nullable(),
+    prerelease: z.boolean(),
+    publishedAt: timestampSchema,
+    url: z.url().describe('Opens the release on GitHub.'),
+  });
+
 export const githubFeedIssueSchema = feedItemSchema.extend({
   number: z.int().positive(),
   title: z.string(),
@@ -96,7 +114,19 @@ export const githubFeedSchema = z.object({
     .describe(
       'Open pull requests waiting on your review, directly or through a team.',
     ),
-  myPullRequests: z.array(githubFeedPullRequestSchema),
+  myPullRequests: z
+    .array(githubFeedPullRequestSchema)
+    .describe('Your open pull requests.'),
+  recentMerges: z
+    .array(githubFeedPullRequestSchema)
+    .describe(
+      'Pull requests of yours merged within the last 48 hours, by merge time, newest first.',
+    ),
+  releases: z
+    .array(githubFeedReleaseSchema)
+    .describe(
+      'Releases published within the last 48 hours on repositories Dash reads, by publish time, newest first.',
+    ),
   failedRuns: z
     .array(githubFeedRunSchema)
     .describe(
@@ -108,5 +138,6 @@ export const githubFeedSchema = z.object({
 export type GithubFeed = z.infer<typeof githubFeedSchema>;
 export type GithubFeedConnection = z.infer<typeof githubFeedConnectionSchema>;
 export type GithubFeedPullRequest = z.infer<typeof githubFeedPullRequestSchema>;
+export type GithubFeedRelease = z.infer<typeof githubFeedReleaseSchema>;
 export type GithubFeedRun = z.infer<typeof githubFeedRunSchema>;
 export type GithubFeedIssue = z.infer<typeof githubFeedIssueSchema>;

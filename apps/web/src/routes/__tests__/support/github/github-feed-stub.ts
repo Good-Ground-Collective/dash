@@ -44,6 +44,8 @@ export class GithubFeedStub {
     const empty = {
       reviewRequests: [],
       myPullRequests: [],
+      recentMerges: [],
+      releases: [],
       failedRuns: [],
       assignedIssues: [],
     };

@@ -51,6 +51,7 @@ export class ObjectiveRecordRows {
       nodeId: row.nodeId,
       epicNodeId: row.epicNodeId,
       position: row.position,
+      assignees: row.assignees,
       title: row.title,
       url: row.url,
       state: row.state,

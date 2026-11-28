@@ -96,6 +96,7 @@ export const objectiveTicketTable = pgTable(
     ...ObjectiveColumns.tracked(),
     epicNodeId: text('epic_node_id').notNull(),
     position: integer('position').notNull(),
+    assignees: text('assignees').array().notNull().default([]),
   },
   (table) => [primaryKey({ columns: [table.connectionId, table.nodeId] })],
 );

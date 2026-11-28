@@ -36,6 +36,14 @@ export class HeartbeatMapper {
     'elicitation_url_dialog',
   ]);
 
+  /** The tools that launch a subagent; older Claude Code versions call it `Task`. */
+  static readonly LAUNCH_TOOLS: ReadonlySet<string> = new Set([
+    'Agent',
+    'Task',
+  ]);
+
+  static readonly ASYNC_LAUNCHED = 'async_launched';
+
   static plan(context: HeartbeatContext): HeartbeatPlan | undefined {
     const { event, input } = context;
 
@@ -59,6 +67,15 @@ export class HeartbeatMapper {
       return HeartbeatMapper.unconditionalPlan(context, 'working');
     }
     if (event === 'PostToolUse') {
+      const launchedChild = HeartbeatMapper.launchedChild(input);
+      if (launchedChild !== undefined) {
+        return {
+          draft: HeartbeatMapper.draft(context, 'working'),
+          condition: 'liveness',
+          launchedChild,
+        };
+      }
+
       return input.toolName === HeartbeatMapper.ASK_TOOL
         ? {
             draft: HeartbeatMapper.draft(context, 'working'),
@@ -84,15 +101,22 @@ export class HeartbeatMapper {
     const { event, input } = context;
 
     if (event === 'Stop') {
+      const reported = input.backgroundTaskCount;
+      const hasBackgroundTasks = (reported ?? 0) > 0;
       return {
         draft: {
-          ...HeartbeatMapper.draft(context, 'complete'),
+          ...HeartbeatMapper.draft(
+            context,
+            hasBackgroundTasks ? 'waiting' : 'complete',
+          ),
           summary: HeartbeatMapper.summary(
             input.lastAssistantMessage,
             input.transcriptPath,
           ),
         },
         condition: 'always',
+        waitsOnRecordedChildren: reported === undefined,
+        reportedBackgroundTasks: reported,
       };
     }
     if (event === 'StopFailure') {
@@ -122,7 +146,24 @@ export class HeartbeatMapper {
         ),
       },
       condition: 'known-subagent',
+      waitsOnRecordedChildren: true,
     };
+  }
+
+  /** The background subagent a finished Agent tool call started, if it was launched asynchronously. */
+  private static launchedChild(input: HookInput): string | undefined {
+    const isLaunch =
+      input.toolName !== undefined &&
+      HeartbeatMapper.LAUNCH_TOOLS.has(input.toolName);
+    if (
+      !isLaunch ||
+      input.toolResponseStatus !== HeartbeatMapper.ASYNC_LAUNCHED ||
+      !input.launchedAgentId
+    ) {
+      return undefined;
+    }
+
+    return input.launchedAgentId;
   }
 
   /** AskUserQuestion can ask up to four questions at once; their texts are joined, and options are kept only when there is one. */

@@ -8,6 +8,13 @@ export interface StubOverlay {
   dueDate: string | null;
 }
 
+/** A task of an epic, in the epic's order. */
+export interface StubTask {
+  title: string;
+  closed?: boolean;
+  assignees?: string[];
+}
+
 /** An initiative or epic as the tracker has it, before Dash's overlay. */
 export interface StubObjective {
   id: string;
@@ -24,6 +31,7 @@ export interface StubObjective {
     ticket: string;
   } | null;
   next: string | null;
+  tasks?: StubTask[];
   hints: string[];
   dueAfterInitiative?: boolean;
   epics?: StubObjective[];
@@ -48,12 +56,22 @@ export class ObjectivesItems {
       {
         ...ObjectivesItems.base('PVT_docs', 'Docs refresh', null),
         url: 'https://github.com/orgs/acme-labs/projects/2',
+        progress: { done: 100, total: 120 },
         hints: ['no_recent_activity'],
         epics: [
           {
             ...ObjectivesItems.base('E_guides', 'Rewrite the guides', 20),
             progress: null,
             hints: ['no_recent_activity'],
+          },
+          {
+            ...ObjectivesItems.base('E_reference', 'Refresh API reference', 21),
+            dueDate: ObjectivesItems.nextYearDay(),
+            progress: { done: 12, total: 12 },
+          },
+          {
+            ...ObjectivesItems.base('E_changelog', 'Publish the changelog', 22),
+            progress: { done: 3, total: 5 },
           },
         ],
       },
@@ -119,6 +137,29 @@ export class ObjectivesItems {
     };
   }
 
+  /** An epic's tasks as Mission Control sends them: open ones first, and the epic's own count. */
+  static tasks(item: StubObjective) {
+    const tasks = (item.tasks ?? []).map((task, index) => ({
+      id: `I_${item.id}_${String(index)}`,
+      title: task.title,
+      url: `${repo}/issues/${String(100 + index)}`,
+      state: task.closed === true ? 'closed' : 'open',
+      assignees: task.assignees ?? [],
+    }));
+    return {
+      items: tasks.toSorted(
+        (left, right) =>
+          Number(left.state === 'closed') - Number(right.state === 'closed'),
+      ),
+      total: tasks.length,
+    };
+  }
+
+  /** A date in May of next year, so its label always carries the year, the widest form. */
+  static nextYearDay(): string {
+    return `${String(new Date().getFullYear() + 1)}-05-28`;
+  }
+
   static ago(minutes: number): string {
     return new Date(Date.now() - minutes * 60 * 1000).toISOString();
   }
@@ -132,6 +173,11 @@ export class ObjectivesItems {
         progress: { done: 4, total: 6 },
         update: ObjectivesItems.update('grace', 'Hash recovery codes', 45),
         next: 'Rate-limit sign-in attempts',
+        tasks: [
+          { title: 'Hash recovery codes', closed: true, assignees: ['grace'] },
+          { title: 'Rate-limit sign-in attempts', assignees: ['ada'] },
+          { title: 'Show a passkey nickname' },
+        ],
       },
       {
         ...ObjectivesItems.base('E_billing', 'Billing page', 11),

@@ -32,6 +32,7 @@ export class SampleObjectives {
       lastActivityAt: new Date('2026-11-27T09:00:00Z'),
       latestUpdate: null,
       nextTicket: null,
+      tasks: { items: [], total: 0 },
       hints: [],
       dueAfterInitiative: false,
       ...overrides,

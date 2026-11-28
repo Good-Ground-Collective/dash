@@ -81,6 +81,13 @@ export class InMemoryBriefingRepository implements BriefingRepository {
       .reduce((total, { costMicroUsd }) => total + costMicroUsd, 0);
   }
 
+  async runsSince(props: { since: Date }): Promise<number> {
+    return this.briefings.filter(
+      ({ startedAt, run }) =>
+        startedAt >= props.since && run.status !== 'skipped_over_budget',
+    ).length;
+  }
+
   async deleteStartedBefore(props: { cutoff: Date }): Promise<number> {
     const kept = this.briefings.filter(
       ({ startedAt }) => startedAt >= props.cutoff,

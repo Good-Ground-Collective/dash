@@ -120,6 +120,20 @@
       "when": 1795834493579,
       "tag": "0016_needs_you_items",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795837941225,
+      "tag": "0017_objective_ticket_assignees",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795839107611,
+      "tag": "0018_recent_merges_and_releases",
+      "breakpoints": true
     }
   ]
 }

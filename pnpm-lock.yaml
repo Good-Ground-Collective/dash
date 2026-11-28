@@ -469,6 +469,9 @@ importers:
       '@dash/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@good-ground-collective/agentic-communication-standards':
+        specifier: workspace:*
+        version: link:../../packages/standards
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.65.1

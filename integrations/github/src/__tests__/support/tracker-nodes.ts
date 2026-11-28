@@ -51,11 +51,15 @@ export class TrackerNodes {
     updatedAt?: string;
     comment?: string;
     mergedAt?: string;
+    assignees?: string[];
   }): GithubBody {
     const closed = props.state === 'CLOSED';
     return {
       ...TrackerNodes.issue({ ...props, labels: props.labels ?? [] }),
       closedAt: closed ? '2026-11-21T10:00:00Z' : null,
+      assignees: {
+        nodes: (props.assignees ?? []).map((login) => ({ login })),
+      },
       comments: {
         nodes:
           props.comment === undefined

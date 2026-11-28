@@ -3,6 +3,7 @@ import type {
   GithubFeedConnection,
   GithubFeedIssue,
   GithubFeedPullRequest,
+  GithubFeedRelease,
   GithubFeedRun,
 } from '#lib/api/github-feed-contracts.ts';
 
@@ -34,6 +35,7 @@ export class SampleFeed {
       },
       url: 'https://github.com/acme-labs/api/pull/42',
       updatedAt: new Date('2026-11-27T10:00:00Z'),
+      mergedAt: null,
       number: 42,
       title: 'Add rate limits',
       author: 'grace',
@@ -44,6 +46,26 @@ export class SampleFeed {
       headSha: 'abc123',
       requestedReviewers: [],
       checks: null,
+      ...overrides,
+    };
+  }
+
+  static release(
+    overrides: Partial<GithubFeedRelease> = {},
+  ): GithubFeedRelease {
+    return {
+      id: 'REL_1',
+      connectionId: 'c-acme',
+      repository: {
+        fullName: 'acme-labs/api',
+        url: 'https://github.com/acme-labs/api',
+      },
+      url: 'https://github.com/acme-labs/api/releases/tag/v1.2.0',
+      tagName: 'v1.2.0',
+      name: 'API 1.2.0',
+      author: 'grace',
+      prerelease: false,
+      publishedAt: new Date('2026-11-27T09:00:00Z'),
       ...overrides,
     };
   }
@@ -92,6 +114,8 @@ export class SampleFeed {
       connections: [SampleFeed.connection()],
       reviewRequests: [],
       myPullRequests: [],
+      recentMerges: [],
+      releases: [],
       failedRuns: [],
       assignedIssues: [],
       ...overrides,

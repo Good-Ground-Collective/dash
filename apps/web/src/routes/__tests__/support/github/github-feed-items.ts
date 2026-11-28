@@ -8,6 +8,8 @@ export class GithubFeedItems {
     return {
       reviewRequests: GithubFeedItems.reviewRequests(),
       myPullRequests: GithubFeedItems.myPullRequests(),
+      recentMerges: GithubFeedItems.recentMerges(),
+      releases: GithubFeedItems.releases(),
       ...GithubFeedItems.runsAndIssues(),
     };
   }
@@ -81,6 +83,12 @@ export class GithubFeedItems {
         checks: { state: 'pending', success: 2, failure: 0, pending: 3 },
         connection: night,
       }),
+    ];
+  }
+
+  private static recentMerges() {
+    const pull = GithubFeedItems.pull;
+    return [
       pull({
         repo: 'acme-labs/api',
         number: 409,
@@ -89,6 +97,30 @@ export class GithubFeedItems {
         review: 'approved',
         state: 'merged',
         checks: { state: 'success', success: 6, failure: 0, pending: 0 },
+      }),
+      pull({
+        repo: 'acme-labs/web',
+        number: 71,
+        title: 'Retire the old settings tabs',
+        minutes: 60 * 40,
+        state: 'merged',
+      }),
+    ];
+  }
+
+  private static releases() {
+    return [
+      GithubFeedItems.release({
+        repo: 'acme-labs/api',
+        tag: 'v2.4.0',
+        name: 'API 2.4.0',
+        minutes: 120,
+      }),
+      GithubFeedItems.release({
+        repo: 'acme-labs/web',
+        tag: 'v1.9.0',
+        name: 'Web 1.9.0',
+        minutes: 60 * 40,
       }),
     ];
   }
@@ -152,6 +184,26 @@ export class GithubFeedItems {
     };
   }
 
+  private static release(props: {
+    repo: string;
+    tag: string;
+    name: string;
+    minutes: number;
+  }) {
+    const { updatedAt, ...base } = GithubFeedItems.base({
+      ...props,
+      path: `releases/tag/${props.tag}`,
+    });
+    return {
+      ...base,
+      tagName: props.tag,
+      name: props.name,
+      author: 'grace',
+      prerelease: false,
+      publishedAt: updatedAt,
+    };
+  }
+
   private static pull(props: {
     repo: string;
     number: number;
@@ -167,6 +219,8 @@ export class GithubFeedItems {
   }) {
     return {
       ...GithubFeedItems.base({ ...props, path: `pull/${props.number}` }),
+      mergedAt:
+        props.state === 'merged' ? GithubFeedItems.ago(props.minutes) : null,
       number: props.number,
       title: props.title,
       author: props.author ?? 'ada',

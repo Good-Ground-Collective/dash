@@ -3,6 +3,7 @@ import type {
   GithubCheckRollupRecord,
   GithubIssueRecord,
   GithubPullRequestRecord,
+  GithubReleaseRecord,
   GithubRepositoryRecord,
   GithubReviewRequestRecord,
   GithubWorkflowRunRecord,
@@ -12,6 +13,7 @@ import type {
   githubCheckRollupTable,
   githubIssueTable,
   githubPullRequestTable,
+  githubReleaseTable,
   githubRepoTable,
   githubReviewRequestTable,
   githubWorkflowRunTable,
@@ -47,7 +49,23 @@ export class GithubRecordRows {
       author: row.author,
       headRef: row.headRef,
       headSha: row.headSha,
+      mergedAt: row.mergedAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  static release(
+    row: typeof githubReleaseTable.$inferSelect,
+  ): GithubReleaseRecord {
+    return {
+      nodeId: row.nodeId,
+      repositoryNodeId: row.repositoryNodeId,
+      tagName: row.tagName,
+      name: row.name,
+      url: row.url,
+      author: row.author,
+      prerelease: row.prerelease,
+      publishedAt: row.publishedAt.toISOString(),
     };
   }
 

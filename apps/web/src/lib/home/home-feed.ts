@@ -52,24 +52,20 @@ export class HomeFeed {
     return HomeFeed.newestFirst([...reviews, ...failing]);
   }
 
-  /**
-   * Merged pull requests the viewer opened or reviewed, last updated in the past 24 hours, newest first.
-   * The feed carries no merge time, so `updatedAt` stands in for it: an old merge with new activity shows here too.
-   */
+  /** The viewer's pull requests merged and the releases published in the past 24 hours, by when they happened, newest first. */
   get sinceYesterday(): FeedRow[] {
     if (this.state.status === 'failed') return [];
-    const { reviewRequests, myPullRequests } = this.state.feed;
+    const { recentMerges, releases } = this.state.feed;
     const since = this.now.getTime() - dayMs;
 
-    const merged = new Map<string, FeedRow>();
-    for (const pull of [...myPullRequests, ...reviewRequests]) {
-      if (pull.state !== 'merged' || pull.updatedAt.getTime() < since) continue;
-      merged.set(pull.id, {
-        ...FeedRows.reviewRequest(pull),
-        badges: [{ label: 'Merged', tone: 'ok' }],
-      });
-    }
-    return HomeFeed.newestFirst([...merged.values()]);
+    const merged = recentMerges
+      .filter((pull) => (pull.mergedAt?.getTime() ?? 0) >= since)
+      .map((pull) => FeedRows.mergedPullRequest(pull));
+    const shipped = releases
+      .filter((release) => release.publishedAt.getTime() >= since)
+      .map((release) => FeedRows.release(release));
+
+    return HomeFeed.newestFirst([...merged, ...shipped]);
   }
 
   /** Leads with “Review” and keeps the “Draft” badge, so a draft doesn't read as ready to review. */

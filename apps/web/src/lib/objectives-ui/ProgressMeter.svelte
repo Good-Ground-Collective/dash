@@ -21,16 +21,17 @@
 
 <style>
   .progress {
-    display: inline-flex;
+    display: inline-grid;
+    grid-template-columns: 4rem 15ch;
     align-items: center;
     gap: var(--space-2);
-    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
   }
 
   .track {
     position: relative;
-    flex: none;
-    width: 5rem;
+    width: 4rem;
     height: 0.375rem;
     overflow: hidden;
     border-radius: var(--radius-pill);
@@ -45,14 +46,16 @@
   }
 
   .label {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
     white-space: nowrap;
   }
 
   .muted {
+    grid-column: 1 / -1;
     font-family: var(--font-body);
     color: var(--ink-muted);
+    text-align: left;
   }
 
   .dash {

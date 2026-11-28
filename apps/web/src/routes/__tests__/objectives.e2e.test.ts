@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { z } from 'zod';
+import { EpicGeometries } from './support/objectives/epic-geometry.ts';
 
 const projectSettingsSchema = z.object({ missionControlUrl: z.url() });
 
@@ -104,6 +105,30 @@ test('when objectives fail, the rest of home still renders', async () => {
   await expect(
     page.getByRole('region', { name: 'Needs you', exact: true }),
   ).toContainText('Rate-limit the public search endpoint');
+});
+
+test('an expanded epic lists its tasks, open first, with who has them', async () => {
+  await Objectives.scenario('populated');
+  await page.goto('/');
+
+  const epic = Objectives.panel().locator('[data-objective="E_passkeys"]');
+  const list = epic.getByRole('list', { name: /^Tasks in/u });
+  await expect(list).toHaveCount(0);
+
+  await Objectives.expand('Sign-in with passkeys');
+  const tasks = list.getByRole('listitem');
+  await expect(tasks).toHaveCount(3);
+  await expect(tasks.nth(0)).toContainText('Rate-limit sign-in attempts');
+  await expect(tasks.nth(0)).toContainText('ada');
+  await expect(tasks.nth(0)).toContainText('To do');
+  await expect(tasks.nth(1)).toContainText('Show a passkey nickname');
+  await expect(tasks.nth(1)).toContainText('—');
+  await expect(tasks.nth(2)).toContainText('Hash recovery codes');
+  await expect(tasks.nth(2)).toContainText('grace');
+  await expect(tasks.nth(2)).toContainText('Done');
+  await expect(
+    tasks.nth(0).getByRole('link', { name: 'Rate-limit sign-in attempts' }),
+  ).toHaveAttribute('href', 'https://github.com/acme-labs/api/issues/101');
 });
 
 test('active initiatives lead home, in Mission Control’s order, with their epics', async () => {
@@ -235,6 +260,66 @@ test('a field the tracker took over since the page loaded is explained, not save
       .filter({ hasText: 'Docs refresh' })
       .first(),
   ).toContainText('P1');
+});
+
+test('progress bars and the actions button line up whatever the count or due date', async () => {
+  await Objectives.scenario('populated');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+
+  const docs = Objectives.epics('Docs refresh').getByRole('listitem');
+  await expect(docs).toHaveCount(3);
+  await expect(docs.filter({ hasText: 'No progress yet' })).toHaveCount(1);
+  await expect(docs.filter({ hasText: '12 of 12 done' })).toHaveCount(1);
+  await expect(docs.filter({ hasText: '3 of 5 done' })).toHaveCount(1);
+  await expect(docs.filter({ hasText: 'Refresh API reference' })).toHaveCount(
+    1,
+  );
+
+  const boxes = await EpicGeometries.trackBoxes(Objectives.panel());
+  expect(boxes.length).toBeGreaterThanOrEqual(4);
+  expect(new Set(boxes.map((box) => box.x)).size).toBe(1);
+  expect(new Set(boxes.map((box) => box.width)).size).toBe(1);
+
+  const geometry = await EpicGeometries.measure(Objectives.panel());
+  const passkeys = geometry.find(
+    (candidate) => candidate.title === 'Sign-in with passkeys',
+  );
+  expect(passkeys?.chipBesideTitle, 'passkeys title sits beside its chip').toBe(
+    true,
+  );
+  expect(passkeys?.rowHeight, 'passkeys row stays one line').toBeLessThan(60);
+
+  const count = await EpicGeometries.initiativeCount(
+    Objectives.panel(),
+    'PVT_docs',
+  );
+  expect(count.text).toBe('100 of 120 done');
+  expect(count.fits, 'a 3-figure count stays inside its progress box').toBe(
+    true,
+  );
+
+  const menuX = async (title: string) =>
+    (
+      await Objectives.panel()
+        .getByRole('button', { name: `Change ${title}` })
+        .boundingBox()
+    )?.x;
+  const withDue = await menuX('Refresh API reference');
+  expect(withDue).toBeDefined();
+  expect(await menuX('Publish the changelog')).toBe(withDue);
+  expect(await menuX('Rewrite the guides')).toBe(withDue);
+
+  for (const width of [1024, 900]) {
+    await page.setViewportSize({ width, height: 800 });
+    const height = async (title: string) =>
+      (await docs.filter({ hasText: title }).boundingBox())?.height;
+    expect(
+      await height('Publish the changelog'),
+      `no-due row height at ${String(width)}px`,
+    ).toBe(await height('Refresh API reference'));
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
 });
 
 test('home fits a phone and keeps Needs you clear of the last panel', async () => {

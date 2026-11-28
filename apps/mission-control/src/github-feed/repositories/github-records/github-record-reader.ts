@@ -14,6 +14,7 @@ import {
   githubCheckRollupTable,
   githubIssueTable,
   githubPullRequestTable,
+  githubReleaseTable,
   githubRepoTable,
   githubReviewRequestTable,
   githubSyncTable,
@@ -188,6 +189,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
           pullRequests: of(rows.pullRequests, id).map(
             GithubRecordRows.pullRequest,
           ),
+          releases: of(rows.releases, id).map(GithubRecordRows.release),
           reviewRequests: of(rows.reviewRequests, id).map(
             GithubRecordRows.reviewRequest,
           ),
@@ -228,7 +230,11 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
           .from(githubCheckRollupTable)
           .where(inArray(githubCheckRollupTable.connectionId, within)),
       ]);
-    const [workflowRuns, issues, assignments] = await Promise.all([
+    const [releases, workflowRuns, issues, assignments] = await Promise.all([
+      orm
+        .select()
+        .from(githubReleaseTable)
+        .where(inArray(githubReleaseTable.connectionId, within)),
       orm
         .select()
         .from(githubWorkflowRunTable)
@@ -245,6 +251,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
     return {
       repositories,
       pullRequests,
+      releases,
       reviewRequests,
       checkRollups,
       workflowRuns,
@@ -274,6 +281,7 @@ export class DrizzleGithubRecordReader implements GithubRecordReader {
     return {
       repositories: [],
       pullRequests: [],
+      releases: [],
       reviewRequests: [],
       checkRollups: [],
       workflowRuns: [],

@@ -22,8 +22,11 @@ export const activityQuerySchema = z.object({
   repositories: z
     .array(z.string().min(1))
     .describe(
-      'Full names of the repositories whose default branch to check for failed runs. Providers read at most their cap, after the repositories the viewer’s own work is in.',
+      'Full names of the repositories whose default branch to check for failed runs and whose releases to read. Providers read at most their cap, after the repositories the viewer’s own work is in.',
     ),
+  since: timestampSchema.describe(
+    'The oldest merge or release worth reading. Pull requests merged and releases published before it are left out.',
+  ),
 });
 
 export const activityRepositorySchema = externalRecordSchema.extend({
@@ -65,7 +68,23 @@ export const activityPullRequestSchema = externalRecordSchema.extend({
   checks: activityChecksSchema
     .nullable()
     .describe('Null when the head commit has no checks.'),
+  mergedAt: timestampSchema
+    .nullable()
+    .describe('When the pull request was merged. Null while it is not merged.'),
   updatedAt: timestampSchema,
+});
+
+export const activityReleaseSchema = externalRecordSchema.extend({
+  repositoryId: z.string().min(1),
+  tagName: z.string().min(1),
+  name: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe('Null when the release has no title of its own.'),
+  author: handleSchema.nullable().describe('Null for a deleted account.'),
+  prerelease: z.boolean(),
+  publishedAt: timestampSchema,
 });
 
 export const activityRunSchema = externalRecordSchema.extend({
@@ -95,7 +114,21 @@ export const activityIssueSchema = externalRecordSchema.extend({
   updatedAt: timestampSchema,
 });
 
-/** What one installation shows of a person's open work. Every list is capped, so a busy account reads in a bounded number of calls. */
+export const activityReleaseReadSchema = z.object({
+  repositoryId: z.string().min(1),
+  exhaustive: z
+    .boolean()
+    .describe(
+      'True when the read returned fewer releases than it asked for, so it saw every release the repository has.',
+    ),
+  oldestPublishedAt: timestampSchema
+    .nullable()
+    .describe(
+      'The oldest publish time among the published releases the read returned, whether or not they fall in the window. Null when it returned none.',
+    ),
+});
+
+/** What one installation shows of a person's work. Every list is capped, so a busy account reads in a bounded number of calls. */
 export const activitySchema = z.object({
   repositories: z.array(activityRepositorySchema),
   reviewRequests: z
@@ -104,6 +137,21 @@ export const activitySchema = z.object({
       'Open pull requests waiting on the viewer’s review, directly or through a team.',
     ),
   authoredPullRequests: z.array(activityPullRequestSchema),
+  mergedPullRequests: z
+    .array(activityPullRequestSchema)
+    .describe(
+      'Pull requests the viewer authored that were merged since the query’s `since`.',
+    ),
+  releases: z
+    .array(activityReleaseSchema)
+    .describe(
+      'Published releases of the repositories read, since the query’s `since`. Drafts are never read.',
+    ),
+  releaseReads: z
+    .array(activityReleaseReadSchema)
+    .describe(
+      'The repositories whose releases were read, and how far back the read could see. A release of one of them that `releases` leaves out and that is not older than that was deleted or unpublished.',
+    ),
   failedRuns: z
     .array(activityRunSchema)
     .describe(
@@ -118,6 +166,8 @@ export type ActivityRepository = z.infer<typeof activityRepositorySchema>;
 export type ActivityChecks = z.infer<typeof activityChecksSchema>;
 export type ActivityReviewer = z.infer<typeof activityReviewerSchema>;
 export type ActivityPullRequest = z.infer<typeof activityPullRequestSchema>;
+export type ActivityRelease = z.infer<typeof activityReleaseSchema>;
+export type ActivityReleaseRead = z.infer<typeof activityReleaseReadSchema>;
 export type ActivityRun = z.infer<typeof activityRunSchema>;
 export type ActivityIssue = z.infer<typeof activityIssueSchema>;
 export type Activity = z.infer<typeof activitySchema>;

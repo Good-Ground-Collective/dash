@@ -43,6 +43,7 @@ export class ActivityNodes {
     author?: string;
     fullName?: string;
     suites?: GithubJson[];
+    mergedAt?: string;
   }): GithubBody {
     const fullName = props.fullName ?? 'acme/app';
     return {
@@ -50,10 +51,11 @@ export class ActivityNodes {
       number: props.number,
       title: `Change ${props.number}`,
       url: `https://github.com/${fullName}/pull/${props.number}`,
-      state: 'OPEN',
+      state: props.mergedAt === undefined ? 'OPEN' : 'MERGED',
       isDraft: false,
       mergeable: 'MERGEABLE',
       reviewDecision: 'REVIEW_REQUIRED',
+      mergedAt: props.mergedAt ?? null,
       updatedAt,
       headRefName: `feature-${props.number}`,
       headRefOid: `sha${props.number}`,
@@ -113,6 +115,25 @@ export class ActivityNodes {
     };
   }
 
+  static releaseNode(props: {
+    id: string;
+    publishedAt: string | null;
+    name?: string | null;
+    draft?: boolean;
+    fullName?: string;
+  }): GithubBody {
+    return {
+      id: props.id,
+      name: props.name ?? null,
+      tagName: `v-${props.id}`,
+      url: `https://github.com/${props.fullName ?? 'acme/app'}/releases/tag/v-${props.id}`,
+      isDraft: props.draft ?? false,
+      isPrerelease: false,
+      publishedAt: props.publishedAt,
+      author: { login: 'grace' },
+    };
+  }
+
   static defaultBranchNode(props: {
     fullName: string;
     suites?: GithubJson[];
@@ -126,6 +147,16 @@ export class ActivityNodes {
           checkSuites: { nodes: props.suites ?? [] },
         },
       },
+    };
+  }
+
+  static releasesNode(props: {
+    fullName: string;
+    releases?: GithubJson[];
+  }): GithubBody {
+    return {
+      id: `R_${props.fullName}`,
+      releases: { nodes: props.releases ?? [] },
     };
   }
 }

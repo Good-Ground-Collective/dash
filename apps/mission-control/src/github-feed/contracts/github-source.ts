@@ -1,6 +1,7 @@
 import type {
   ConnectionKind,
   GithubRecords,
+  GithubReleaseRead,
 } from '#src/github-feed/contracts/github-records.ts';
 
 /** A GitHub connection as a source reads it. `owned` ones carry their installation; `guest` ones will carry a personal token instead. */
@@ -18,6 +19,7 @@ export interface GithubSyncTarget {
 export interface GithubSnapshot {
   viewerLogin: string;
   records: GithubRecords;
+  releaseReads: GithubReleaseRead[];
   truncated: boolean;
 }
 
