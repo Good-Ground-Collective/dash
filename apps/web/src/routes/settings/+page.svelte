@@ -12,6 +12,7 @@
   import AppearanceSettings from '#lib/theme-ui/AppearanceSettings.svelte';
   import AccountPanels from '#lib/auth-ui/AccountPanels.svelte';
   import GithubConnectionsPanel from '#lib/connections-ui/GithubConnectionsPanel.svelte';
+  import TimeZonePanel from '#lib/time-zone-ui/TimeZonePanel.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -184,6 +185,8 @@
   <RecoveryCodesPanel status={data.recoveryCodes} />
 
   <AppearanceSettings />
+
+  <TimeZonePanel timeZone={data.viewer.timeZone} />
 
   <GithubConnectionsPanel github={data.github} />
 

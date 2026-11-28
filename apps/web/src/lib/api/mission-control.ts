@@ -14,6 +14,9 @@ import {
 
 export { missionControlBaseUrlSchema };
 
+/** Where Mission Control places a person until one of their browsers reports a zone. */
+export const defaultTimeZone = 'America/New_York';
+
 export const viewerSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -23,6 +26,13 @@ export const viewerSchema = z.object({
     .nullable()
     .catch(null)
     .describe('`null` until the viewer picks a mode.'),
+  timeZone: z
+    .string()
+    .min(1)
+    .catch(defaultTimeZone)
+    .describe(
+      'The IANA zone Mission Control keeps for the viewer, `America/New_York` until a browser of theirs reports one.',
+    ),
 });
 
 export const sessionResponseSchema = z

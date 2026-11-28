@@ -35,6 +35,7 @@ describe('HttpMissionControl', () => {
             email: 'ada@example.com',
             theme: 'characters',
             colorMode: 'dark',
+            timeZone: 'Europe/London',
           },
         }),
     });
@@ -49,6 +50,7 @@ describe('HttpMissionControl', () => {
       email: 'ada@example.com',
       theme: 'characters',
       colorMode: 'dark',
+      timeZone: 'Europe/London',
     });
     expect(recorder.calls[0]?.url).toBe(
       'https://api.example.test/api/auth/get-session',

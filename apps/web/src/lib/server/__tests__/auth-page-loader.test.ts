@@ -12,6 +12,7 @@ const ada: Viewer = {
   email: 'ada@example.com',
   theme: 'characters',
   colorMode: null,
+  timeZone: 'America/New_York',
 };
 
 class PageVisit {
