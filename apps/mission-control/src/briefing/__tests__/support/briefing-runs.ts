@@ -29,6 +29,38 @@ export class BriefingRuns {
         agents: 1,
         benches: 0,
       },
+      sections: {
+        opening: [
+          { text: 'Work continues on the card. It is close.', href: null },
+        ],
+        actions: [
+          [
+            { text: 'Review ', href: null },
+            {
+              text: 'the pull request',
+              href: 'https://github.com/acme/app/pull/1',
+            },
+            { text: '.', href: null },
+          ],
+        ],
+        closing: [
+          {
+            text: 'The pace is too thin to call. Check back later.',
+            href: null,
+          },
+        ],
+      },
+      paragraphs: null,
+      unknownRefs: 0,
+      error: null,
+      ...overrides,
+    };
+  }
+
+  /** A run written before briefings had sections: only `paragraphs` are set. */
+  static legacy(overrides: Partial<NewBriefingRun> = {}): NewBriefingRun {
+    return BriefingRuns.succeeded({
+      sections: null,
       paragraphs: [
         [
           { text: 'Review ', href: null },
@@ -38,16 +70,14 @@ export class BriefingRuns {
           },
         ],
       ],
-      unknownRefs: 0,
-      error: null,
       ...overrides,
-    };
+    });
   }
 
   static failed(overrides: Partial<NewBriefingRun> = {}): NewBriefingRun {
     return BriefingRuns.succeeded({
       status: 'failed',
-      paragraphs: null,
+      sections: null,
       error: 'OpenAI answered 500',
       ...overrides,
     });
@@ -62,7 +92,7 @@ export class BriefingRuns {
       costMicroUsd: 0,
       prices: null,
       sourceCounts: null,
-      paragraphs: null,
+      sections: null,
       error: 'The monthly budget is spent',
       ...overrides,
     });

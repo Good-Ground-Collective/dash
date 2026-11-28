@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { BriefingRecord } from '#lib/api/briefings/briefing-contracts.ts';
 import { HttpBriefings } from '#lib/api/briefings/briefings.ts';
 import { MissionControlError } from '#lib/api/mission-control-error.ts';
-import { SampleBriefings } from '#lib/briefing/__tests__/support/sample-briefings.ts';
+import {
+  LegacyBriefings,
+  SampleBriefings,
+} from '#lib/briefing/__tests__/support/sample-briefings.ts';
 
 class RecordingFetch {
   readonly calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -92,5 +96,62 @@ describe('briefing paragraphs', () => {
     const read = await client.latest();
 
     expect(read.latest?.paragraphs).toEqual([[{ text: 'click', href: null }]]);
+  });
+});
+
+describe('briefing sections', () => {
+  class Reading {
+    static async of(latest: Partial<BriefingRecord>) {
+      const client = new HttpBriefings({
+        baseUrl: 'https://api.example.test',
+        fetch: new RecordingFetch({
+          response: () =>
+            Response.json({ ...SampleBriefings.briefings(), latest }),
+        }).fetch,
+      });
+      return client.latest();
+    }
+  }
+
+  it('shows a link that is not http or https as plain text', async () => {
+    const run = SampleBriefings.run({
+      sections: {
+        opening: [{ text: 'click', href: 'javascript:alert(1)' }],
+        actions: [],
+        closing: [{ text: 'later', href: null }],
+      },
+    });
+
+    const read = await Reading.of(run);
+
+    expect(read.latest?.sections?.opening).toEqual([
+      { text: 'click', href: null },
+    ]);
+  });
+
+  it('reads a run from before sections, which has none', async () => {
+    const { sections: _sections, ...stored } = LegacyBriefings.run();
+
+    const read = await Reading.of(stored);
+
+    expect(read.latest?.sections).toBeNull();
+    expect(read.latest?.paragraphs).toHaveLength(1);
+  });
+
+  it('rejects a run whose sections are malformed instead of showing an empty briefing', async () => {
+    const malformed = {
+      ...SampleBriefings.run(),
+      sections: { opening: 'text', actions: [], closing: [] },
+    };
+
+    const client = new HttpBriefings({
+      baseUrl: 'https://api.example.test',
+      fetch: new RecordingFetch({
+        response: () =>
+          Response.json({ ...SampleBriefings.briefings(), latest: malformed }),
+      }).fetch,
+    });
+
+    await expect(client.latest()).rejects.toThrow();
   });
 });

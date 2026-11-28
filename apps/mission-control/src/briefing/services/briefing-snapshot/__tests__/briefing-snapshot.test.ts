@@ -90,7 +90,7 @@ describe('SourcedBriefingSnapshot assembly', () => {
 
     const digest = await world
       .snapshot()
-      .of({ userId: briefedPersonId, now: fixedNow });
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
 
     expect(briefingSnapshotSchema.safeParse(digest).success).toBe(true);
     expect(digest.takenAt).toBe('2026-11-26T12:00:00.000Z');
@@ -139,7 +139,7 @@ describe('SourcedBriefingSnapshot refs', () => {
 
     const digest = await world
       .snapshot()
-      .of({ userId: briefedPersonId, now: fixedNow });
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
 
     const items = [
       ...digest.objectives,
@@ -179,7 +179,7 @@ describe('SourcedBriefingSnapshot agents', () => {
 
     const digest = await world
       .snapshot()
-      .of({ userId: briefedPersonId, now: fixedNow });
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
 
     expect(digest.agents).toEqual([
       {
@@ -226,7 +226,7 @@ describe('SourcedBriefingSnapshot secrets', () => {
 
     const digest = await world
       .snapshot()
-      .of({ userId: briefedPersonId, now: fixedNow });
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
 
     const serialized = JSON.stringify(digest);
     for (const forbidden of [
@@ -255,11 +255,54 @@ describe('SourcedBriefingSnapshot secrets', () => {
 
     const digest = await world
       .snapshot()
-      .of({ userId: nobodyId, now: fixedNow });
+      .of({ userId: nobodyId, now: fixedNow, previousBriefingAt: null });
 
     expect(digest.objectives).toEqual([]);
     expect(digest.connections).toEqual([]);
     expect(digest.agents).toEqual([]);
     expect(digest.counts.agents).toBe(0);
+  });
+});
+
+describe('SourcedBriefingSnapshot since the last briefing', () => {
+  it('looks back 24 hours when the person has no earlier briefing', async () => {
+    const world = await StockedWorld.build();
+
+    const digest = await world
+      .snapshot()
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt: null });
+
+    expect(digest.sinceLastBriefing).toMatchObject({
+      since: '2026-11-25T12:00:00.000Z',
+      previousBriefingAt: null,
+    });
+  });
+
+  it('starts at the previous briefing and carries closed objectives with refs', async () => {
+    const world = await StockedWorld.build();
+    const previousBriefingAt = new Date('2026-11-24T00:00:00.000Z');
+
+    const digest = await world
+      .snapshot()
+      .of({ userId: briefedPersonId, now: fixedNow, previousBriefingAt });
+
+    const { sinceLastBriefing } = digest;
+    expect(sinceLastBriefing.previousBriefingAt).toBe(
+      '2026-11-24T00:00:00.000Z',
+    );
+    expect(sinceLastBriefing.changes.map(({ title }) => title)).toEqual([
+      'Archive',
+      'Epic E1',
+    ]);
+    expect(sinceLastBriefing.changes.map(({ ref }) => ref)).toEqual([
+      'ch1',
+      'ch2',
+    ]);
+    expect(sinceLastBriefing.changes[1]).toMatchObject({
+      change: 'started',
+      ticketsClosed: 1,
+      initiativeTitle: 'Launch',
+    });
+    expect(briefingSnapshotSchema.safeParse(digest).success).toBe(true);
   });
 });

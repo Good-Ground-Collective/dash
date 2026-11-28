@@ -6,6 +6,7 @@ import type {
   BriefingObjectiveDraft,
   BriefingPullRequestDraft,
   BriefingRunDraft,
+  BriefingSinceLastBriefingDraft,
 } from '#src/briefing/contracts/briefing-snapshot.ts';
 
 /** An initiative with the epics kept under it. */
@@ -16,6 +17,7 @@ export interface BriefingInitiativeDraft {
 
 /** A snapshot's sections as the trimming works on them: capped, in priority order, and not yet given refs. */
 export interface BriefingDraft {
+  sinceLastBriefing: BriefingSinceLastBriefingDraft;
   initiatives: BriefingInitiativeDraft[];
   reviewRequests: BriefingPullRequestDraft[];
   myPullRequests: BriefingPullRequestDraft[];

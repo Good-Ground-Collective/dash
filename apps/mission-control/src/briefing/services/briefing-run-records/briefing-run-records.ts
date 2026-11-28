@@ -1,7 +1,13 @@
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
 import type { BriefingWriteOutcome } from '#src/briefing/contracts/briefing-write-outcome.ts';
-import type { BriefingPrices } from '#src/briefing/contracts/briefing-written.ts';
-import type { BriefingRun } from '#src/briefing/contracts/briefings.ts';
+import type {
+  BriefingParagraph,
+  BriefingPrices,
+} from '#src/briefing/contracts/briefing-written.ts';
+import type {
+  BriefingParagraph as BriefingRecordedParagraph,
+  BriefingRun,
+} from '#src/briefing/contracts/briefings.ts';
 import type { NewBriefingRun } from '#src/briefing/repositories/briefings/briefing-repository.ts';
 
 export type UnfinishedBriefingRun = Omit<NewBriefingRun, 'finishedAt'>;
@@ -24,6 +30,7 @@ export class BriefingRunRecords {
       costMicroUsd: 0,
       prices: null,
       sourceCounts: null,
+      sections: null,
       paragraphs: null,
       unknownRefs: 0,
       error:
@@ -56,6 +63,7 @@ export class BriefingRunRecords {
         tokens: outcome.failure.tokens,
         costMicroUsd: outcome.failure.costMicroUsd,
         prices: props.prices,
+        sections: null,
         paragraphs: null,
         unknownRefs: 0,
         error: outcome.failure.message,
@@ -69,11 +77,20 @@ export class BriefingRunRecords {
       tokens: written.tokens,
       costMicroUsd: written.costMicroUsd,
       prices: written.prices,
-      paragraphs: written.paragraphs.map(({ segments }) =>
-        segments.map(({ text, url }) => ({ text, href: url })),
-      ),
+      sections: {
+        opening: BriefingRunRecords.paragraph(written.opening),
+        actions: written.actions.map(BriefingRunRecords.paragraph),
+        closing: BriefingRunRecords.paragraph(written.closing),
+      },
+      paragraphs: null,
       unknownRefs: written.unknownRefs,
       error: null,
     };
+  }
+
+  private static paragraph(
+    paragraph: BriefingParagraph,
+  ): BriefingRecordedParagraph {
+    return paragraph.segments.map(({ text, url }) => ({ text, href: url }));
   }
 }

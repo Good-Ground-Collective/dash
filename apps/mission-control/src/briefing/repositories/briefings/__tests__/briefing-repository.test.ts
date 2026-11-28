@@ -60,13 +60,25 @@ describe.skipIf(databaseUrl === null)('DrizzleBriefingRepository', () => {
       unknownRefs: 0,
       error: null,
     });
-    expect(recorded.paragraphs?.[0]?.[1]).toEqual({
+    expect(recorded.sections?.actions[0]?.[1]).toEqual({
       text: 'the pull request',
       href: 'https://github.com/acme/app/pull/1',
     });
     await expect(briefings.latestRun({ userId: adaId })).resolves.toEqual(
       recorded,
     );
+  });
+
+  it('keeps a run written before sections as paragraphs with no sections', async () => {
+    const { briefings } = BriefingsDatabase.required(store);
+
+    const recorded = await briefings.record(BriefingRuns.legacy());
+
+    expect(recorded.sections).toBeNull();
+    expect(recorded.paragraphs?.[0]?.[1]).toEqual({
+      text: 'the pull request',
+      href: 'https://github.com/acme/app/pull/1',
+    });
   });
 
   it('keeps the last good briefing as latest when a later run failed', async () => {

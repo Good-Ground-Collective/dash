@@ -3,20 +3,29 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { Response } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 
-import { briefingCompositionSchema } from '#src/briefing/contracts/briefing-composition.ts';
+import {
+  briefingCompositionSchema,
+  briefingRawCompositionSchema,
+} from '#src/briefing/contracts/briefing-composition.ts';
 import type { BriefingSnapshotDigest } from '#src/briefing/contracts/briefing-snapshot.ts';
-import type {
-  BriefingPrices,
-  BriefingTokens,
-  BriefingWritten,
+import {
+  type BriefingLinkedText,
+  type BriefingParagraph,
+  type BriefingPrices,
+  type BriefingTokens,
+  type BriefingWritten,
+  briefingWrittenTextSchema,
 } from '#src/briefing/contracts/briefing-written.ts';
 import { briefingInstructions } from '#src/briefing/definitions/briefing-instructions/briefing-instructions.ts';
+import { briefingLimits } from '#src/briefing/definitions/briefing-limits/briefing-limits.ts';
 import {
   BriefingWriteFailedError,
   type BriefingWriteFailureReason,
 } from '#src/briefing/errors.ts';
 import { BriefingCost } from '#src/briefing/services/briefing-cost/briefing-cost.ts';
 import { BriefingRefLinks } from '#src/briefing/services/briefing-ref-links/briefing-ref-links.ts';
+import { BriefingLengthTrim } from '#src/briefing/services/briefing-length-trim/briefing-length-trim.ts';
+import { BriefingSentences } from '#src/briefing/services/briefing-sentences/briefing-sentences.ts';
 import {
   type OpenAiBriefingWriterProps,
   openAiBriefingWriterPropsSchema,
@@ -34,7 +43,7 @@ const compositionFromTextSchema = z
       return z.NEVER;
     }
   })
-  .pipe(briefingCompositionSchema);
+  .pipe(briefingRawCompositionSchema);
 
 export interface BriefingWriter {
   /** Writes the briefing for a snapshot. Throws `BriefingWriteFailedError`, carrying what the run cost, when no usable briefing came back. */
@@ -82,8 +91,20 @@ export class OpenAiBriefingWriter implements BriefingWriter {
     );
     if (!parsed.success) throw fail('unreadable', parsed.error);
 
+    const linked = BriefingLengthTrim.of(
+      BriefingRefLinks.attach({ composition: parsed.data, snapshot }),
+    );
+    const valid = briefingWrittenTextSchema.safeParse(linked);
+    if (!valid.success) {
+      throw fail(
+        OpenAiBriefingWriter.isTooShort(linked) ? 'tooShort' : 'unreadable',
+        valid.error,
+      );
+    }
+
     return {
-      ...BriefingRefLinks.attach({ composition: parsed.data, snapshot }),
+      ...valid.data,
+      unknownRefs: linked.unknownRefs,
       model: response.model,
       tokens,
       costMicroUsd,
@@ -134,6 +155,18 @@ export class OpenAiBriefingWriter implements BriefingWriter {
       .replaceAll('<', '\\u003c')
       .replaceAll('>', '\\u003e');
     return `<snapshot>\n${json}\n</snapshot>`;
+  }
+
+  /** The trim only shortens, so a draft the schema still rejects for its length is one with too few sentences. */
+  private static isTooShort(text: BriefingLinkedText): boolean {
+    const { framingSentences, actionSentences } = briefingLimits;
+    const short = (paragraph: BriefingParagraph, min: number) =>
+      BriefingSentences.count(paragraph.segments) < min;
+    return (
+      short(text.opening, framingSentences.min) ||
+      short(text.closing, framingSentences.min) ||
+      text.actions.some((action) => short(action, actionSentences.min))
+    );
   }
 
   private static tokensOf(response: Response): BriefingTokens {

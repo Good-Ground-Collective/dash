@@ -33,6 +33,7 @@ export class InMemoryBriefingRepository implements BriefingRepository {
       costUsd: run.costMicroUsd / microUsdPerUsd,
       prices: run.prices,
       sourceCounts: run.sourceCounts,
+      sections: run.sections,
       paragraphs: run.paragraphs,
       unknownRefs: run.unknownRefs,
       error: run.error,

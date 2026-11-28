@@ -1,0 +1,1 @@
+ALTER TABLE "briefing" ADD COLUMN "sections" jsonb;

@@ -25,14 +25,23 @@ export const prices = {
 };
 
 export const written: BriefingWritten = {
-  paragraphs: [
+  opening: {
+    segments: [{ text: 'Work continues on the card. It is close.', url: null }],
+  },
+  actions: [
     {
       segments: [
         { text: 'Review ', url: null },
         { text: 'the pull request', url: 'https://github.com/acme/web/pull/7' },
+        { text: '.', url: null },
       ],
     },
   ],
+  closing: {
+    segments: [
+      { text: 'The pace is too thin to call. Check back later.', url: null },
+    ],
+  },
   unknownRefs: 0,
   model: 'gpt-test',
   tokens: { input: 1000, cachedInput: 0, output: 200, reasoning: 0 },
@@ -40,8 +49,27 @@ export const written: BriefingWritten = {
   prices,
 };
 
+export const writtenSections = {
+  opening: [{ text: 'Work continues on the card. It is close.', href: null }],
+  actions: [
+    [
+      { text: 'Review ', href: null },
+      { text: 'the pull request', href: 'https://github.com/acme/web/pull/7' },
+      { text: '.', href: null },
+    ],
+  ],
+  closing: [
+    { text: 'The pace is too thin to call. Check back later.', href: null },
+  ],
+};
+
 class RecordedSnapshot implements BriefingSnapshot {
-  async of(): Promise<BriefingSnapshotDigest> {
+  readonly previousBriefingAts: (Date | null)[] = [];
+
+  async of(props: {
+    previousBriefingAt: Date | null;
+  }): Promise<BriefingSnapshotDigest> {
+    this.previousBriefingAts.push(props.previousBriefingAt);
     return SampleSnapshot.build();
   }
 }
@@ -106,11 +134,12 @@ export class BriefingWorkflowsFixture {
   readonly writer = new ScriptedWriter();
   readonly people = new PeopleAt();
   readonly liveEvents = new InProcessLiveEvents();
+  readonly snapshot = new RecordedSnapshot();
   readonly workflows = new DbosBriefingWorkflows({
     briefings: this.briefings,
     ownerTimeZone: new FixedOwnerTimeZone({ timeZone: 'America/New_York' }),
     people: this.people,
-    snapshot: new RecordedSnapshot(),
+    snapshot: this.snapshot,
     liveEvents: this.liveEvents,
     generation: {
       settings: { monthlyBudgetUsd: 1, prices },
@@ -148,6 +177,7 @@ export class BriefingWorkflowsFixture {
       this.events.push(event),
     );
     this.people.zones = {};
+    this.snapshot.previousBriefingAts.length = 0;
     this.briefings.briefings.length = 0;
   }
 

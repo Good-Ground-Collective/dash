@@ -2,6 +2,7 @@
   import '#lib/auth-ui/auth-form.css';
   import { onMount, tick } from 'svelte';
   import { API_BASE_URL } from '$app/env/public';
+  import type { BriefingParagraph } from '#lib/api/briefings/briefing-contracts.ts';
   import { HttpBriefings } from '#lib/api/briefings/briefings.ts';
   import { MissionControlError } from '#lib/api/mission-control-error.ts';
   import { BriefingEventReader } from '#lib/briefing/briefing-event-reader.ts';
@@ -141,6 +142,16 @@
 
 <svelte:document onvisibilitychange={refreshWhenVisible} />
 
+{#snippet words(paragraph: BriefingParagraph)}
+  {#each paragraph as segment, position (position)}
+    {#if segment.href !== null}
+      <a href={segment.href}>{segment.text}</a>
+    {:else}
+      {segment.text}
+    {/if}
+  {/each}
+{/snippet}
+
 <HomeSection id="briefing-title" title="Briefing">
   {#snippet aside()}
     <span class="meta">
@@ -163,17 +174,21 @@
       {#if view.note !== null}
         <p class="note">{view.note}</p>
       {/if}
-      {#each view.paragraphs as paragraph, index (index)}
-        <p class="paragraph">
-          {#each paragraph as segment, position (position)}
-            {#if segment.href !== null}
-              <a href={segment.href}>{segment.text}</a>
-            {:else}
-              {segment.text}
-            {/if}
-          {/each}
-        </p>
-      {/each}
+      {#if view.sections !== null}
+        <p class="paragraph opening">{@render words(view.sections.opening)}</p>
+        {#if view.sections.actions.length > 0}
+          <ul class="actions" aria-label="Actions">
+            {#each view.sections.actions as action, index (index)}
+              <li>{@render words(action)}</li>
+            {/each}
+          </ul>
+        {/if}
+        <p class="paragraph closing">{@render words(view.sections.closing)}</p>
+      {:else}
+        {#each view.paragraphs as paragraph, index (index)}
+          <p class="paragraph">{@render words(paragraph)}</p>
+        {/each}
+      {/if}
     </div>
 
     <p class="status" role="status">{statusLine}</p>
@@ -190,7 +205,7 @@
           <p class="sources">{view.budgetNote}</p>
         {/if}
         <button
-          class="auth-button small quiet"
+          class="auth-button quiet"
           type="button"
           bind:this={button}
           disabled={busy || !view.canRegenerate}
@@ -230,8 +245,17 @@
     display: none;
   }
 
-  .paragraph {
+  .paragraph,
+  .actions li {
     line-height: var(--line-height-body);
+    overflow-wrap: anywhere;
+  }
+
+  .actions {
+    display: grid;
+    gap: var(--space-2);
+    padding-left: var(--space-5);
+    list-style: disc;
   }
 
   .note {
@@ -267,6 +291,7 @@
   .meta {
     display: flex;
     flex-wrap: wrap;
+    min-width: 0;
     gap: var(--space-1) var(--space-3);
   }
 

@@ -148,6 +148,13 @@
       "when": 1795887588881,
       "tag": "0020_per_check_results",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795888988131,
+      "tag": "0021_briefing_sections",
+      "breakpoints": true
     }
   ]
 }

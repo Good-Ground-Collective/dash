@@ -7,52 +7,84 @@ export const regeneratedBriefingId = freshRunId;
 /** One paragraph of text segments, links set as Mission Control sets them. */
 type StubParagraph = { text: string; href: string | null }[];
 
+type StubSections = {
+  opening: StubParagraph;
+  actions: StubParagraph[];
+  closing: StubParagraph;
+};
+
 /** Briefings as `GET /briefings` sends them. */
 export class BriefingsItems {
   static ago(minutes: number): string {
     return new Date(Date.now() - minutes * 60_000).toISOString();
   }
 
-  static paragraphs(): StubParagraph[] {
-    return [
-      [
-        { text: 'Two things need you today: ', href: null },
+  static sections(): StubSections {
+    return {
+      opening: [
         {
-          text: 'Add passkey sign-in',
-          href: 'https://github.com/acme-labs/api/pull/42',
-        },
-        { text: ' is waiting on your review, and ', href: null },
-        {
-          text: 'the nightly build',
-          href: 'https://github.com/acme-labs/api/actions/runs/7',
-        },
-        { text: ' failed.', href: null },
-      ],
-      [{ text: 'Rook is idle and the Studio bench is quiet.', href: null }],
-    ];
-  }
-
-  static freshParagraphs(): StubParagraph[] {
-    return [
-      [
-        {
-          text: 'Fresh read: the nightly build is green again, and ',
+          text: 'Two things need you today. The console epic closed and work continues on billing.',
           href: null,
         },
-        {
-          text: 'Add passkey sign-in',
-          href: 'https://github.com/acme-labs/api/pull/42',
-        },
-        { text: ' still needs you.', href: null },
       ],
-    ];
+      actions: [
+        [
+          { text: 'Review ', href: null },
+          {
+            text: 'Add passkey sign-in',
+            href: 'https://github.com/acme-labs/api/pull/42',
+          },
+          { text: ' before it waits another day.', href: null },
+        ],
+        [
+          { text: 'Look at why ', href: null },
+          {
+            text: 'the nightly build',
+            href: 'https://github.com/acme-labs/api/actions/runs/7',
+          },
+          { text: ' failed.', href: null },
+        ],
+      ],
+      closing: [
+        {
+          text: 'At this rate billing should reach verification by the next update. Rook is idle, so the pace there is too thin to call.',
+          href: null,
+        },
+      ],
+    };
+  }
+
+  static freshSections(): StubSections {
+    return {
+      opening: [
+        {
+          text: 'Fresh read: the nightly build is green again. Nothing else closed.',
+          href: null,
+        },
+      ],
+      actions: [
+        [
+          {
+            text: 'Add passkey sign-in',
+            href: 'https://github.com/acme-labs/api/pull/42',
+          },
+          { text: ' still needs you.', href: null },
+        ],
+      ],
+      closing: [
+        {
+          text: 'The pace is too thin to call. Check back at the next update.',
+          href: null,
+        },
+      ],
+    };
   }
 
   static run(props: {
     id: string;
     status: 'succeeded' | 'failed' | 'skipped_over_budget';
     finishedMinutesAgo: number;
-    paragraphs: StubParagraph[] | null;
+    sections: StubSections | null;
     error?: string;
   }) {
     const answered = props.status !== 'skipped_over_budget';
@@ -80,7 +112,8 @@ export class BriefingsItems {
             benches: 2,
           }
         : null,
-      paragraphs: props.paragraphs,
+      sections: props.sections,
+      paragraphs: null,
       unknownRefs: 0,
       error: props.error ?? null,
     };
@@ -91,7 +124,7 @@ export class BriefingsItems {
       id: ownerRunId,
       status: 'succeeded',
       finishedMinutesAgo: minutesAgo,
-      paragraphs: BriefingsItems.paragraphs(),
+      sections: BriefingsItems.sections(),
     });
   }
 
@@ -100,7 +133,7 @@ export class BriefingsItems {
       id: freshRunId,
       status: 'succeeded',
       finishedMinutesAgo: 0,
-      paragraphs: BriefingsItems.freshParagraphs(),
+      sections: BriefingsItems.freshSections(),
     });
   }
 
@@ -109,7 +142,7 @@ export class BriefingsItems {
       id: failedRunId,
       status: 'failed',
       finishedMinutesAgo: 5,
-      paragraphs: null,
+      sections: null,
       error: 'The writer timed out.',
     });
   }
@@ -119,7 +152,7 @@ export class BriefingsItems {
       id: failedRunId,
       status: 'skipped_over_budget',
       finishedMinutesAgo: 5,
-      paragraphs: null,
+      sections: null,
     });
   }
 

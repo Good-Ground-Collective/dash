@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Viewer } from '#lib/api/mission-control.ts';
+import { SampleBriefings } from '#lib/briefing/__tests__/support/sample-briefings.ts';
 import {
   type HomeLoadEvent,
   MissionControlHomeLoader,
@@ -123,6 +124,31 @@ describe('MissionControlHomeLoader, the briefing', () => {
         '/onboarding/checklist': () => Response.json(checklist),
         '/integrations/github/feed': () => Response.json(feed),
         '/objectives': () => Response.json(objectives),
+      },
+    });
+
+    const data = await loader.load(visit.event);
+
+    expect(data.briefing).toEqual({ status: 'failed' });
+    expect(data.github).toEqual({ status: 'loaded', feed });
+  });
+
+  it('marks the briefing failed, not empty, when its sections are malformed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const malformed = {
+      ...briefings,
+      latest: {
+        ...SampleBriefings.run(),
+        sections: { opening: 'text', actions: [], closing: [] },
+      },
+    };
+    const visit = new HomeVisit({
+      viewer: ada,
+      answers: {
+        '/onboarding/checklist': () => Response.json(checklist),
+        '/integrations/github/feed': () => Response.json(feed),
+        '/objectives': () => Response.json(objectives),
+        '/briefings': () => Response.json(malformed),
       },
     });
 

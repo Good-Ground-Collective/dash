@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type {
   BriefingParagraph,
   Briefings,
+  BriefingSections,
 } from '#lib/api/briefings/briefing-contracts.ts';
 import { BriefingWording } from '#lib/briefing/briefing-wording.ts';
 
@@ -45,6 +46,12 @@ export class BriefingView {
     return latest === null ? 'empty' : 'ready';
   }
 
+  /** The opening, actions and closing of a briefing written in the current form. */
+  get sections(): BriefingSections | null {
+    return this.loaded?.latest?.sections ?? null;
+  }
+
+  /** A briefing written before it had sections, shown as it was written. */
   get paragraphs(): BriefingParagraph[] {
     return this.loaded?.latest?.paragraphs ?? [];
   }

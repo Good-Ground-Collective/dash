@@ -4,8 +4,9 @@ import type {
   BriefingLinkedText,
   BriefingParagraph,
 } from '#src/briefing/contracts/briefing-written.ts';
+import { BriefingRefTokens } from '#src/briefing/services/briefing-ref-tokens/briefing-ref-tokens.ts';
 
-/** Turns the refs a model cited into the links of the snapshot's own items. Model output never becomes a URL. */
+/** Turns the refs a model cited into the links of the snapshot's own items. Model output never becomes a URL, and an id left in the words is removed rather than shown. */
 export class BriefingRefLinks {
   static attach(props: {
     composition: BriefingComposition;
@@ -13,22 +14,30 @@ export class BriefingRefLinks {
   }): BriefingLinkedText {
     const urls = BriefingRefLinks.urlsByRef(props.snapshot);
     let unknownRefs = 0;
-    const paragraphs: BriefingParagraph[] = [];
 
-    for (const paragraph of props.composition.paragraphs) {
+    const link = (paragraph: BriefingComposition['opening']) => {
       const segments: BriefingParagraph['segments'] = [];
       for (const { text, ref } of paragraph.segments) {
         if (ref !== null && !urls.has(ref)) unknownRefs += 1;
-        if (text.trim() === '') continue;
+        const clean = BriefingRefTokens.strip(text);
+        if (clean.trim() === '') continue;
         segments.push({
-          text,
+          text: clean,
           url: ref === null ? null : (urls.get(ref) ?? null),
         });
       }
-      if (segments.length > 0) paragraphs.push({ segments });
-    }
+      return { segments };
+    };
 
-    return { paragraphs, unknownRefs };
+    const { composition } = props;
+    return {
+      opening: link(composition.opening),
+      actions: composition.actions
+        .map(link)
+        .filter(({ segments }) => segments.length > 0),
+      closing: link(composition.closing),
+      unknownRefs,
+    };
   }
 
   private static urlsByRef(
@@ -36,6 +45,7 @@ export class BriefingRefLinks {
   ): Map<string, string | null> {
     const items: { ref: string; url?: string }[] = [
       ...snapshot.objectives,
+      ...snapshot.sinceLastBriefing.changes,
       ...snapshot.github.reviewRequests,
       ...snapshot.github.myPullRequests,
       ...snapshot.github.failedRuns,

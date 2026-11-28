@@ -4,6 +4,7 @@ import {
 } from '#src/briefing/contracts/briefing-snapshot.ts';
 
 export const objectiveUrl = 'https://github.com/orgs/acme/projects/1';
+export const changeUrl = 'https://github.com/acme/web/issues/12';
 export const pullRequestUrl = 'https://github.com/acme/web/pull/7';
 
 /** A small snapshot with one objective, one pull request, and one connection that has no page of its own to link to. */
@@ -11,6 +12,32 @@ export class SampleSnapshot {
   static build(): BriefingSnapshotDigest {
     return briefingSnapshotSchema.parse({
       takenAt: '2026-11-27T09:00:00.000Z',
+      sinceLastBriefing: {
+        since: '2026-11-26T09:00:00.000Z',
+        previousBriefingAt: '2026-11-26T09:00:00.000Z',
+        totals: {
+          initiativesClosed: 0,
+          epicsClosed: 1,
+          epicsStarted: 0,
+          epicsProgressed: 0,
+          ticketsClosed: 0,
+          pullRequestsMerged: 0,
+        },
+        changes: [
+          {
+            ref: 'ch1',
+            kind: 'epic',
+            change: 'closed',
+            title: 'Wire the card',
+            url: changeUrl,
+            initiativeTitle: 'Ship the briefing',
+            status: 'done',
+            progress: { source: 'tracker', done: 3, total: 3 },
+            ticketsClosed: 0,
+            pullRequestsMerged: 0,
+          },
+        ],
+      },
       objectives: [SampleSnapshot.objective()],
       github: {
         reviewRequests: [],

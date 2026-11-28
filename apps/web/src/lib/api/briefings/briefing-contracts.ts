@@ -37,6 +37,18 @@ export const briefingParagraphSchema = z
   )
   .describe('One paragraph as text segments, each optionally a link.');
 
+export const briefingSectionsSchema = z
+  .object({
+    opening: briefingParagraphSchema,
+    actions: z
+      .array(briefingParagraphSchema)
+      .describe('At most three, one sentence each.'),
+    closing: briefingParagraphSchema,
+  })
+  .describe(
+    'The briefing’s fixed shape: what changed, what to do, and what the pace says comes next.',
+  );
+
 export const briefingRunSchema = z.object({
   id: z.uuid(),
   trigger: z.enum(['scheduled', 'manual']),
@@ -62,7 +74,18 @@ export const briefingRunSchema = z.object({
     })
     .nullable(),
   sourceCounts: briefingCountsSchema.nullable(),
-  paragraphs: z.array(briefingParagraphSchema).nullable(),
+  sections: briefingSectionsSchema
+    .nullable()
+    .default(null)
+    .describe(
+      'The briefing. Null for a run that wrote none, and for runs from before the briefing had this shape, which keep their `paragraphs`.',
+    ),
+  paragraphs: z
+    .array(briefingParagraphSchema)
+    .nullable()
+    .describe(
+      'A briefing written before it had sections. Null for newer runs.',
+    ),
   unknownRefs: z
     .int()
     .nonnegative()
@@ -136,6 +159,7 @@ export const briefingReadyEventSchema = z.object({
 export type BriefingStatus = z.infer<typeof briefingStatusSchema>;
 export type BriefingStage = z.infer<typeof briefingStageSchema>;
 export type BriefingCounts = z.infer<typeof briefingCountsSchema>;
+export type BriefingSections = z.infer<typeof briefingSectionsSchema>;
 export type BriefingParagraph = z.infer<typeof briefingParagraphSchema>;
 export type BriefingRecord = z.infer<typeof briefingRunSchema>;
 export type BriefingBudget = z.infer<typeof briefingBudgetSchema>;

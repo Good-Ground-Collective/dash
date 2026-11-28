@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SampleBriefings } from '#lib/briefing/__tests__/support/sample-briefings.ts';
+import {
+  LegacyBriefings,
+  SampleBriefings,
+} from '#lib/briefing/__tests__/support/sample-briefings.ts';
 import {
   type BriefingState,
   BriefingView,
@@ -32,9 +35,16 @@ afterEach(() => {
 describe('BriefingView, a good briefing', () => {
   const view = Sample.loaded({});
 
-  it('keeps the segments with their links', () => {
+  it('splits the briefing into an opening, actions and a closing', () => {
     expect(view.status).toBe('ready');
-    expect(view.paragraphs[0]?.map(({ href }) => href)).toEqual([
+    expect(view.sections?.opening).toHaveLength(2);
+    expect(view.sections?.actions).toHaveLength(1);
+    expect(view.sections?.closing).toHaveLength(1);
+    expect(view.paragraphs).toEqual([]);
+  });
+
+  it('keeps the segments of an action with their links', () => {
+    expect(view.sections?.actions[0]?.map(({ href }) => href)).toEqual([
       null,
       'https://github.com/acme/api/pull/9',
       null,
@@ -88,12 +98,13 @@ describe('BriefingView, a run that did not produce a briefing', () => {
       id: '0b7d6a1e-1111-4c1a-9a51-2f1f6a3c0002',
       status: 'failed',
       finishedAt: new Date('2026-11-27T11:50:00Z'),
+      sections: null,
       paragraphs: null,
       error: 'The writer timed out.',
     });
     const view = Sample.loaded({ latest, lastRun: failed });
 
-    expect(view.paragraphs).toHaveLength(1);
+    expect(view.sections?.actions).toHaveLength(1);
     expect(view.note).toBe(
       'The latest run failed 10 minutes ago, so this is the previous briefing. The writer timed out.',
     );
@@ -103,6 +114,7 @@ describe('BriefingView, a run that did not produce a briefing', () => {
     const skipped = SampleBriefings.run({
       status: 'skipped_over_budget',
       finishedAt: new Date('2026-11-27T11:50:00Z'),
+      sections: null,
       paragraphs: null,
     });
     const view = Sample.loaded({
@@ -166,5 +178,20 @@ describe('BriefingView, a run in progress', () => {
     const running = { runId: 'wf-1', startedAt: now };
 
     expect(Sample.loaded({ running }).running).toEqual(running);
+  });
+});
+
+describe('BriefingView, a briefing written before sections', () => {
+  const view = Sample.loaded({ latest: LegacyBriefings.run() });
+
+  it('shows its paragraphs as they were written and has no sections', () => {
+    expect(view.status).toBe('ready');
+    expect(view.sections).toBeNull();
+    expect(view.paragraphs).toHaveLength(1);
+    expect(view.paragraphs[0]?.map(({ href }) => href)).toEqual([
+      null,
+      'https://github.com/acme/api/pull/9',
+      null,
+    ]);
   });
 });

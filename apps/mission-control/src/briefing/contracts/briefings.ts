@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { briefingCountsSchema } from '#src/briefing/contracts/briefing-snapshot.ts';
+import { briefingLimits } from '#src/briefing/definitions/briefing-limits/briefing-limits.ts';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -29,6 +30,19 @@ export const briefingParagraphSchema = z
   )
   .describe('One paragraph as text segments, each optionally a link.');
 
+export const briefingSectionsSchema = z
+  .object({
+    opening: briefingParagraphSchema,
+    actions: z
+      .array(briefingParagraphSchema)
+      .max(briefingLimits.maxActions)
+      .describe('At most three, one sentence each.'),
+    closing: briefingParagraphSchema,
+  })
+  .describe(
+    'The briefing’s fixed shape: what changed, what to do, and what the pace says comes next.',
+  );
+
 export const briefingRunSchema = z.object({
   id: z.uuid(),
   trigger: briefingTriggerSchema,
@@ -48,7 +62,17 @@ export const briefingRunSchema = z.object({
   costUsd: z.number().nonnegative(),
   prices: briefingPricesSchema.nullable(),
   sourceCounts: briefingCountsSchema.nullable(),
-  paragraphs: z.array(briefingParagraphSchema).nullable(),
+  sections: briefingSectionsSchema
+    .nullable()
+    .describe(
+      'The briefing. Null for a run that wrote none, and for runs from before the briefing had this shape, which keep their `paragraphs`.',
+    ),
+  paragraphs: z
+    .array(briefingParagraphSchema)
+    .nullable()
+    .describe(
+      'A briefing written before it had sections. Null for newer runs.',
+    ),
   unknownRefs: z
     .int()
     .nonnegative()
@@ -126,6 +150,7 @@ export type BriefingProgressEvent = z.infer<typeof briefingProgressEventSchema>;
 export type BriefingReadyEvent = z.infer<typeof briefingReadyEventSchema>;
 export type BriefingRun = z.infer<typeof briefingRunSchema>;
 export type BriefingPrices = z.infer<typeof briefingPricesSchema>;
+export type BriefingSections = z.infer<typeof briefingSectionsSchema>;
 export type BriefingParagraph = z.infer<typeof briefingParagraphSchema>;
 export type BriefingBudget = z.infer<typeof briefingBudgetSchema>;
 export type Briefings = z.infer<typeof briefingsSchema>;

@@ -16,6 +16,7 @@ import type { BriefingCounts } from '#src/briefing/contracts/briefing-snapshot.t
 import type {
   BriefingParagraph,
   BriefingPrices,
+  BriefingSections,
 } from '#src/briefing/contracts/briefings.ts';
 
 /**
@@ -48,6 +49,7 @@ export const briefingTable = pgTable(
       .default(0),
     prices: jsonb('prices').$type<BriefingPrices>(),
     sourceCounts: jsonb('source_counts').$type<BriefingCounts>(),
+    sections: jsonb('sections').$type<BriefingSections>(),
     paragraphs: jsonb('paragraphs').$type<BriefingParagraph[]>(),
     unknownRefs: integer('unknown_refs').notNull().default(0),
     error: text('error'),

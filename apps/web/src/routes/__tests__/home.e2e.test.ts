@@ -172,7 +172,7 @@ test('wide screens split home into two columns, with placeholders for what isnâ€
   }
 });
 
-test('the briefing shows its paragraphs with links, how fresh it is, its sources and the spend', async () => {
+test('the briefing shows its opening, actions and closing, how fresh it is, its sources and the spend', async () => {
   await briefing.scenario('ready');
   await page.goto('/');
 
