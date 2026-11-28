@@ -19,6 +19,8 @@ import {
   OutboxHeartbeatRelay,
   type RelayOutcome,
 } from '#src/services/heartbeat-relay/heartbeat-relay.js';
+import { MissionControlIngest } from '#src/services/mission-control-ingest/mission-control-ingest.js';
+import { OutboxRetention } from '#src/services/outbox-retention/outbox-retention.js';
 import { RelayCursorStore } from '#src/services/relay-cursor-store/relay-cursor-store.js';
 import { RelayHaltRecord } from '#src/services/relay-halt-record/relay-halt-record.js';
 import { RelayLock } from '#src/services/relay-lock/relay-lock.js';
@@ -316,5 +318,38 @@ describe('OutboxHeartbeatRelay housekeeping', () => {
 
     expect(await TestRelay.run()).toBe('busy');
     expect(ingest.requests).toBe(0);
+  });
+});
+
+describe('OutboxHeartbeatRelay against retention', () => {
+  it('does not save a cursor for an outbox retention deleted mid-send, and relays the resumed session in full', async () => {
+    const outboxPath = state.outboxPath(RecordedPayloads.SESSION_ID);
+    const cursorPath = RelayCursorStore.cursorPath(
+      state.config.relayCursorsDirectory,
+      FileSessionLedger.fileStem(RecordedPayloads.SESSION_ID),
+    );
+    await state.writeTurns(1);
+    await utimes(outboxPath, new Date(0), new Date(0));
+    const send = MissionControlIngest.prototype.send;
+    vi.spyOn(MissionControlIngest.prototype, 'send').mockImplementationOnce(
+      async function (this: MissionControlIngest, ...args) {
+        const results = await send.apply(this, args);
+        await OutboxRetention.prune(state.config, new Date());
+        return results;
+      },
+    );
+
+    await TestRelay.run();
+
+    expect(await TestRelay.exists(outboxPath)).toBe(false);
+    expect(await TestRelay.exists(cursorPath)).toBe(false);
+
+    await state.writeTurns(1);
+    await TestRelay.run();
+    expect(
+      ingest.stored.filter(
+        ({ sessionId }) => sessionId === RecordedPayloads.SESSION_ID,
+      ),
+    ).toHaveLength(4);
   });
 });

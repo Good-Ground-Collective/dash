@@ -94,12 +94,38 @@ export class OutboxDelivery {
 
       await this.send(stem, batch);
       cursor = OutboxDelivery.advance(cursor, batch);
-      await RelayCursorStore.save(this.cursorsDirectory, stem, cursor);
+      if (!(await this.saveCursorIfOutboxUnchanged(stem, cursor, batch))) {
+        return progressed;
+      }
       progressed = true;
     }
 
     await this.removeIfFinished(stem, cursor);
     return progressed;
+  }
+
+  /**
+   * Saves the cursor under the session's lock, only while the outbox still exists with the inode of
+   * the batch just sent. Retention deletes the outbox and its cursor under that lock, so a cursor for
+   * a deleted outbox is never written back to skip the lines of a resumed session. `false` when the
+   * outbox is gone or replaced.
+   */
+  private async saveCursorIfOutboxUnchanged(
+    stem: string,
+    cursor: RelayCursor,
+    batch: OutboxBatch,
+  ): Promise<boolean> {
+    return new FileLock({ lockPath: this.sessionLockPath(stem) }).hold(
+      async () => {
+        const outbox = await stat(this.outboxPath(stem)).catch(() => undefined);
+        if (outbox?.ino !== batch.inode) {
+          return false;
+        }
+
+        await RelayCursorStore.save(this.cursorsDirectory, stem, cursor);
+        return true;
+      },
+    );
   }
 
   /** Sends the batch's lines, then logs any Mission Control rejected and any that weren't JSON. */
@@ -138,21 +164,25 @@ export class OutboxDelivery {
     stem: string,
     cursor: RelayCursor,
   ): Promise<void> {
-    const statePath = path.join(this.config.sessionsDirectory, `${stem}.json`);
+    const statePath = this.sessionStatePath(stem);
     if (!(await OutboxDelivery.hasEnded(statePath))) {
       return;
     }
 
     try {
-      await new FileLock({ lockPath: `${statePath}.lock` }).hold(async () => {
-        const outbox = await stat(this.outboxPath(stem)).catch(() => undefined);
-        const delivered =
-          outbox?.ino === cursor.inode && outbox.size === cursor.offset;
-        if (delivered && (await OutboxDelivery.hasEnded(statePath))) {
-          await rm(this.outboxPath(stem), { force: true });
-          await RelayCursorStore.remove(this.cursorsDirectory, stem);
-        }
-      });
+      await new FileLock({ lockPath: this.sessionLockPath(stem) }).hold(
+        async () => {
+          const outbox = await stat(this.outboxPath(stem)).catch(
+            () => undefined,
+          );
+          const delivered =
+            outbox?.ino === cursor.inode && outbox.size === cursor.offset;
+          if (delivered && (await OutboxDelivery.hasEnded(statePath))) {
+            await rm(this.outboxPath(stem), { force: true });
+            await RelayCursorStore.remove(this.cursorsDirectory, stem);
+          }
+        },
+      );
     } catch (cause) {
       this.log.failure({ event: 'relay', cause, now: new Date() });
     }
@@ -181,6 +211,14 @@ export class OutboxDelivery {
     return names
       .filter((name) => name.endsWith('.jsonl'))
       .map((name) => name.slice(0, -'.jsonl'.length));
+  }
+
+  private sessionStatePath(stem: string): string {
+    return path.join(this.config.sessionsDirectory, `${stem}.json`);
+  }
+
+  private sessionLockPath(stem: string): string {
+    return `${this.sessionStatePath(stem)}.lock`;
   }
 
   private outboxPath(stem: string): string {
