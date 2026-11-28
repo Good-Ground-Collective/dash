@@ -29,6 +29,7 @@ export class SampleAgentSessions {
       workspace: null,
       machine: null,
       agent: null,
+      livenessChangedAt: SampleAgentSessions.at(minutes + 30),
       highestSeq: 1,
       startedAt: SampleAgentSessions.at(minutes + 30),
       reportedAt: SampleAgentSessions.at(minutes),
@@ -85,6 +86,7 @@ export class SampleAgentSessions {
   static wire(state: AgentSessionState): string {
     return JSON.stringify({
       ...state,
+      livenessChangedAt: state.livenessChangedAt.toISOString(),
       startedAt: state.startedAt.toISOString(),
       reportedAt: state.reportedAt.toISOString(),
       updatedAt: state.updatedAt.toISOString(),

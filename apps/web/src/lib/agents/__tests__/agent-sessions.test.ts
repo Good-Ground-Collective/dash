@@ -113,6 +113,59 @@ describe('AgentSessions.applyUpdate for held rows', () => {
   });
 });
 
+describe('AgentSessions.applyUpdate for liveness ordering', () => {
+  it('drops a stale row with the same sequence number but an older liveness change after a live one', () => {
+    const held = AgentSessions.of([
+      session('one', {
+        parent: {
+          liveness: 'live',
+          livenessChangedAt: SampleAgentSessions.at(2),
+        },
+      }),
+    ]);
+
+    const next = held.applyUpdate(
+      update({
+        sessionId: 'one',
+        agentId: null,
+        activity: {
+          liveness: 'stale',
+          livenessChangedAt: SampleAgentSessions.at(5),
+        },
+      }),
+    );
+
+    expect(next).toBe(held);
+    expect(next.list[0]?.parent?.liveness).toBe('live');
+  });
+
+  it('drops an older liveness change for a subagent too', () => {
+    const held = AgentSessions.of([
+      session('one', {
+        subagents: [
+          subagent('worker', {
+            liveness: 'live',
+            livenessChangedAt: SampleAgentSessions.at(2),
+          }),
+        ],
+      }),
+    ]);
+
+    const next = held.applyUpdate(
+      update({
+        sessionId: 'one',
+        agentId: 'worker',
+        activity: {
+          liveness: 'stale',
+          livenessChangedAt: SampleAgentSessions.at(5),
+        },
+      }),
+    );
+
+    expect(next.list[0]?.subagents[0]?.liveness).toBe('live');
+  });
+});
+
 describe('AgentSessions.applyUpdate for stale rows', () => {
   it('drops a row older than the one it holds', () => {
     const held = AgentSessions.of([

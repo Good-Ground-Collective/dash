@@ -5,6 +5,7 @@ export interface StubNeedsYouItem {
   reportedBy: string;
   sessionId: string;
   agentId: string | null;
+  kind: 'needs_input' | 'stopped_responding';
   question: {
     text: string;
     options?: { label: string; description?: string }[];
@@ -57,12 +58,10 @@ export class NeedsYouItems {
   }
 
   static named(name: string, props: { minutesAgo: number }): StubNeedsYouItem {
-    const openedAt = new Date(
-      Date.now() - props.minutesAgo * 60_000,
-    ).toISOString();
     const base = {
       reportedBy,
-      openedAt,
+      kind: 'needs_input' as const,
+      openedAt: NeedsYouItems.minutesAgo(props.minutesAgo),
       resolvedAt: null,
     };
     switch (name) {
@@ -115,5 +114,9 @@ export class NeedsYouItems {
       default:
         throw new Error(`No Needs you item is named ${name}`);
     }
+  }
+
+  private static minutesAgo(minutes: number): string {
+    return new Date(Date.now() - minutes * 60_000).toISOString();
   }
 }

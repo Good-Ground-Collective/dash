@@ -41,7 +41,7 @@ export class AgentSessions {
     };
   }
 
-  /** Folds one row in: the session's own state, or a subagent's under it. A row older than what is already held is dropped. */
+  /** Folds one row in: the session's own state, or a subagent's under it. A row older than what is already held is dropped: one with a lower `highestSeq`, or the same `highestSeq` and an earlier `livenessChangedAt`. */
   applyUpdate(state: AgentSessionState): AgentSessions {
     const key = AgentSessionActivity.key(state);
     const known = this.list.find(
@@ -106,7 +106,12 @@ export class AgentSessions {
     held: AgentActivity | null | undefined;
     state: AgentSessionState;
   }): boolean {
-    return props.held != null && props.held.highestSeq > props.state.highestSeq;
+    const { held, state } = props;
+    if (held == null) return false;
+    if (held.highestSeq !== state.highestSeq) {
+      return held.highestSeq > state.highestSeq;
+    }
+    return held.livenessChangedAt.getTime() > state.livenessChangedAt.getTime();
   }
 
   private static empty(state: AgentSessionState): AgentSession {
@@ -125,6 +130,7 @@ export class AgentSessions {
     return {
       status: state.status,
       liveness: state.liveness,
+      livenessChangedAt: state.livenessChangedAt,
       summary: state.summary,
       question: state.question,
       error: state.error,
