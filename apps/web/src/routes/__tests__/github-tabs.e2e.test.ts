@@ -113,6 +113,16 @@ test('the account filter and the tab combine, each surviving the other', async (
   );
 });
 
+test('the header’s relative time moves on after a minute without a reload', async () => {
+  await page.clock.install();
+  await page.goto('/github');
+  const header = page.getByText(/accounts · reconciled/u);
+  await expect(header).toHaveText('3 accounts · reconciled 4 minutes ago');
+
+  await page.clock.fastForward('01:00');
+  await expect(header).toHaveText('3 accounts · reconciled 5 minutes ago');
+});
+
 test('an unknown account shows everything and says so', async () => {
   await page.goto('/github?account=nobody&tab=mine');
 

@@ -19,6 +19,7 @@
   let now = $state(new Date());
 
   let view = $derived.by(() => {
+    // Reading `now` re-derives the view on each clock tick so relative times stay current.
     void now;
     return data.github.status === 'loaded'
       ? new GithubFeedView({

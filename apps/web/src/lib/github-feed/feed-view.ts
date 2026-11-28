@@ -113,13 +113,7 @@ export const githubFeedViewPropsSchema = z.object({
     .transform((value) => (value === '' ? null : value))
     .nullish()
     .transform((value) => value ?? null),
-  tab: z
-    .string()
-    .nullish()
-    .transform((value): GithubTabKey => {
-      const match = githubTabKeys.find((key) => key === value);
-      return match ?? defaultTab;
-    }),
+  tab: z.string().nullish().pipe(z.enum(githubTabKeys).catch(defaultTab)),
 });
 
 export type GithubFeedViewProps = z.input<typeof githubFeedViewPropsSchema>;
@@ -157,7 +151,7 @@ export class GithubFeedView {
     return synced ? 'ready' : 'first-sync';
   }
 
-  /** “2 accounts · reconciled 4 minutes ago”, from the most recent successful read of any connection. */
+  /** “2 accounts · reconciled 4 minutes ago”, covering every connected account whatever the `account` filter, from the most recent successful read of any connection. The connection list below the header still flags a stale one. */
   get freshness(): string {
     const accounts = new Set(
       this.feed.connections.map((connection) => connection.accountLogin),

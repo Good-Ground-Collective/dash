@@ -10,7 +10,6 @@ export const myPullGroupKeys = [
 
 export type MyPullGroupKey = (typeof myPullGroupKeys)[number];
 
-/** Each group's pull requests. */
 export interface MyPullGroupSplit {
   changesRequested: GithubFeedPullRequest[];
   checksFailing: GithubFeedPullRequest[];

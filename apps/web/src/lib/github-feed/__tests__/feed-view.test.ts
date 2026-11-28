@@ -227,6 +227,13 @@ describe('GithubFeedView freshness', () => {
     );
   });
 
+  it('covers every connected account whatever the account filter', () => {
+    const view = new GithubFeedView({ feed, account: 'night-shift' });
+
+    expect(view.connections).toHaveLength(1);
+    expect(view.freshness).toBe('2 accounts · reconciled 5 minutes ago');
+  });
+
   it('says so before any connection has been read', () => {
     const view = new GithubFeedView({
       feed: SampleFeed.feed({
