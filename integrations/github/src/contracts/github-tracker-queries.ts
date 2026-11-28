@@ -3,7 +3,7 @@ const issueFields =
 
 const ticketFields = `
   ${issueFields}
-  assignees(first: 5) { nodes { login } }
+  assignees(first: 10) { nodes { login } }
   comments(last: 1) { nodes { url createdAt author { login } } }
   closedByPullRequestsReferences(first: 5, includeClosedPrs: true) { nodes { url mergedAt author { login } } }`;
 
