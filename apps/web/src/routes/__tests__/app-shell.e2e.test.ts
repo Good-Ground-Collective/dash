@@ -24,9 +24,9 @@ test.describe('app shell', () => {
       'page',
     );
 
-    await expect(
-      page.getByRole('heading', { name: 'Home', level: 1 }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      /^Good (morning|afternoon|evening)$/u,
+    );
     await expect(
       page.getByRole('button', { name: 'Needs you, 0 waiting' }),
     ).toBeVisible();

@@ -80,6 +80,15 @@ export class GithubFeedItems {
         checks: { state: 'pending', success: 2, failure: 0, pending: 3 },
         connection: night,
       }),
+      pull({
+        repo: 'acme-labs/api',
+        number: 409,
+        title: 'Cache the objectives read',
+        minutes: 600,
+        review: 'approved',
+        state: 'merged',
+        checks: { state: 'success', success: 6, failure: 0, pending: 0 },
+      }),
     ];
   }
 
@@ -152,6 +161,7 @@ export class GithubFeedItems {
     review?: 'approved' | 'changes_requested' | 'review_required';
     mergeable?: 'mergeable' | 'conflicting';
     checks?: object;
+    state?: 'open' | 'merged';
     connection?: string;
   }) {
     return {
@@ -159,7 +169,7 @@ export class GithubFeedItems {
       number: props.number,
       title: props.title,
       author: props.author ?? 'ada',
-      state: 'open',
+      state: props.state ?? 'open',
       draft: props.draft ?? false,
       mergeable: props.mergeable ?? 'mergeable',
       reviewDecision: props.review ?? null,
